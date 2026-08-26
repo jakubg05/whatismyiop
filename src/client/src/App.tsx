@@ -383,6 +383,7 @@ export default function App() {
 
       {!data ? (
         <section className="empty-state" onClick={() => fileInput.current?.click()}>
+          <img className="empty-state-logo" src="/whatismyiop_mark_black.svg" alt="What Is My IOP" />
           <button>Choose measurements.csv</button>
         </section>
       ) : (
