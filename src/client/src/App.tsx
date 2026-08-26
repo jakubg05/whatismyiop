@@ -26,7 +26,7 @@ import {
   type Summary,
 } from "./analysis";
 import { MeasurementCanvas } from "./MeasurementCanvas";
-import type { TimeDomain } from "./chartNavigation";
+import { zoomDomain, type TimeDomain } from "./chartNavigation";
 
 type SavedRange = {
   id: string;
@@ -383,6 +383,15 @@ export default function App() {
     return ratio >= 0.98 && domainEnd >= fullDomainEnd;
   }
 
+  function zoomChart(scale: number) {
+    setViewDomain(zoomDomain(
+      [domainStart, domainEnd],
+      scale,
+      0.5,
+      [fullDomainStart, fullDomainEnd],
+    ));
+  }
+
   function ratioForTime(time: number): number {
     if (domainEnd <= domainStart) return 0;
     return Math.max(0, Math.min(1, (time - domainStart) / (domainEnd - domainStart)));
@@ -506,9 +515,15 @@ export default function App() {
 
           <section className="panel chart-panel">
             <div className="panel-heading">
-              <div className="annotation-modes">
-                <button type="button" aria-pressed={mode === "range"} onClick={beginRange}>New range</button>
-                <button type="button" aria-pressed={mode === "event"} onClick={beginEvent}>Event</button>
+              <div className="chart-actions">
+                <div className="annotation-modes">
+                  <button type="button" aria-pressed={mode === "range"} onClick={beginRange}>New range</button>
+                  <button type="button" aria-pressed={mode === "event"} onClick={beginEvent}>Event</button>
+                </div>
+                <div className="zoom-controls" role="group" aria-label="Chart zoom">
+                  <button type="button" aria-label="Zoom out" disabled={domainStart <= fullDomainStart && domainEnd >= fullDomainEnd} onClick={() => zoomChart(2)}>−</button>
+                  <button type="button" aria-label="Zoom in" disabled={domainEnd - domainStart <= 60_000} onClick={() => zoomChart(0.5)}>+</button>
+                </div>
               </div>
               <div className="eye-toggles">
                 {(["OD", "OS"] as Eye[]).map((eye) => (

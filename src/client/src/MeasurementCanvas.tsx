@@ -4,10 +4,9 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
-  type WheelEvent as ReactWheelEvent,
 } from "react";
 import { formatFullTime, type Eye, type Measurement } from "./analysis";
-import { panDomain, zoomDomain, type TimeDomain } from "./chartNavigation";
+import { panDomain, type TimeDomain } from "./chartNavigation";
 
 type HoveredPoint = {
   measurement: Measurement;
@@ -27,11 +26,7 @@ type Props = {
   yMax: number;
 };
 
-type PointerPosition = { x: number; y: number };
-
-type Gesture =
-  | { kind: "pan"; x: number; domain: TimeDomain }
-  | { kind: "pinch"; distance: number; centerX: number; domain: TimeDomain };
+type Drag = { pointerId: number; x: number; domain: TimeDomain };
 
 const COLORS = { OD: "#d9623d", OS: "#237c78" } as const;
 const PLOT = { left: 52, right: 20, top: 12, bottom: 40 } as const;
@@ -64,8 +59,7 @@ export function MeasurementCanvas({
   yMax,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const pointers = useRef(new Map<number, PointerPosition>());
-  const gesture = useRef<Gesture | null>(null);
+  const drag = useRef<Drag | null>(null);
   const currentDomain = useRef<TimeDomain>([domainStart, domainEnd]);
   const pendingDomain = useRef<TimeDomain | null>(null);
   const animationFrame = useRef<number | null>(null);
@@ -152,84 +146,36 @@ export function MeasurementCanvas({
   }
 
   function startNavigation(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (!event.ctrlKey || event.button !== 0) return;
     const { bounds } = chartGeometry(event.currentTarget);
-    const position = { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
-    if (position.x < PLOT.left || position.x > bounds.width - PLOT.right) return;
+    const x = event.clientX - bounds.left;
+    if (x < PLOT.left || x > bounds.width - PLOT.right) return;
 
+    event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    pointers.current.set(event.pointerId, position);
+    drag.current = { pointerId: event.pointerId, x, domain: currentDomain.current };
     setHovered(null);
     setNavigating(true);
-
-    const activePointers = [...pointers.current.values()];
-    if (activePointers.length >= 2) {
-      const [first, second] = activePointers;
-      gesture.current = {
-        kind: "pinch",
-        distance: Math.max(1, Math.hypot(second.x - first.x, second.y - first.y)),
-        centerX: (first.x + second.x) / 2,
-        domain: currentDomain.current,
-      };
-    } else {
-      gesture.current = { kind: "pan", x: position.x, domain: currentDomain.current };
-    }
   }
 
   function moveNavigation(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (!pointers.current.has(event.pointerId)) {
+    const activeDrag = drag.current;
+    if (!activeDrag || activeDrag.pointerId !== event.pointerId) {
       findNearest(event);
       return;
     }
 
     const { bounds, plotWidth } = chartGeometry(event.currentTarget);
-    pointers.current.set(event.pointerId, { x: event.clientX - bounds.left, y: event.clientY - bounds.top });
-    const activePointers = [...pointers.current.values()];
-    const activeGesture = gesture.current;
     const fullDomain: TimeDomain = [fullDomainStart, fullDomainEnd];
-
-    if (activePointers.length >= 2 && activeGesture?.kind === "pinch") {
-      const [first, second] = activePointers;
-      const distance = Math.max(1, Math.hypot(second.x - first.x, second.y - first.y));
-      const centerX = (first.x + second.x) / 2;
-      const anchorRatio = (activeGesture.centerX - PLOT.left) / plotWidth;
-      const zoomed = zoomDomain(activeGesture.domain, activeGesture.distance / distance, anchorRatio, fullDomain);
-      const shifted = panDomain(zoomed, ((activeGesture.centerX - centerX) / plotWidth) * (zoomed[1] - zoomed[0]), fullDomain);
-      scheduleDomain(shifted);
-    } else if (activePointers.length === 1 && activeGesture?.kind === "pan") {
-      const offset = ((activeGesture.x - activePointers[0].x) / plotWidth) * (activeGesture.domain[1] - activeGesture.domain[0]);
-      scheduleDomain(panDomain(activeGesture.domain, offset, fullDomain));
-    }
+    const x = event.clientX - bounds.left;
+    const offset = ((activeDrag.x - x) / plotWidth) * (activeDrag.domain[1] - activeDrag.domain[0]);
+    scheduleDomain(panDomain(activeDrag.domain, offset, fullDomain));
   }
 
   function finishNavigation(event: ReactPointerEvent<HTMLCanvasElement>) {
-    pointers.current.delete(event.pointerId);
-    const remaining = [...pointers.current.values()];
-    if (remaining.length === 1) {
-      gesture.current = { kind: "pan", x: remaining[0].x, domain: currentDomain.current };
-      return;
-    }
-    gesture.current = null;
+    if (drag.current?.pointerId !== event.pointerId) return;
+    drag.current = null;
     setNavigating(false);
-  }
-
-  function navigateWithWheel(event: ReactWheelEvent<HTMLCanvasElement>) {
-    event.preventDefault();
-    const { bounds, plotWidth } = chartGeometry(event.currentTarget);
-    const fullDomain: TimeDomain = [fullDomainStart, fullDomainEnd];
-    const domain = currentDomain.current;
-    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? bounds.height : 1;
-    const deltaX = event.deltaX * unit;
-    const deltaY = event.deltaY * unit;
-
-    if (!event.ctrlKey && Math.abs(deltaX) > Math.abs(deltaY)) {
-      scheduleDomain(panDomain(domain, (deltaX / plotWidth) * (domain[1] - domain[0]), fullDomain));
-      return;
-    }
-
-    const anchorRatio = (event.clientX - bounds.left - PLOT.left) / plotWidth;
-    const scale = Math.exp(Math.max(-4, Math.min(4, deltaY * 0.002)));
-    scheduleDomain(zoomDomain(domain, scale, anchorRatio, fullDomain));
   }
 
   function findNearest(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -279,7 +225,6 @@ export function MeasurementCanvas({
       <canvas
         ref={canvasRef}
         className={`measurement-canvas ${navigating ? "measurement-canvas--navigating" : ""}`}
-        onWheel={navigateWithWheel}
         onPointerDown={startNavigation}
         onPointerMove={moveNavigation}
         onPointerUp={finishNavigation}
@@ -287,7 +232,6 @@ export function MeasurementCanvas({
         onPointerLeave={() => {
           if (!navigating) setHovered(null);
         }}
-        onDoubleClick={() => onDomainChange([fullDomainStart, fullDomainEnd])}
         aria-label={`${measurements.length.toLocaleString()} pressure measurements`}
       />
       {hovered && <div className="chart-tooltip measurement-canvas-tooltip" style={{ left: hovered.left, top: hovered.top }}>
