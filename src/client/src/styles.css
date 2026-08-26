@@ -28,14 +28,9 @@ main { max-width: 1480px; margin: 0 auto; padding: 24px 42px 70px; }
 .panel { background: transparent; border: 0; border-radius: 0; box-shadow: none; }
 .chart-panel { padding: 16px 0 0; }
 .panel-heading { display: flex; justify-content: space-between; align-items: center; min-height: 30px; }
-.chart-actions { display: flex; align-items: center; gap: 8px; }
 .annotation-modes { display: flex; padding: 2px; border: 1px solid #cdd3ca; border-radius: 7px; background: #f1f3ee; }
 .annotation-modes button { padding: 5px 10px; border: 0; border-radius: 5px; background: transparent; color: #687068; font: 500 .72rem ui-monospace, "Cascadia Mono", monospace; }
 .annotation-modes button[aria-pressed="true"] { background: #1d4b3b; color: white; }
-.zoom-controls { display: flex; overflow: hidden; border: 1px solid #cdd3ca; border-radius: 7px; }
-.zoom-controls button { width: 30px; height: 30px; padding: 0; border: 0; background: #fff; color: #314239; font-size: 1.1rem; line-height: 1; }
-.zoom-controls button + button { border-left: 1px solid #cdd3ca; }
-.zoom-controls button:disabled { color: #b8bdb7; cursor: default; }
 .eye-toggles { display: flex; gap: 18px; }
 .eye-toggles label { display: flex; align-items: center; gap: 7px; font: 500 .78rem ui-monospace, "Cascadia Mono", monospace; }
 .eye-toggles input { accent-color: #1d4b3b; }

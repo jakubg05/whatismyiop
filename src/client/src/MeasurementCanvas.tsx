@@ -29,7 +29,7 @@ type Props = {
 type Drag = { pointerId: number; x: number; domain: TimeDomain };
 
 const COLORS = { OD: "#d9623d", OS: "#237c78" } as const;
-const PLOT = { left: 52, right: 20, top: 12, bottom: 40 } as const;
+export const MEASUREMENT_PLOT = { left: 52, right: 20, top: 12, bottom: 40 } as const;
 const HIT_RADIUS = 12;
 
 function eyeLabel(eye: Eye): string {
@@ -93,7 +93,7 @@ export function MeasurementCanvas({
     function draw() {
       const width = canvas!.clientWidth;
       const height = canvas!.clientHeight;
-      if (width <= PLOT.left + PLOT.right || height <= PLOT.top + PLOT.bottom) return;
+      if (width <= MEASUREMENT_PLOT.left + MEASUREMENT_PLOT.right || height <= MEASUREMENT_PLOT.top + MEASUREMENT_PLOT.bottom) return;
 
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
       canvas!.width = Math.round(width * pixelRatio);
@@ -103,8 +103,8 @@ export function MeasurementCanvas({
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       context.clearRect(0, 0, width, height);
 
-      const plotWidth = width - PLOT.left - PLOT.right;
-      const plotHeight = height - PLOT.top - PLOT.bottom;
+      const plotWidth = width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right;
+      const plotHeight = height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom;
       const timeSpan = Math.max(1, domainEnd - domainStart);
       const pressureSpan = Math.max(1, yMax - yMin);
       const paths: Record<Eye, Path2D> = { OD: new Path2D(), OS: new Path2D() };
@@ -115,8 +115,8 @@ export function MeasurementCanvas({
         const measurement = measurements[index];
         if (measurement.time > domainEnd) break;
         if (!visibleEyes[measurement.eye]) continue;
-        const x = PLOT.left + ((measurement.time - domainStart) / timeSpan) * plotWidth;
-        const y = PLOT.top + (1 - (measurement.iop - yMin) / pressureSpan) * plotHeight;
+        const x = MEASUREMENT_PLOT.left + ((measurement.time - domainStart) / timeSpan) * plotWidth;
+        const y = MEASUREMENT_PLOT.top + (1 - (measurement.iop - yMin) / pressureSpan) * plotHeight;
         const path = paths[measurement.eye];
         path.moveTo(x + radius, y);
         path.arc(x, y, radius, 0, Math.PI * 2);
@@ -141,7 +141,7 @@ export function MeasurementCanvas({
     const bounds = canvas.getBoundingClientRect();
     return {
       bounds,
-      plotWidth: Math.max(1, bounds.width - PLOT.left - PLOT.right),
+      plotWidth: Math.max(1, bounds.width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right),
     };
   }
 
@@ -149,7 +149,7 @@ export function MeasurementCanvas({
     if (!event.ctrlKey || event.button !== 0) return;
     const { bounds } = chartGeometry(event.currentTarget);
     const x = event.clientX - bounds.left;
-    if (x < PLOT.left || x > bounds.width - PLOT.right) return;
+    if (x < MEASUREMENT_PLOT.left || x > bounds.width - MEASUREMENT_PLOT.right) return;
 
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -184,18 +184,18 @@ export function MeasurementCanvas({
       return;
     }
     const bounds = event.currentTarget.getBoundingClientRect();
-    const plotWidth = bounds.width - PLOT.left - PLOT.right;
-    const plotHeight = bounds.height - PLOT.top - PLOT.bottom;
+    const plotWidth = bounds.width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right;
+    const plotHeight = bounds.height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom;
     const pointerX = event.clientX - bounds.left;
     const pointerY = event.clientY - bounds.top;
-    if (pointerX < PLOT.left || pointerX > bounds.width - PLOT.right || pointerY < PLOT.top || pointerY > bounds.height - PLOT.bottom) {
+    if (pointerX < MEASUREMENT_PLOT.left || pointerX > bounds.width - MEASUREMENT_PLOT.right || pointerY < MEASUREMENT_PLOT.top || pointerY > bounds.height - MEASUREMENT_PLOT.bottom) {
       setHovered(null);
       return;
     }
 
     const timeSpan = Math.max(1, domainEnd - domainStart);
     const pressureSpan = Math.max(1, yMax - yMin);
-    const targetTime = domainStart + ((pointerX - PLOT.left) / plotWidth) * timeSpan;
+    const targetTime = domainStart + ((pointerX - MEASUREMENT_PLOT.left) / plotWidth) * timeSpan;
     const insertion = lowerBound(visibleMeasurements, targetTime);
     let best: HoveredPoint | null = null;
     let bestDistanceSquared = HIT_RADIUS * HIT_RADIUS;
@@ -204,9 +204,9 @@ export function MeasurementCanvas({
 
     for (let index = start; index < end; index += 1) {
       const measurement = visibleMeasurements[index];
-      const x = PLOT.left + ((measurement.time - domainStart) / timeSpan) * plotWidth;
+      const x = MEASUREMENT_PLOT.left + ((measurement.time - domainStart) / timeSpan) * plotWidth;
       if (Math.abs(x - pointerX) > HIT_RADIUS) continue;
-      const y = PLOT.top + (1 - (measurement.iop - yMin) / pressureSpan) * plotHeight;
+      const y = MEASUREMENT_PLOT.top + (1 - (measurement.iop - yMin) / pressureSpan) * plotHeight;
       const distanceSquared = (x - pointerX) ** 2 + (y - pointerY) ** 2;
       if (distanceSquared <= bestDistanceSquared) {
         bestDistanceSquared = distanceSquared;

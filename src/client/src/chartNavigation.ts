@@ -54,3 +54,20 @@ export function panDomain(domain: TimeDomain, offset: number, fullDomain: TimeDo
     fullDomain[1],
   );
 }
+
+export function navigateWheelDomain(
+  domain: TimeDomain,
+  fullDomain: TimeDomain,
+  action: "pan" | "zoom",
+  deltaX: number,
+  deltaY: number,
+  anchorRatio: number,
+  plotWidth: number,
+): TimeDomain {
+  const movement = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
+  if (action === "zoom") {
+    const scale = Math.exp(Math.max(-4, Math.min(4, movement * 0.002)));
+    return zoomDomain(domain, scale, anchorRatio, fullDomain);
+  }
+  return panDomain(domain, (movement / Math.max(1, plotWidth)) * (domain[1] - domain[0]), fullDomain);
+}
