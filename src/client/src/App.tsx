@@ -23,7 +23,6 @@ import {
   type ParseResult,
   type Summary,
 } from "./analysis";
-import type { TimeDomain } from "./chartNavigation";
 import { MeasurementsChart, type ChartMode, type DraftRange } from "./MeasurementsChart";
 
 type SavedRange = DraftRange & { id: string };
@@ -232,15 +231,12 @@ export default function App() {
   const [events, setEvents] = useState<SavedEvent[]>([]);
   const [draftRange, setDraftRange] = useState<DraftRange>({ label: "", start: "", end: "", openEnded: false });
   const [draftEvent, setDraftEvent] = useState({ label: "", date: "", clock: "" });
-  const [viewDomain, setViewDomain] = useState<TimeDomain | null>(null);
 
   const measurements = data?.measurements ?? [];
   const firstDate = measurements[0]?.timestampText.slice(0, 10) ?? "";
   const lastDate = measurements.at(-1)?.timestampText.slice(0, 10) ?? "";
   const fullDomainStart = measurements[0]?.time ?? 0;
   const fullDomainEnd = measurements.at(-1)?.time ?? 0;
-  const domainStart = viewDomain?.[0] ?? fullDomainStart;
-  const domainEnd = viewDomain?.[1] ?? fullDomainEnd;
   const [minimumIop, maximumIop] = useMemo(() => {
     let minimum = Number.POSITIVE_INFINITY;
     let maximum = Number.NEGATIVE_INFINITY;
@@ -307,7 +303,6 @@ export default function App() {
       setRanges([]);
       setEvents([]);
       setMode(null);
-      setViewDomain(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not read this CSV file.");
       setData(null);
@@ -322,7 +317,6 @@ export default function App() {
     setRanges([]);
     setEvents([]);
     setMode(null);
-    setViewDomain(null);
     setError("");
   }
 
@@ -420,10 +414,8 @@ export default function App() {
             draftEventTime={eventTimestamp()}
             onDraftEventTime={setDraftEventTime}
             today={today}
-            domain={[domainStart, domainEnd]}
             fullDomain={[fullDomainStart, fullDomainEnd]}
             yDomain={[minimumIop, maximumIop]}
-            onDomainChange={setViewDomain}
           />
 
           <section className={`work-grid ${ranges.length === 0 ? "work-grid--editor-only" : ""}`}>

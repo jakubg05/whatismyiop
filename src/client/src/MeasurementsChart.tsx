@@ -46,10 +46,8 @@ type Props = {
   draftEventTime: number | null;
   onDraftEventTime: (time: number) => void;
   today: string;
-  domain: TimeDomain;
   fullDomain: TimeDomain;
   yDomain: TimeDomain;
-  onDomainChange: (domain: TimeDomain) => void;
 };
 
 function eyeLabel(eye: Eye): string {
@@ -82,23 +80,28 @@ export function MeasurementsChart({
   draftEventTime,
   onDraftEventTime,
   today,
-  domain,
   fullDomain,
   yDomain,
-  onDomainChange,
 }: Props) {
   const chart = useRef<HTMLDivElement>(null);
   const selectionLayer = useRef<HTMLDivElement>(null);
+  const [domain, setDomain] = useState<TimeDomain>(fullDomain);
   const domainRef = useRef(domain);
   const fullDomainRef = useRef(fullDomain);
-  const onDomainChangeRef = useRef(onDomainChange);
+  const pendingDomain = useRef<TimeDomain | null>(null);
+  const wheelFrame = useRef<number | null>(null);
   const [drag, setDrag] = useState<{ start: number; current: number } | null>(null);
   const [domainStart, domainEnd] = domain;
   const [fullDomainStart, fullDomainEnd] = fullDomain;
 
   domainRef.current = domain;
   fullDomainRef.current = fullDomain;
-  onDomainChangeRef.current = onDomainChange;
+
+  useEffect(() => {
+    domainRef.current = fullDomain;
+    pendingDomain.current = null;
+    setDomain(fullDomain);
+  }, [fullDomainStart, fullDomainEnd, measurements]);
 
   useEffect(() => {
     const element = chart.current;
@@ -129,14 +132,30 @@ export function MeasurementsChart({
         (event.clientX - bounds.left - MEASUREMENT_PLOT.left) / plotWidth,
         plotWidth,
       );
+      if (next[0] === current[0] && next[1] === current[1]) return;
 
       domainRef.current = next;
-      onDomainChangeRef.current(next);
+      pendingDomain.current = next;
+      if (wheelFrame.current === null) {
+        wheelFrame.current = window.requestAnimationFrame(() => {
+          wheelFrame.current = null;
+          if (pendingDomain.current) setDomain(pendingDomain.current);
+          pendingDomain.current = null;
+        });
+      }
     }
 
     element.addEventListener("wheel", handleWheel, { passive: false });
-    return () => element.removeEventListener("wheel", handleWheel);
+    return () => {
+      element.removeEventListener("wheel", handleWheel);
+      if (wheelFrame.current !== null) window.cancelAnimationFrame(wheelFrame.current);
+    };
   }, []);
+
+  function changeDomain(next: TimeDomain) {
+    domainRef.current = next;
+    setDomain(next);
+  }
 
   function pointerRatio(event: ReactPointerEvent<HTMLDivElement>): number {
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -269,7 +288,7 @@ export function MeasurementsChart({
           domainEnd={domainEnd}
           fullDomainStart={fullDomainStart}
           fullDomainEnd={fullDomainEnd}
-          onDomainChange={onDomainChange}
+          onDomainChange={changeDomain}
           yMin={yDomain[0]}
           yMax={yDomain[1]}
         />
