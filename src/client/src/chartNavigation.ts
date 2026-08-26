@@ -71,3 +71,9 @@ export function navigateWheelDomain(
   }
   return panDomain(domain, (movement / Math.max(1, plotWidth)) * (domain[1] - domain[0]), fullDomain);
 }
+
+export function clipDomain(domain: TimeDomain, viewport: TimeDomain): TimeDomain | null {
+  const start = Math.max(domain[0], viewport[0]);
+  const end = Math.min(domain[1], viewport[1]);
+  return end > start ? [start, end] : null;
+}

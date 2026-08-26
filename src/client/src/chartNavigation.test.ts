@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { constrainDomain, navigateWheelDomain, panDomain, zoomDomain } from "./chartNavigation";
+import { clipDomain, constrainDomain, navigateWheelDomain, panDomain, zoomDomain } from "./chartNavigation";
 
 describe("chart navigation", () => {
   const fullDomain = [0, 1_000_000] as const;
@@ -28,5 +28,11 @@ describe("chart navigation", () => {
     expect(horizontal).toEqual(vertical);
     expect(vertical[1] - vertical[0]).toBeLessThan(fullDomain[1] - fullDomain[0]);
     expect(vertical[0] + (vertical[1] - vertical[0]) * 0.25).toBe(250_000);
+  });
+
+  it("clips periods to the visible chart window", () => {
+    expect(clipDomain([100_000, 900_000], [300_000, 600_000])).toEqual([300_000, 600_000]);
+    expect(clipDomain([100_000, 400_000], [300_000, 600_000])).toEqual([300_000, 400_000]);
+    expect(clipDomain([100_000, 200_000], [300_000, 600_000])).toBeNull();
   });
 });

@@ -16,7 +16,7 @@ import {
   YAxis,
 } from "recharts";
 import { dateBoundary, formatChartTime, formatDateInput, type Eye, type Measurement } from "./analysis";
-import { navigateWheelDomain, type TimeDomain } from "./chartNavigation";
+import { clipDomain, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
 
 export type ChartMode = "range" | "event" | null;
@@ -244,6 +244,17 @@ export function MeasurementsChart({
     onDraftEventTime(timeFromClientX(event.clientX).time);
   }
 
+  function visibleRange(start: string, end: string, openEnded: boolean): TimeDomain | null {
+    const startTime = dateBoundary(start);
+    const endTime = openEnded ? fullDomainEnd : dateBoundary(end, true);
+    if (startTime === null || endTime === null) return null;
+    return clipDomain([startTime, endTime], domain);
+  }
+
+  const visibleDraftRange = mode === "range"
+    ? visibleRange(draftRange.start, draftRange.end, draftRange.openEnded)
+    : null;
+
   return (
     <section className="panel chart-panel">
       <div className="panel-heading">
@@ -266,11 +277,12 @@ export function MeasurementsChart({
             <CartesianGrid stroke="#dfe3da" vertical={false} />
             <XAxis type="number" dataKey="time" domain={domain} allowDataOverflow tickFormatter={formatChartTime} tick={{ fill: "#667064", fontSize: 12 }} minTickGap={48} />
             <YAxis width={52} type="number" dataKey="iop" domain={yDomain} allowDataOverflow allowDecimals={false} tick={{ fill: "#667064", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "#667064" }} />
-            {ranges.map((range, index) => (
-              <ReferenceArea key={range.id} x1={dateBoundary(range.start)!} x2={range.openEnded ? domainEnd : Math.min(dateBoundary(range.end, true)!, domainEnd)} fill={index % 2 === 0 ? "#8aa8c4" : "#d9ad54"} fillOpacity={0.14} stroke={index % 2 === 0 ? "#6c8eac" : "#b9892d"} strokeOpacity={0.55} label={{ value: range.label, fill: "#47534b", fontSize: 11 }} />
-            ))}
-            {mode === "range" && draftRange.start && draftRange.end && !drag && (
-              <ReferenceArea x1={dateBoundary(draftRange.start)!} x2={draftRange.openEnded ? domainEnd : Math.min(dateBoundary(draftRange.end, true)!, domainEnd)} fill="#6c8eac" fillOpacity={0.2} stroke="#6c8eac" strokeDasharray="4 3" />
+            {ranges.map((range, index) => {
+              const visible = visibleRange(range.start, range.end, range.openEnded);
+              return visible && <ReferenceArea key={range.id} x1={visible[0]} x2={visible[1]} fill={index % 2 === 0 ? "#8aa8c4" : "#d9ad54"} fillOpacity={0.14} stroke={index % 2 === 0 ? "#6c8eac" : "#b9892d"} strokeOpacity={0.55} label={{ value: range.label, fill: "#47534b", fontSize: 11 }} />;
+            })}
+            {visibleDraftRange && !drag && (
+              <ReferenceArea x1={visibleDraftRange[0]} x2={visibleDraftRange[1]} fill="#6c8eac" fillOpacity={0.2} stroke="#6c8eac" strokeDasharray="4 3" />
             )}
             {drag && <ReferenceArea x1={Math.min(drag.start, drag.current)} x2={Math.max(drag.start, drag.current)} fill="#6c8eac" fillOpacity={0.25} />}
             {events.map((event) => (
