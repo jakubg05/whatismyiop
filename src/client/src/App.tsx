@@ -25,6 +25,7 @@ import {
   type ParseResult,
   type Summary,
 } from "./analysis";
+import { MeasurementCanvas } from "./MeasurementCanvas";
 
 type SavedRange = {
   id: string;
@@ -60,7 +61,6 @@ type DiurnalPoint = {
   eye: Eye;
 };
 
-const COLORS = { OD: "#d9623d", OS: "#237c78" } as const;
 const PERIOD_COLORS = ["#346f9c", "#b47722", "#6b5595", "#43815d", "#a55252", "#477d88"];
 const STORAGE_KEY = "icare-analytics:v1";
 
@@ -217,21 +217,6 @@ function SummaryCard({ title, range, measurements, endLabel }: {
   );
 }
 
-function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: Measurement & { periodLabel?: string } }> }) {
-  if (!active || !payload?.length) return null;
-  const point = payload[0].payload;
-  return (
-    <div className="chart-tooltip">
-      <strong>{eyeLabel(point.eye)} · {point.iop} mmHg</strong>
-      <span>{formatFullTime(point.time)}</span>
-      {point.periodLabel && <span>Range: {point.periodLabel}</span>}
-      <span>Quality: {point.quality}</span>
-      {point.position && <span>Position: {point.position}</span>}
-      <span className="source-row">Source row {point.sourceRow}</span>
-    </div>
-  );
-}
-
 function DiurnalTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: DiurnalPoint }> }) {
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
@@ -265,12 +250,19 @@ export default function App() {
   const [draftEvent, setDraftEvent] = useState({ label: "", date: "", clock: "" });
 
   const measurements = data?.measurements ?? [];
-  const od = useMemo(() => measurements.filter((measurement) => measurement.eye === "OD"), [measurements]);
-  const os = useMemo(() => measurements.filter((measurement) => measurement.eye === "OS"), [measurements]);
   const firstDate = measurements[0]?.timestampText.slice(0, 10) ?? "";
   const lastDate = measurements.at(-1)?.timestampText.slice(0, 10) ?? "";
   const domainStart = measurements[0]?.time ?? 0;
   const domainEnd = measurements.at(-1)?.time ?? 0;
+  const [minimumIop, maximumIop] = useMemo(() => {
+    let minimum = Number.POSITIVE_INFINITY;
+    let maximum = Number.NEGATIVE_INFINITY;
+    for (const measurement of measurements) {
+      minimum = Math.min(minimum, measurement.iop);
+      maximum = Math.max(maximum, measurement.iop);
+    }
+    return Number.isFinite(minimum) ? [Math.floor(minimum - 2), Math.ceil(maximum + 2)] : [0, 1];
+  }, [measurements]);
   const today = formatDateInput(now);
   const diurnalSeries = useMemo(() => ranges.map((range, rangeIndex) => {
     const effectiveEnd = range.openEnded ? today : range.end;
@@ -520,14 +512,11 @@ export default function App() {
             <div className="chart-wrap">
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart
-                  data={measurements}
                   margin={{ top: 12, right: 20, bottom: 10, left: 0 }}
                 >
                   <CartesianGrid stroke="#dfe3da" vertical={false} />
-                  <XAxis type="number" dataKey="time" domain={["dataMin", "dataMax"]} tickFormatter={formatChartTime} tick={{ fill: "#667064", fontSize: 12 }} minTickGap={48} />
-                  <YAxis width={52} type="number" dataKey="iop" unit="" domain={["dataMin - 2", "dataMax + 2"]} allowDecimals={false} tick={{ fill: "#667064", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "#667064" }} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend height={28} verticalAlign="top" align="right" />
+                  <XAxis type="number" dataKey="time" domain={[domainStart, domainEnd]} allowDataOverflow tickFormatter={formatChartTime} tick={{ fill: "#667064", fontSize: 12 }} minTickGap={48} />
+                  <YAxis width={52} type="number" dataKey="iop" unit="" domain={[minimumIop, maximumIop]} allowDataOverflow allowDecimals={false} tick={{ fill: "#667064", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "#667064" }} />
                   {ranges.map((range, index) => (
                     <ReferenceArea key={range.id} x1={dateBoundary(range.start)!} x2={range.openEnded ? domainEnd : Math.min(dateBoundary(range.end, true)!, domainEnd)} fill={index % 2 === 0 ? "#8aa8c4" : "#d9ad54"} fillOpacity={0.14} stroke={index % 2 === 0 ? "#6c8eac" : "#b9892d"} strokeOpacity={0.55} label={{ value: range.label, fill: "#47534b", fontSize: 11 }} />
                   ))}
@@ -537,8 +526,6 @@ export default function App() {
                   {dragStart !== null && dragCurrent !== null && (
                     <ReferenceArea x1={Math.min(dragStart, dragCurrent)} x2={Math.max(dragStart, dragCurrent)} fill="#6c8eac" fillOpacity={0.25} />
                   )}
-                  {visibleEyes.OD && <Scatter name="Right eye" data={od} fill={COLORS.OD} line={false} shape="circle" />}
-                  {visibleEyes.OS && <Scatter name="Left eye" data={os} fill={COLORS.OS} line={false} shape="circle" />}
                   {events.map((event) => (
                     <ReferenceLine
                       key={event.id}
@@ -559,6 +546,14 @@ export default function App() {
                   )}
                 </ScatterChart>
               </ResponsiveContainer>
+              <MeasurementCanvas
+                measurements={measurements}
+                visibleEyes={visibleEyes}
+                domainStart={domainStart}
+                domainEnd={domainEnd}
+                yMin={minimumIop}
+                yMax={maximumIop}
+              />
               <div
                 ref={selectionLayer}
                 className={`chart-selection-layer ${mode ? "chart-selection-layer--active" : ""}`}
