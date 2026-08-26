@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from "react";
 import {
   CartesianGrid,
   ErrorBar,
@@ -26,7 +33,7 @@ import {
   type Summary,
 } from "./analysis";
 import { MeasurementCanvas } from "./MeasurementCanvas";
-import { zoomDomain, type TimeDomain } from "./chartNavigation";
+import { panDomain, zoomDomain, type TimeDomain } from "./chartNavigation";
 
 type SavedRange = {
   id: string;
@@ -392,6 +399,32 @@ export default function App() {
     ));
   }
 
+  function navigateChartWithWheel(event: ReactWheelEvent<HTMLDivElement>) {
+    if (!event.ctrlKey && !event.shiftKey) return;
+    event.preventDefault();
+
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const plotLeft = 52;
+    const plotRight = 20;
+    const plotWidth = Math.max(1, bounds.width - plotLeft - plotRight);
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? bounds.height : 1;
+    const deltaX = event.deltaX * unit;
+    const deltaY = event.deltaY * unit;
+    const fullDomain: TimeDomain = [fullDomainStart, fullDomainEnd];
+
+    setViewDomain((current) => {
+      const domain: TimeDomain = current ?? fullDomain;
+      const movement = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
+      if (event.shiftKey) {
+        const anchorRatio = (event.clientX - bounds.left - plotLeft) / plotWidth;
+        const scale = Math.exp(Math.max(-4, Math.min(4, movement * 0.002)));
+        return zoomDomain(domain, scale, anchorRatio, fullDomain);
+      }
+
+      return panDomain(domain, (movement / plotWidth) * (domain[1] - domain[0]), fullDomain);
+    });
+  }
+
   function ratioForTime(time: number): number {
     if (domainEnd <= domainStart) return 0;
     return Math.max(0, Math.min(1, (time - domainStart) / (domainEnd - domainStart)));
@@ -534,7 +567,7 @@ export default function App() {
                 ))}
               </div>
             </div>
-            <div className="chart-wrap">
+            <div className="chart-wrap" onWheel={navigateChartWithWheel}>
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart
                   margin={{ top: 12, right: 20, bottom: 10, left: 0 }}
