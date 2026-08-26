@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "test": "vitest run",
+    "dev": "vite --config src/client/vite.config.ts",
+    "build": "tsc -b src/client/tsconfig.json && vite build --config src/client/vite.config.ts",
+    "test": "vitest run --root src/client",
     "preview:worker": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
     "deploy:check": "npm run build && wrangler deploy --dry-run"

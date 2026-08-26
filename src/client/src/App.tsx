@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   ErrorBar,
   Legend,
   ReferenceArea,
-  ReferenceLine,
   ResponsiveContainer,
   Scatter,
   ScatterChart,
@@ -13,7 +12,6 @@ import {
   YAxis,
 } from "recharts";
 import {
-  formatChartTime,
   formatDateInput,
   formatFullTime,
   inDateRange,
@@ -25,14 +23,9 @@ import {
   type ParseResult,
   type Summary,
 } from "./analysis";
+import { MeasurementsChart, type ChartMode, type DraftRange } from "./MeasurementsChart";
 
-type SavedRange = {
-  id: string;
-  label: string;
-  start: string;
-  end: string;
-  openEnded: boolean;
-};
+type SavedRange = DraftRange & { id: string };
 
 type SavedEvent = {
   id: string;
@@ -60,7 +53,6 @@ type DiurnalPoint = {
   eye: Eye;
 };
 
-const COLORS = { OD: "#d9623d", OS: "#237c78" } as const;
 const PERIOD_COLORS = ["#346f9c", "#b47722", "#6b5595", "#43815d", "#a55252", "#477d88"];
 const STORAGE_KEY = "icare-analytics:v1";
 
@@ -128,12 +120,6 @@ function DateTextInput({ label, value, onChange, disabled = false }: {
 
 function oneDecimal(value: number | null): string {
   return value === null ? "–" : value.toFixed(1);
-}
-
-function eventLabel(label: string, time: number): string {
-  const date = new Date(time);
-  const clock = `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
-  return `${label} · ${displayDate(formatDateInput(time))} ${clock}`;
 }
 
 function diurnalBinLabel(bin: number): string {
@@ -217,21 +203,6 @@ function SummaryCard({ title, range, measurements, endLabel }: {
   );
 }
 
-function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: Measurement & { periodLabel?: string } }> }) {
-  if (!active || !payload?.length) return null;
-  const point = payload[0].payload;
-  return (
-    <div className="chart-tooltip">
-      <strong>{eyeLabel(point.eye)} · {point.iop} mmHg</strong>
-      <span>{formatFullTime(point.time)}</span>
-      {point.periodLabel && <span>Range: {point.periodLabel}</span>}
-      <span>Quality: {point.quality}</span>
-      {point.position && <span>Position: {point.position}</span>}
-      <span className="source-row">Source row {point.sourceRow}</span>
-    </div>
-  );
-}
-
 function DiurnalTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: DiurnalPoint }> }) {
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
@@ -248,29 +219,33 @@ function DiurnalTooltip({ active, payload }: { active?: boolean; payload?: Array
 
 export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
-  const selectionLayer = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<ParseResult | null>(null);
   const [fileName, setFileName] = useState("");
   const [rawCsv, setRawCsv] = useState("");
   const [error, setError] = useState("");
   const [visibleEyes, setVisibleEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [diurnalEye, setDiurnalEye] = useState<Eye>("OD");
-  const [mode, setMode] = useState<"range" | "event" | null>(null);
-  const [dragStart, setDragStart] = useState<number | null>(null);
-  const [dragCurrent, setDragCurrent] = useState<number | null>(null);
+  const [mode, setMode] = useState<ChartMode>(null);
   const [now, setNow] = useState(Date.now());
   const [ranges, setRanges] = useState<SavedRange[]>([]);
   const [events, setEvents] = useState<SavedEvent[]>([]);
-  const [draftRange, setDraftRange] = useState({ label: "", start: "", end: "", openEnded: false });
+  const [draftRange, setDraftRange] = useState<DraftRange>({ label: "", start: "", end: "", openEnded: false });
   const [draftEvent, setDraftEvent] = useState({ label: "", date: "", clock: "" });
 
   const measurements = data?.measurements ?? [];
-  const od = useMemo(() => measurements.filter((measurement) => measurement.eye === "OD"), [measurements]);
-  const os = useMemo(() => measurements.filter((measurement) => measurement.eye === "OS"), [measurements]);
   const firstDate = measurements[0]?.timestampText.slice(0, 10) ?? "";
   const lastDate = measurements.at(-1)?.timestampText.slice(0, 10) ?? "";
-  const domainStart = measurements[0]?.time ?? 0;
-  const domainEnd = measurements.at(-1)?.time ?? 0;
+  const fullDomainStart = measurements[0]?.time ?? 0;
+  const fullDomainEnd = measurements.at(-1)?.time ?? 0;
+  const [minimumIop, maximumIop] = useMemo(() => {
+    let minimum = Number.POSITIVE_INFINITY;
+    let maximum = Number.NEGATIVE_INFINITY;
+    for (const measurement of measurements) {
+      minimum = Math.min(minimum, measurement.iop);
+      maximum = Math.max(maximum, measurement.iop);
+    }
+    return Number.isFinite(minimum) ? [Math.floor(minimum - 2), Math.ceil(maximum + 2)] : [0, 1];
+  }, [measurements]);
   const today = formatDateInput(now);
   const diurnalSeries = useMemo(() => ranges.map((range, rangeIndex) => {
     const effectiveEnd = range.openEnded ? today : range.end;
@@ -376,23 +351,6 @@ export default function App() {
     setMode(null);
   }
 
-  function pointerRatio(event: ReactPointerEvent<HTMLDivElement>): number {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    return Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-  }
-
-  function ratioForTime(time: number): number {
-    if (domainEnd <= domainStart) return 0;
-    return Math.max(0, Math.min(1, (time - domainStart) / (domainEnd - domainStart)));
-  }
-
-  function timeFromClientX(clientX: number): { time: number; ratio: number } {
-    const bounds = selectionLayer.current?.getBoundingClientRect();
-    if (!bounds) return { time: domainStart, ratio: 0 };
-    const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
-    return { time: domainStart + ratio * (domainEnd - domainStart), ratio };
-  }
-
   function setDraftEventTime(time: number) {
     const date = new Date(time);
     setDraftEvent((current) => ({
@@ -400,67 +358,6 @@ export default function App() {
       date: formatDateInput(time),
       clock: `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`,
     }));
-  }
-
-  function pointerTime(event: ReactPointerEvent<HTMLDivElement>): number {
-    return domainStart + pointerRatio(event) * (domainEnd - domainStart);
-  }
-
-  function startSelection(event: ReactPointerEvent<HTMLDivElement>) {
-    const time = pointerTime(event);
-    if (mode === "event") {
-      setDraftEventTime(time);
-      return;
-    }
-    if (mode !== "range") return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setDragStart(time);
-    setDragCurrent(time);
-    setDraftRange((current) => ({ ...current, start: formatDateInput(time), end: formatDateInput(time), openEnded: false }));
-  }
-
-  function moveSelection(event: ReactPointerEvent<HTMLDivElement>) {
-    if (mode !== "range" || dragStart === null) return;
-    const end = pointerTime(event);
-    const openEnded = pointerRatio(event) >= 0.98;
-    setDragCurrent(end);
-    setDraftRange((current) => ({
-      ...current,
-      start: formatDateInput(Math.min(dragStart, end)),
-      end: openEnded ? today : formatDateInput(Math.max(dragStart, end)),
-      openEnded,
-    }));
-  }
-
-  function beginHandleDrag(event: ReactPointerEvent<HTMLDivElement>) {
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function moveRangeHandle(event: ReactPointerEvent<HTMLDivElement>, edge: "start" | "end") {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    const { time, ratio } = timeFromClientX(event.clientX);
-    setDraftRange((current) => edge === "start"
-      ? { ...current, start: formatDateInput(time) }
-      : { ...current, end: ratio >= 0.98 ? today : formatDateInput(time), openEnded: ratio >= 0.98 });
-  }
-
-  function moveEventHandle(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    setDraftEventTime(timeFromClientX(event.clientX).time);
-  }
-
-  function finishSelection(event: ReactPointerEvent<HTMLDivElement>) {
-    if (mode !== "range" || dragStart === null) return;
-    const end = pointerTime(event);
-    const range = {
-      start: formatDateInput(Math.min(dragStart, end)),
-      end: pointerRatio(event) >= 0.98 ? today : formatDateInput(Math.max(dragStart, end)),
-      openEnded: pointerRatio(event) >= 0.98,
-    };
-    setDraftRange((current) => ({ ...current, ...range }));
-    setDragStart(null);
-    setDragCurrent(null);
   }
 
   function beginRange() {
@@ -486,6 +383,7 @@ export default function App() {
 
       {!data ? (
         <section className="empty-state" onClick={() => fileInput.current?.click()}>
+          <img className="empty-state-logo" src="/whatismyiop_mark_black.svg" alt="What Is My IOP" />
           <button>Choose measurements.csv</button>
         </section>
       ) : (
@@ -502,91 +400,24 @@ export default function App() {
             <div className={data.warnings.length ? "has-warning" : ""}><span>Warnings</span><strong>{data.warnings.length}</strong></div>
           </section>
 
-          <section className="panel chart-panel">
-            <div className="panel-heading">
-              <div className="annotation-modes">
-                <button type="button" aria-pressed={mode === "range"} onClick={beginRange}>New range</button>
-                <button type="button" aria-pressed={mode === "event"} onClick={beginEvent}>Event</button>
-              </div>
-              <div className="eye-toggles">
-                {(["OD", "OS"] as Eye[]).map((eye) => (
-                  <label key={eye}>
-                    <input type="checkbox" checked={visibleEyes[eye]} onChange={() => setVisibleEyes((value) => ({ ...value, [eye]: !value[eye] }))} />
-                    <span className={`dot dot--${eye.toLowerCase()}`} />{eyeLabel(eye)}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className="chart-wrap">
-              <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart
-                  data={measurements}
-                  margin={{ top: 12, right: 20, bottom: 10, left: 0 }}
-                >
-                  <CartesianGrid stroke="#dfe3da" vertical={false} />
-                  <XAxis type="number" dataKey="time" domain={["dataMin", "dataMax"]} tickFormatter={formatChartTime} tick={{ fill: "#667064", fontSize: 12 }} minTickGap={48} />
-                  <YAxis width={52} type="number" dataKey="iop" unit="" domain={["dataMin - 2", "dataMax + 2"]} allowDecimals={false} tick={{ fill: "#667064", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "#667064" }} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend height={28} verticalAlign="top" align="right" />
-                  {ranges.map((range, index) => (
-                    <ReferenceArea key={range.id} x1={dateBoundary(range.start)!} x2={range.openEnded ? domainEnd : Math.min(dateBoundary(range.end, true)!, domainEnd)} fill={index % 2 === 0 ? "#8aa8c4" : "#d9ad54"} fillOpacity={0.14} stroke={index % 2 === 0 ? "#6c8eac" : "#b9892d"} strokeOpacity={0.55} label={{ value: range.label, fill: "#47534b", fontSize: 11 }} />
-                  ))}
-                  {mode === "range" && draftRange.start && draftRange.end && dragStart === null && (
-                    <ReferenceArea x1={dateBoundary(draftRange.start)!} x2={draftRange.openEnded ? domainEnd : Math.min(dateBoundary(draftRange.end, true)!, domainEnd)} fill="#6c8eac" fillOpacity={0.2} stroke="#6c8eac" strokeDasharray="4 3" />
-                  )}
-                  {dragStart !== null && dragCurrent !== null && (
-                    <ReferenceArea x1={Math.min(dragStart, dragCurrent)} x2={Math.max(dragStart, dragCurrent)} fill="#6c8eac" fillOpacity={0.25} />
-                  )}
-                  {visibleEyes.OD && <Scatter name="Right eye" data={od} fill={COLORS.OD} line={false} shape="circle" />}
-                  {visibleEyes.OS && <Scatter name="Left eye" data={os} fill={COLORS.OS} line={false} shape="circle" />}
-                  {events.map((event) => (
-                    <ReferenceLine
-                      key={event.id}
-                      x={event.time}
-                      stroke="#7656a0"
-                      strokeWidth={2}
-                      label={{ value: eventLabel(event.label, event.time), fill: "#65448f", fontSize: 11, fontWeight: 600, position: "insideTopLeft" }}
-                    />
-                  ))}
-                  {mode === "event" && eventTimestamp() !== null && (
-                    <ReferenceLine
-                      x={eventTimestamp()!}
-                      stroke="#7656a0"
-                      strokeWidth={2}
-                      strokeDasharray="4 3"
-                      label={{ value: eventLabel(draftEvent.label.trim() || "Event", eventTimestamp()!), fill: "#65448f", fontSize: 11, position: "insideTopLeft" }}
-                    />
-                  )}
-                </ScatterChart>
-              </ResponsiveContainer>
-              <div
-                ref={selectionLayer}
-                className={`chart-selection-layer ${mode ? "chart-selection-layer--active" : ""}`}
-                onPointerDown={startSelection}
-                onPointerMove={moveSelection}
-                onPointerUp={finishSelection}
-              >
-                {mode === "range" && draftRange.start && <div
-                  className="selection-handle selection-handle--range"
-                  style={{ left: `${ratioForTime(dateBoundary(draftRange.start)!) * 100}%` }}
-                  onPointerDown={beginHandleDrag}
-                  onPointerMove={(event) => moveRangeHandle(event, "start")}
-                ><span /></div>}
-                {mode === "range" && draftRange.end && <div
-                  className="selection-handle selection-handle--range"
-                  style={{ left: `${draftRange.openEnded ? 100 : ratioForTime(dateBoundary(draftRange.end, true)!) * 100}%` }}
-                  onPointerDown={beginHandleDrag}
-                  onPointerMove={(event) => moveRangeHandle(event, "end")}
-                ><span /></div>}
-                {mode === "event" && eventTimestamp() !== null && <div
-                  className="selection-handle selection-handle--event"
-                  style={{ left: `${ratioForTime(eventTimestamp()!) * 100}%` }}
-                  onPointerDown={beginHandleDrag}
-                  onPointerMove={moveEventHandle}
-                ><span /></div>}
-              </div>
-            </div>
-          </section>
+          <MeasurementsChart
+            measurements={measurements}
+            visibleEyes={visibleEyes}
+            onToggleEye={(eye) => setVisibleEyes((current) => ({ ...current, [eye]: !current[eye] }))}
+            ranges={ranges}
+            events={events}
+            mode={mode}
+            onBeginRange={beginRange}
+            onBeginEvent={beginEvent}
+            draftRange={draftRange}
+            setDraftRange={setDraftRange}
+            draftEventLabel={draftEvent.label}
+            draftEventTime={eventTimestamp()}
+            onDraftEventTime={setDraftEventTime}
+            today={today}
+            fullDomain={[fullDomainStart, fullDomainEnd]}
+            yDomain={[minimumIop, maximumIop]}
+          />
 
           <section className={`work-grid ${ranges.length === 0 ? "work-grid--editor-only" : ""}`}>
             {ranges.length > 0 && <div className="panel controls-panel">
