@@ -13,7 +13,6 @@ import {
 } from "recharts";
 import {
   formatDateInput,
-  formatFullTime,
   inDateRange,
   dateBoundary,
   parseMeasurementsCsv,
@@ -353,6 +352,12 @@ export default function App() {
     setError("");
   }, []);
 
+  function deleteDraft() {
+    if (editingRangeId) setRanges((current) => current.filter((range) => range.id !== editingRangeId));
+    if (editingEventId) setEvents((current) => current.filter((event) => event.id !== editingEventId));
+    cancelDraft();
+  }
+
   const setDraftEventTime = useCallback((time: number) => {
     const date = new Date(time);
     setDraftEvent((current) => ({
@@ -462,32 +467,14 @@ export default function App() {
             yDomain={chartYDomain}
           />
 
-          <section className={`work-grid ${ranges.length === 0 ? "work-grid--editor-only" : ""}`}>
-            {ranges.length > 0 && <div className="panel controls-panel">
+          {ranges.length > 0 && <section className="work-grid">
+            <div className="panel controls-panel">
               <SectionHeading eyebrow="Periods" title="Comparison" />
               <div className="comparisons">
                 {ranges.map((range) => <SummaryCard key={range.id} title={range.label} range={{ start: range.start, end: range.openEnded ? today : range.end }} endLabel={range.openEnded ? "Present" : undefined} measurements={measurements} />)}
               </div>
-            </div>}
-
-            <aside className="panel saved-items-panel">
-              <SectionHeading eyebrow="Timeline" title="Annotations" />
-              <div className="treatment-list">
-                {ranges.map((range) => (
-                  <div className="treatment-item" key={range.id}>
-                    <span><strong>{range.label}</strong><small>{displayDate(range.start)} – {range.openEnded ? "Present" : displayDate(range.end)}</small></span>
-                    <Button variant="danger" aria-label={`Remove ${range.label}`} onClick={() => setRanges((current) => current.filter((item) => item.id !== range.id))}>Remove</Button>
-                  </div>
-                ))}
-                {events.map((event) => (
-                  <div className="treatment-item" key={event.id}>
-                    <span><strong>{event.label}</strong><small>{formatFullTime(event.time)}</small></span>
-                    <Button variant="danger" aria-label={`Remove ${event.label}`} onClick={() => setEvents((current) => current.filter((item) => item.id !== event.id))}>Remove</Button>
-                  </div>
-                ))}
-              </div>
-            </aside>
-          </section>
+            </div>
+          </section>}
 
           {ranges.length > 0 && <section className="diurnal-section">
             <SectionHeading
@@ -537,6 +524,7 @@ export default function App() {
               <div className="editor-drawer__toolbar">
                 <span>{mode === "range" ? "Period" : "Event"}</span>
                 <div className="editor-drawer__actions">
+                  {(editingRangeId || editingEventId) && <button type="button" className="editor-drawer__delete" onClick={deleteDraft}>Delete</button>}
                   <Button type="submit" form={`${mode}-editor-form`} variant="editorPrimary" className="draft-action">Save</Button>
                   <button type="button" className="editor-drawer__close" aria-label="Close editor" onClick={cancelDraft}>
                     <svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-424 284-228q-11 11-28 11t-28-11q-11-11-11-28t11-28l196-196-196-196q-11-11-11-28t11-28q11-11 28-11t28 11l196 196 196-196q11-11 28-11t28 11q11 11 11 28t-11 28L536-480l196 196q11 11 11 28t-11 28q-11 11-28 11t-28-11L480-424Z" /></svg>
