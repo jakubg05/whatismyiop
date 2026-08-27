@@ -22,11 +22,15 @@ type Props = {
   fullDomainStart: number;
   fullDomainEnd: number;
   onDomainChange: (domain: TimeDomain) => void;
+  onAnnotationStart: (time: number, clientX: number) => void;
+  onAnnotationMove: (time: number, clientX: number) => void;
+  onAnnotationEnd: (time: number, ratio: number, clientX: number) => void;
   yMin: number;
   yMax: number;
 };
 
 type Drag = { pointerId: number; x: number; domain: TimeDomain };
+type AnnotationDrag = { pointerId: number };
 
 const COLORS = { OD: "#d9623d", OS: "#237c78" } as const;
 export const MEASUREMENT_PLOT = { left: 52, right: 20, top: 12, bottom: 40 } as const;
@@ -55,11 +59,16 @@ export function MeasurementCanvas({
   fullDomainStart,
   fullDomainEnd,
   onDomainChange,
+  onAnnotationStart,
+  onAnnotationMove,
+  onAnnotationEnd,
   yMin,
   yMax,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const crosshairRef = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
+  const annotationDrag = useRef<AnnotationDrag | null>(null);
   const currentDomain = useRef<TimeDomain>([domainStart, domainEnd]);
   const pendingDomain = useRef<TimeDomain | null>(null);
   const animationFrame = useRef<number | null>(null);
@@ -145,20 +154,41 @@ export function MeasurementCanvas({
     };
   }
 
+  function setCrosshair(x: number | null) {
+    const crosshair = crosshairRef.current;
+    if (!crosshair) return;
+    crosshair.style.opacity = x === null ? "0" : "1";
+    if (x !== null) crosshair.style.transform = `translateX(${x}px)`;
+  }
+
   function startNavigation(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (!event.ctrlKey || event.button !== 0) return;
+    if (event.button !== 0) return;
     const { bounds } = chartGeometry(event.currentTarget);
     const x = event.clientX - bounds.left;
     if (x < MEASUREMENT_PLOT.left || x > bounds.width - MEASUREMENT_PLOT.right) return;
 
     event.preventDefault();
+    setCrosshair(null);
     event.currentTarget.setPointerCapture(event.pointerId);
+    if (!event.ctrlKey) {
+      const plotWidth = Math.max(1, bounds.width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
+      const ratio = Math.max(0, Math.min(1, (x - MEASUREMENT_PLOT.left) / plotWidth));
+      annotationDrag.current = { pointerId: event.pointerId };
+      onAnnotationStart(domainStart + ratio * (domainEnd - domainStart), event.clientX);
+      return;
+    }
     drag.current = { pointerId: event.pointerId, x, domain: currentDomain.current };
     setHovered(null);
     setNavigating(true);
   }
 
   function moveNavigation(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (annotationDrag.current?.pointerId === event.pointerId) {
+      const { bounds, plotWidth } = chartGeometry(event.currentTarget);
+      const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left - MEASUREMENT_PLOT.left) / plotWidth));
+      onAnnotationMove(domainStart + ratio * (domainEnd - domainStart), event.clientX);
+      return;
+    }
     const activeDrag = drag.current;
     if (!activeDrag || activeDrag.pointerId !== event.pointerId) {
       findNearest(event);
@@ -173,22 +203,31 @@ export function MeasurementCanvas({
   }
 
   function finishNavigation(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (annotationDrag.current?.pointerId === event.pointerId) {
+      const { bounds, plotWidth } = chartGeometry(event.currentTarget);
+      const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left - MEASUREMENT_PLOT.left) / plotWidth));
+      annotationDrag.current = null;
+      onAnnotationEnd(domainStart + ratio * (domainEnd - domainStart), ratio, event.clientX);
+      return;
+    }
     if (drag.current?.pointerId !== event.pointerId) return;
     drag.current = null;
     setNavigating(false);
   }
 
   function findNearest(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (visibleMeasurements.length === 0) {
-      setHovered(null);
-      return;
-    }
     const bounds = event.currentTarget.getBoundingClientRect();
     const plotWidth = bounds.width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right;
     const plotHeight = bounds.height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom;
     const pointerX = event.clientX - bounds.left;
     const pointerY = event.clientY - bounds.top;
     if (pointerX < MEASUREMENT_PLOT.left || pointerX > bounds.width - MEASUREMENT_PLOT.right || pointerY < MEASUREMENT_PLOT.top || pointerY > bounds.height - MEASUREMENT_PLOT.bottom) {
+      setCrosshair(null);
+      setHovered(null);
+      return;
+    }
+    setCrosshair(pointerX);
+    if (visibleMeasurements.length === 0) {
       setHovered(null);
       return;
     }
@@ -230,10 +269,12 @@ export function MeasurementCanvas({
         onPointerUp={finishNavigation}
         onPointerCancel={finishNavigation}
         onPointerLeave={() => {
+          setCrosshair(null);
           if (!navigating) setHovered(null);
         }}
         aria-label={`${measurements.length.toLocaleString()} pressure measurements`}
       />
+      <div ref={crosshairRef} className="measurement-crosshair" aria-hidden="true" />
       {hovered && <div className="chart-tooltip measurement-canvas-tooltip" style={{ left: hovered.left, top: hovered.top }}>
         <strong>{eyeLabel(hovered.measurement.eye)} · {hovered.measurement.iop} mmHg</strong>
         <span>{formatFullTime(hovered.measurement.time)}</span>
