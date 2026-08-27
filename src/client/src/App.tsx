@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type Ref } from "react";
 import {
   CartesianGrid,
   ErrorBar,
@@ -24,8 +24,40 @@ import {
   type Summary,
 } from "./analysis";
 import { MeasurementsChart, type ChartMode, type DraftRange } from "./MeasurementsChart";
+import { TopNavigation } from "./TopNavigation";
+import { Button, DateInput, SectionHeading, SegmentedControl } from "./ui";
 
 type SavedRange = DraftRange & { id: string };
+
+function EditorInput({ label, fieldName, value, onChange, inputRef, inputMode, placeholder, maxLength }: {
+  label: string;
+  fieldName: string;
+  value: string;
+  onChange: (value: string) => void;
+  inputRef?: Ref<HTMLInputElement>;
+  inputMode?: "text" | "numeric";
+  placeholder?: string;
+  maxLength?: number;
+}) {
+  return (
+    <label className="builder-field">
+      <span className="builder-field-copy"><span>{label}</span></span>
+      <input
+        ref={inputRef}
+        type="text"
+        name={fieldName}
+        autoComplete="off"
+        data-1p-ignore
+        data-lpignore="true"
+        inputMode={inputMode}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  );
+}
 
 type SavedEvent = {
   id: string;
@@ -63,59 +95,6 @@ function eyeLabel(eye: Eye): string {
 function displayDate(value: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   return match ? `${match[3]}.${match[2]}.${match[1]}` : "";
-}
-
-function parseDisplayDate(value: string): string | null {
-  const match = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(value);
-  if (!match) return null;
-  const [, day, month, year] = match.map(Number);
-  const time = Date.UTC(year, month - 1, day);
-  const check = new Date(time);
-  if (
-    check.getUTCFullYear() !== year ||
-    check.getUTCMonth() !== month - 1 ||
-    check.getUTCDate() !== day
-  ) return null;
-  return `${year.toString().padStart(4, "0")}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
-}
-
-function DateTextInput({ label, value, onChange, disabled = false }: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-}) {
-  const [draft, setDraft] = useState(displayDate(value));
-
-  useEffect(() => setDraft(displayDate(value)), [value]);
-
-  function update(raw: string) {
-    const digits = raw.replace(/\D/g, "").slice(0, 8);
-    const formatted = digits.length <= 2
-      ? digits
-      : digits.length <= 4
-        ? `${digits.slice(0, 2)}.${digits.slice(2)}`
-        : `${digits.slice(0, 2)}.${digits.slice(2, 4)}.${digits.slice(4)}`;
-    setDraft(formatted);
-    const parsed = parseDisplayDate(formatted);
-    if (parsed) onChange(parsed);
-  }
-
-  return (
-    <label>{label}
-      <input
-        type="text"
-        inputMode="numeric"
-        autoComplete="off"
-        maxLength={10}
-        placeholder="DD.MM.YYYY"
-        disabled={disabled}
-        value={draft}
-        onChange={(event) => update(event.target.value)}
-        onBlur={() => setDraft(displayDate(value))}
-      />
-    </label>
-  );
 }
 
 function oneDecimal(value: number | null): string {
@@ -231,10 +210,13 @@ export default function App() {
   const [events, setEvents] = useState<SavedEvent[]>([]);
   const [draftRange, setDraftRange] = useState<DraftRange>({ label: "", start: "", end: "", openEnded: false });
   const [draftEvent, setDraftEvent] = useState({ label: "", date: "", clock: "" });
+  const [editingRangeId, setEditingRangeId] = useState<string | null>(null);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const draftNameInput = useRef<HTMLInputElement>(null);
+  const chartDraftRange = useDeferredValue(draftRange);
+  const chartDraftEvent = useDeferredValue(draftEvent);
 
   const measurements = data?.measurements ?? [];
-  const firstDate = measurements[0]?.timestampText.slice(0, 10) ?? "";
-  const lastDate = measurements.at(-1)?.timestampText.slice(0, 10) ?? "";
   const fullDomainStart = measurements[0]?.time ?? 0;
   const fullDomainEnd = measurements.at(-1)?.time ?? 0;
   const [minimumIop, maximumIop] = useMemo(() => {
@@ -302,6 +284,8 @@ export default function App() {
       setFileName(file.name);
       setRanges([]);
       setEvents([]);
+      setEditingRangeId(null);
+      setEditingEventId(null);
       setMode(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not read this CSV file.");
@@ -316,6 +300,8 @@ export default function App() {
     setFileName("");
     setRanges([]);
     setEvents([]);
+    setEditingRangeId(null);
+    setEditingEventId(null);
     setMode(null);
     setError("");
   }
@@ -327,15 +313,19 @@ export default function App() {
       setError("Range start must be on or before its end date.");
       return;
     }
-    setRanges((current) => [...current, { ...draftRange, end: effectiveEnd, label: draftRange.label.trim(), id: crypto.randomUUID() }]);
+    const saved = { ...draftRange, end: effectiveEnd, label: draftRange.label.trim() };
+    setRanges((current) => editingRangeId
+      ? current.map((range) => range.id === editingRangeId ? { ...saved, id: range.id } : range)
+      : [...current, { ...saved, id: crypto.randomUUID() }]);
+    setEditingRangeId(null);
     setDraftRange({ label: "", start: "", end: "", openEnded: false });
     setMode(null);
     setError("");
   }
 
-  function eventTimestamp(): number | null {
-    const date = dateBoundary(draftEvent.date);
-    const clock = /^(\d{2}):(\d{2})$/.exec(draftEvent.clock);
+  function eventTimestamp(source = draftEvent): number | null {
+    const date = dateBoundary(source.date);
+    const clock = /^(\d{2}):(\d{2})$/.exec(source.clock);
     if (date === null || !clock) return null;
     const hour = Number(clock[1]);
     const minute = Number(clock[2]);
@@ -346,29 +336,80 @@ export default function App() {
   function addEvent() {
     const time = eventTimestamp();
     if (!draftEvent.label.trim() || time === null) return;
-    setEvents((current) => [...current, { id: crypto.randomUUID(), label: draftEvent.label.trim(), time }]);
+    setEvents((current) => editingEventId
+      ? current.map((event) => event.id === editingEventId ? { ...event, label: draftEvent.label.trim(), time } : event)
+      : [...current, { id: crypto.randomUUID(), label: draftEvent.label.trim(), time }]);
+    setEditingEventId(null);
     setDraftEvent({ label: "", date: "", clock: "" });
     setMode(null);
   }
 
-  function setDraftEventTime(time: number) {
+  const cancelDraft = useCallback(() => {
+    setMode(null);
+    setDraftRange({ label: "", start: "", end: "", openEnded: false });
+    setDraftEvent({ label: "", date: "", clock: "" });
+    setEditingRangeId(null);
+    setEditingEventId(null);
+    setError("");
+  }, []);
+
+  const setDraftEventTime = useCallback((time: number) => {
     const date = new Date(time);
     setDraftEvent((current) => ({
       ...current,
       date: formatDateInput(time),
       clock: `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`,
     }));
-  }
+  }, []);
 
-  function beginRange() {
-    setDraftRange({ label: "", start: "", end: "", openEnded: false });
-    setMode("range");
-  }
-
-  function beginEvent() {
+  const selectRange = useCallback((range: Omit<DraftRange, "label">) => {
+    setDraftRange({ label: "", ...range });
     setDraftEvent({ label: "", date: "", clock: "" });
+    setMode("range");
+    setEditingRangeId(null);
+    setEditingEventId(null);
+  }, []);
+
+  const selectEvent = useCallback((time: number) => {
+    setDraftEvent({ label: "", date: "", clock: "" });
+    setDraftRange({ label: "", start: "", end: "", openEnded: false });
+    setDraftEventTime(time);
     setMode("event");
-  }
+    setEditingRangeId(null);
+    setEditingEventId(null);
+  }, [setDraftEventTime]);
+
+  const editRange = useCallback((range: SavedRange) => {
+    setDraftRange({ label: range.label, start: range.start, end: range.end, openEnded: range.openEnded });
+    setDraftEvent({ label: "", date: "", clock: "" });
+    setEditingRangeId(range.id);
+    setEditingEventId(null);
+    setMode("range");
+  }, []);
+
+  const editEvent = useCallback((event: SavedEvent) => {
+    const date = new Date(event.time);
+    setDraftEvent({
+      label: event.label,
+      date: formatDateInput(event.time),
+      clock: `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`,
+    });
+    setDraftRange({ label: "", start: "", end: "", openEnded: false });
+    setEditingEventId(event.id);
+    setEditingRangeId(null);
+    setMode("event");
+  }, []);
+
+  const toggleEye = useCallback((eye: Eye) => {
+    setVisibleEyes((current) => ({ ...current, [eye]: !current[eye] }));
+  }, []);
+  const chartFullDomain = useMemo(() => [fullDomainStart, fullDomainEnd] as [number, number], [fullDomainEnd, fullDomainStart]);
+  const chartYDomain = useMemo(() => [minimumIop, maximumIop] as [number, number], [maximumIop, minimumIop]);
+
+  useEffect(() => {
+    if (!mode) return;
+    draftNameInput.current?.focus();
+  }, [mode]);
 
   return (
     <main>
@@ -384,77 +425,64 @@ export default function App() {
       {!data ? (
         <section className="empty-state" onClick={() => fileInput.current?.click()}>
           <img className="empty-state-logo" src="/whatismyiop_mark_black.svg" alt="What Is My IOP" />
-          <button>Choose measurements.csv</button>
+          <Button variant="primary">Choose measurements.csv</Button>
         </section>
       ) : (
         <>
-          <div className="file-actions">
-            <button className="clear-button" onClick={clearStoredData}>Clear</button>
-            <button className="file-button" onClick={() => fileInput.current?.click()}>Choose another CSV</button>
-          </div>
-          <section className="data-strip">
-            <div><span>File</span><strong>{fileName}</strong></div>
-            <div><span>Recorded period</span><strong>{firstDate} to {lastDate}</strong></div>
-            <div><span>Source rows</span><strong>{data.sourceRows.toLocaleString()}</strong></div>
-            <div><span>Measurements</span><strong>{measurements.length.toLocaleString()}</strong></div>
-            <div className={data.warnings.length ? "has-warning" : ""}><span>Warnings</span><strong>{data.warnings.length}</strong></div>
-          </section>
+          <div className={`analysis-shell ${mode ? "analysis-shell--editor-open" : ""}`}>
+          <div className="analysis-main">
+          <TopNavigation
+            fileName={fileName}
+            measurementCount={measurements.length}
+            onClearData={clearStoredData}
+            onChooseFile={() => fileInput.current?.click()}
+          />
 
           <MeasurementsChart
             measurements={measurements}
             visibleEyes={visibleEyes}
-            onToggleEye={(eye) => setVisibleEyes((current) => ({ ...current, [eye]: !current[eye] }))}
+            onToggleEye={toggleEye}
             ranges={ranges}
             events={events}
             mode={mode}
-            onBeginRange={beginRange}
-            onBeginEvent={beginEvent}
-            draftRange={draftRange}
+            onSelectRange={selectRange}
+            onSelectEvent={selectEvent}
+            onEditRange={editRange}
+            onEditEvent={editEvent}
+            onCancelEdit={cancelDraft}
+            draftRange={chartDraftRange}
+            draftRangeLabel={draftRange.label}
             setDraftRange={setDraftRange}
             draftEventLabel={draftEvent.label}
-            draftEventTime={eventTimestamp()}
+            onDraftEventLabel={(label) => setDraftEvent((value) => ({ ...value, label }))}
+            draftEventTime={eventTimestamp(chartDraftEvent)}
             onDraftEventTime={setDraftEventTime}
             today={today}
-            fullDomain={[fullDomainStart, fullDomainEnd]}
-            yDomain={[minimumIop, maximumIop]}
+            fullDomain={chartFullDomain}
+            yDomain={chartYDomain}
           />
 
           <section className={`work-grid ${ranges.length === 0 ? "work-grid--editor-only" : ""}`}>
             {ranges.length > 0 && <div className="panel controls-panel">
+              <SectionHeading eyebrow="Periods" title="Comparison" />
               <div className="comparisons">
                 {ranges.map((range) => <SummaryCard key={range.id} title={range.label} range={{ start: range.start, end: range.openEnded ? today : range.end }} endLabel={range.openEnded ? "Present" : undefined} measurements={measurements} />)}
               </div>
             </div>}
 
-            <aside className="panel treatment-panel">
-              {mode === "range" && <>
-                <label>Name<input value={draftRange.label} onChange={(event) => setDraftRange((value) => ({ ...value, label: event.target.value }))} /></label>
-                <div className="treatment-dates">
-                  <DateTextInput label="Start" value={draftRange.start} onChange={(start) => setDraftRange((value) => ({ ...value, start }))} />
-                  <DateTextInput label="End" value={draftRange.openEnded ? today : draftRange.end} disabled={draftRange.openEnded} onChange={(end) => setDraftRange((value) => ({ ...value, end, openEnded: false }))} />
-                </div>
-                <label className="present-toggle"><input type="checkbox" checked={draftRange.openEnded} onChange={(event) => setDraftRange((value) => ({ ...value, openEnded: event.target.checked, end: event.target.checked ? today : value.end }))} />Present</label>
-                <button className="secondary-button" onClick={addRange}>Add range</button>
-              </>}
-              {mode === "event" && <>
-                <label>Name<input value={draftEvent.label} onChange={(event) => setDraftEvent((value) => ({ ...value, label: event.target.value }))} /></label>
-                <div className="treatment-dates">
-                  <DateTextInput label="Date" value={draftEvent.date} onChange={(date) => setDraftEvent((value) => ({ ...value, date }))} />
-                  <label>Time<input inputMode="numeric" placeholder="HH:MM" maxLength={5} value={draftEvent.clock} onChange={(event) => setDraftEvent((value) => ({ ...value, clock: event.target.value.replace(/[^\d:]/g, "") }))} /></label>
-                </div>
-                <button className="secondary-button" onClick={addEvent}>Add event</button>
-              </>}
+            <aside className="panel saved-items-panel">
+              <SectionHeading eyebrow="Timeline" title="Annotations" />
               <div className="treatment-list">
                 {ranges.map((range) => (
                   <div className="treatment-item" key={range.id}>
                     <span><strong>{range.label}</strong><small>{displayDate(range.start)} – {range.openEnded ? "Present" : displayDate(range.end)}</small></span>
-                    <button aria-label={`Remove ${range.label}`} onClick={() => setRanges((current) => current.filter((item) => item.id !== range.id))}>Remove</button>
+                    <Button variant="danger" aria-label={`Remove ${range.label}`} onClick={() => setRanges((current) => current.filter((item) => item.id !== range.id))}>Remove</Button>
                   </div>
                 ))}
                 {events.map((event) => (
                   <div className="treatment-item" key={event.id}>
                     <span><strong>{event.label}</strong><small>{formatFullTime(event.time)}</small></span>
-                    <button aria-label={`Remove ${event.label}`} onClick={() => setEvents((current) => current.filter((item) => item.id !== event.id))}>Remove</button>
+                    <Button variant="danger" aria-label={`Remove ${event.label}`} onClick={() => setEvents((current) => current.filter((item) => item.id !== event.id))}>Remove</Button>
                   </div>
                 ))}
               </div>
@@ -462,15 +490,15 @@ export default function App() {
           </section>
 
           {ranges.length > 0 && <section className="diurnal-section">
-            <div className="diurnal-eye-toggle" role="group" aria-label="Eye shown in diurnal chart">
-              {(["OD", "OS"] as Eye[]).map((eye) => (
-                <button key={eye} type="button" aria-pressed={diurnalEye === eye} onClick={() => setDiurnalEye(eye)}>{eyeLabel(eye)}</button>
-              ))}
-            </div>
+            <SectionHeading
+              eyebrow="Periods"
+              title="Diurnal pattern"
+              actions={<SegmentedControl label="Eye shown in diurnal chart" value={diurnalEye} options={["OD", "OS"] as const} optionLabel={(eye) => eye === "OD" ? "Right" : "Left"} onChange={setDiurnalEye} />}
+            />
             <div className="diurnal-chart">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart data={diurnalPoints} margin={{ top: 16, right: 20, bottom: 20, left: 0 }}>
-                <CartesianGrid stroke="#dfe3da" vertical={false} />
+                <CartesianGrid stroke="var(--line)" vertical={false} />
                 {Array.from({ length: 8 }, (_, bin) => bin % 2 === 1 && (
                   <ReferenceArea key={bin} x1={bin * 180} x2={(bin + 1) * 180} fill="#e8ecee" fillOpacity={0.72} stroke="none" />
                 ))}
@@ -480,9 +508,9 @@ export default function App() {
                   domain={[0, 1440]}
                   ticks={Array.from({ length: 8 }, (_, bin) => bin * 180 + 90)}
                   tickFormatter={(value) => diurnalBinLabel(Math.floor(value / 180))}
-                  tick={{ fill: "#667064", fontSize: 11 }}
+                  tick={{ fill: "var(--muted)", fontSize: 11 }}
                 />
-                <YAxis width={52} type="number" dataKey="mean" domain={["dataMin - 2", "dataMax + 2"]} allowDecimals={false} tick={{ fill: "#667064", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "#667064" }} />
+                <YAxis width={52} type="number" dataKey="mean" domain={["dataMin - 2", "dataMax + 2"]} allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
                 <Tooltip content={<DiurnalTooltip />} />
                 <Legend height={34} verticalAlign="top" align="right" />
                 {diurnalSeries.map((series) => (
@@ -501,6 +529,35 @@ export default function App() {
             </ResponsiveContainer>
             </div>
           </section>}
+          </div>
+
+          <aside className={`editor-drawer editor-drawer--${mode ?? "closed"}`} aria-hidden={!mode}>
+            <div className="editor-drawer__inner">
+              {mode && <>
+              <div className="editor-drawer__toolbar">
+                <span>{mode === "range" ? "Period" : "Event"}</span>
+                <div className="editor-drawer__actions">
+                  <Button type="submit" form={`${mode}-editor-form`} variant="editorPrimary" className="draft-action">Save</Button>
+                  <button type="button" className="editor-drawer__close" aria-label="Close editor" onClick={cancelDraft}>
+                    <svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-424 284-228q-11 11-28 11t-28-11q-11-11-11-28t11-28l196-196-196-196q-11-11-11-28t11-28q11-11 28-11t28 11l196 196 196-196q11-11 28-11t28 11q11 11 11 28t-11 28L536-480l196 196q11 11 11 28t-11 28q-11 11-28 11t-28-11L480-424Z" /></svg>
+                  </button>
+                </div>
+              </div>
+              </>}
+              {mode === "range" && <form id="range-editor-form" className="editor-form" autoComplete="off" onSubmit={(event) => { event.preventDefault(); addRange(); }}>
+                <section className="editor-fields" aria-label="Period fields">
+                  <EditorInput label="Label" fieldName="period-label" inputRef={draftNameInput} value={draftRange.label} onChange={(label) => setDraftRange((value) => ({ ...value, label }))} />
+                </section>
+              </form>}
+              {mode === "event" && <form id="event-editor-form" className="editor-form" autoComplete="off" onSubmit={(event) => { event.preventDefault(); addEvent(); }}>
+                <section className="editor-fields" aria-label="Event fields">
+                  <EditorInput label="Label" fieldName="event-label" inputRef={draftNameInput} value={draftEvent.label} onChange={(label) => setDraftEvent((value) => ({ ...value, label }))} />
+                  <EditorInput label="Time" fieldName="event-time" inputMode="numeric" placeholder="HH:MM" maxLength={5} value={draftEvent.clock} onChange={(clock) => setDraftEvent((value) => ({ ...value, clock: clock.replace(/[^\d:]/g, "") }))} />
+                </section>
+              </form>}
+            </div>
+          </aside>
+          </div>
         </>
       )}
     </main>
