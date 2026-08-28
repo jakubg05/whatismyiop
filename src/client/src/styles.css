@@ -2,7 +2,7 @@
   --font: "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --body: 400 .875rem/1.5 var(--font); --small: 400 .75rem/1.45 var(--font);
   --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1rem; --s5: 1.5rem; --s6: 2rem;
-  --gutter: clamp(.5rem, 1vw, 1rem); --control: 2.5rem; --control-sm: 2rem; --chart-height: 28rem;
+  --gutter: clamp(1rem, 3vw, 4rem); --control: 2.5rem; --control-sm: 2rem; --chart-height: 28rem;
   --radius: .375rem; --radius-panel: .625rem;
   --ink: #202124; --muted: #6b7280; --subtle: #8b919a; --line: #e0e3e7; --line-strong: #cdd2d8;
   --canvas: #fff; --surface: #fff; --hover: #f3f4f6; --accent: #7656a0; --cta: #9b4ab8; --cta-hover: #7d3798; --danger: #a23f32;
