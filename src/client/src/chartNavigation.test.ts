@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clipDomain, constrainDomain, navigateWheelDomain, panDomain, zoomDomain } from "./chartNavigation";
+import { clipDomain, constrainDomain, daylightBackground, navigateWheelDomain, panDomain, zoomDomain } from "./chartNavigation";
 
 describe("chart navigation", () => {
   const fullDomain = [0, 1_000_000] as const;
@@ -34,5 +34,29 @@ describe("chart navigation", () => {
     expect(clipDomain([100_000, 900_000], [300_000, 600_000])).toEqual([300_000, 600_000]);
     expect(clipDomain([100_000, 400_000], [300_000, 600_000])).toEqual([300_000, 400_000]);
     expect(clipDomain([100_000, 200_000], [300_000, 600_000])).toBeNull();
+  });
+
+  it("aligns programmatic daylight bands to midnight", () => {
+    const day = 86_400_000;
+    const background = daylightBackground([day + day / 4, day * 3 + day / 4]);
+
+    expect(background?.opacity).toBe(0.3);
+    expect(background?.days.map(({ start }) => start)).toEqual([day, day * 2, day * 3]);
+  });
+
+  it("does not render the daylight background when days are no longer prominent", () => {
+    const day = 86_400_000;
+    expect(daylightBackground([0, day * 20])).toBeNull();
+    expect(daylightBackground([0, day * 19])?.opacity).toBeCloseTo(0.3 / 17);
+  });
+
+  it("calculates longer summer days and shorter winter days", () => {
+    const summer = daylightBackground([Date.UTC(2026, 5, 21), Date.UTC(2026, 5, 22)]);
+    const winter = daylightBackground([Date.UTC(2026, 11, 21), Date.UTC(2026, 11, 22)]);
+    const summerDay = summer!.days[0];
+    const winterDay = winter!.days[0];
+
+    expect(summerDay.sunrisePercent).toBeLessThan(winterDay.sunrisePercent);
+    expect(summerDay.sunsetPercent).toBeGreaterThan(winterDay.sunsetPercent);
   });
 });

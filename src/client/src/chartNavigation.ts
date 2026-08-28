@@ -1,6 +1,73 @@
 export type TimeDomain = readonly [start: number, end: number];
 
+export type DaylightBackground = {
+  opacity: number;
+  days: DaylightDay[];
+};
+
+export type DaylightDay = {
+  start: number;
+  sunrisePercent: number;
+  sunsetPercent: number;
+};
+
 const MINIMUM_WINDOW_MS = 60_000;
+const DAY_MS = 86_400_000;
+const DAYLIGHT_FADE_START_DAYS = 20;
+const DAYLIGHT_FULL_STRENGTH_DAYS = 3;
+const DAYLIGHT_MAX_OPACITY = 0.3;
+const BRATISLAVA_LATITUDE_RADIANS = 48.1486 * Math.PI / 180;
+const SUNRISE_ALTITUDE_RADIANS = -0.833 * Math.PI / 180;
+
+function daylightHours(dayStart: number): readonly [sunrise: number, sunset: number] {
+  const date = new Date(dayStart);
+  const yearStart = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const dayOfYear = Math.floor((dayStart - yearStart) / DAY_MS) + 1;
+  const daysInYear = Date.UTC(date.getUTCFullYear() + 1, 0, 1) - yearStart === 366 * DAY_MS ? 366 : 365;
+  const yearAngle = 2 * Math.PI * (dayOfYear - 1) / daysInYear;
+  const declination =
+    0.006918
+    - 0.399912 * Math.cos(yearAngle)
+    + 0.070257 * Math.sin(yearAngle)
+    - 0.006758 * Math.cos(2 * yearAngle)
+    + 0.000907 * Math.sin(2 * yearAngle)
+    - 0.002697 * Math.cos(3 * yearAngle)
+    + 0.00148 * Math.sin(3 * yearAngle);
+  const hourAngleCosine = (
+    Math.sin(SUNRISE_ALTITUDE_RADIANS)
+    - Math.sin(BRATISLAVA_LATITUDE_RADIANS) * Math.sin(declination)
+  ) / (Math.cos(BRATISLAVA_LATITUDE_RADIANS) * Math.cos(declination));
+  const hourAngle = Math.acos(Math.max(-1, Math.min(1, hourAngleCosine)));
+  const halfDaylightHours = hourAngle * 12 / Math.PI;
+  return [12 - halfDaylightHours, 12 + halfDaylightHours];
+}
+
+export function daylightBackground(domain: TimeDomain): DaylightBackground | null {
+  const span = domain[1] - domain[0];
+  if (span <= 0 || span >= DAYLIGHT_FADE_START_DAYS * DAY_MS) return null;
+
+  const visibleDays = span / DAY_MS;
+  const strength = Math.min(
+    1,
+    (DAYLIGHT_FADE_START_DAYS - visibleDays) /
+      (DAYLIGHT_FADE_START_DAYS - DAYLIGHT_FULL_STRENGTH_DAYS),
+  );
+  const days: DaylightDay[] = [];
+  const firstMidnight = Math.floor(domain[0] / DAY_MS) * DAY_MS;
+  for (let start = firstMidnight; start < domain[1]; start += DAY_MS) {
+    const [sunrise, sunset] = daylightHours(start);
+    days.push({
+      start,
+      sunrisePercent: sunrise / 24 * 100,
+      sunsetPercent: sunset / 24 * 100,
+    });
+  }
+
+  return {
+    opacity: strength * DAYLIGHT_MAX_OPACITY,
+    days,
+  };
+}
 
 export function constrainDomain(
   start: number,
