@@ -333,7 +333,11 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }, []);
 
   useEffect(() => {
-    if (mode === null) setFocusedAnnotation(null);
+    if (mode !== null) return;
+    setFocusedAnnotation(null);
+    setHoveredAnnotation(null);
+    setHoveredRegionRangeIds([]);
+    setDraggedRangeFocus(null);
   }, [mode]);
 
   function changeDomain(next: TimeDomain) {
