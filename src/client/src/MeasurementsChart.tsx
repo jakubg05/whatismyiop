@@ -651,16 +651,16 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               const color = rangePalette(index);
               const muted = hoverFocus !== null && hoverFocus !== `range:${range.id}`;
               return <Fragment key={range.id}>
-                <ReferenceArea x1={visible[0]} x2={visible[1]} fill={color.fill} fillOpacity={muted ? 0 : 0.14} stroke="none" />
-                <ReferenceLine x={visible[0]} stroke={color.stroke} strokeOpacity={muted ? 0 : 0.55} />
-                <ReferenceLine x={visible[1]} stroke={color.stroke} strokeOpacity={muted ? 0 : 0.55} />
+                <ReferenceArea x1={visible[0]} x2={visible[1]} fill={color.fill} fillOpacity={muted ? 0.035 : 0.14} stroke="none" />
+                <ReferenceLine x={visible[0]} stroke={color.stroke} strokeOpacity={muted ? 0.14 : 0.55} />
+                <ReferenceLine x={visible[1]} stroke={color.stroke} strokeOpacity={muted ? 0.14 : 0.55} />
               </Fragment>;
             })}
             {focusedAnnotation === null && visibleDraftRange && (
               <ReferenceArea x1={visibleDraftRange[0]} x2={visibleDraftRange[1]} fill={rangePalette(ranges.length).fill} fillOpacity={0.2} stroke="none" />
             )}
             {visibleEvents.map((event) => (
-              <ReferenceLine key={event.id} x={event.time} stroke={eventColor(events.indexOf(event))} strokeWidth={2} strokeOpacity={hoverFocus && hoverFocus !== `event:${event.id}` ? 0 : 1} />
+              <ReferenceLine key={event.id} x={event.time} stroke={eventColor(events.indexOf(event))} strokeWidth={2} strokeOpacity={hoverFocus && hoverFocus !== `event:${event.id}` ? 0.2 : 1} />
             ))}
             {focusedAnnotation === null && mode === "event" && draftEventTime !== null && (
               <ReferenceLine x={draftEventTime} stroke={eventColor(events.length)} strokeWidth={2} strokeDasharray="4 3" />
