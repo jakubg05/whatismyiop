@@ -736,7 +736,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                 value={hoveredRange.openEnded ? today : hoveredRange.end}
                 timeValue={hoveredRange.openEnded ? formatTimeInput(presentTime) : hoveredRange.endTime}
                 displayValue={displayDate(hoveredRange.openEnded ? today : hoveredRange.end)}
-                empty={hoveredRange.openEnded}
+                present={{ checked: hoveredRange.openEnded }}
               />
             </div>}
           </>}
@@ -786,7 +786,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             active
             ariaLabel="Period end date"
             disabled={draftRange.openEnded}
-            empty={draftRange.openEnded}
             value={draftRange.openEnded ? today : draftRange.end}
             timeValue={draftRange.openEnded ? formatTimeInput(presentTime) : draftRange.endTime}
             onChange={(value) => setDraftRange((current) => ({ ...current, end: value, openEnded: false }))}

@@ -56,7 +56,6 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
   ariaLabel: string;
   active?: boolean;
   disabled?: boolean;
-  empty?: boolean;
   alignRight?: boolean;
   className?: string;
   style?: CSSProperties;
@@ -71,7 +70,6 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
   ariaLabel,
   active = false,
   disabled = false,
-  empty = false,
   alignRight = false,
   className = "",
   style,
@@ -87,10 +85,7 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
       onPointerDown={(event) => active && event.stopPropagation()}
     >
       <div className="selection-handle__date-fields">
-        {active && empty ? <>
-          <output className="selection-handle__date-input selection-handle__empty-value" aria-label={ariaLabel}>-- / -- / ----</output>
-          <output className="selection-handle__time-input selection-handle__empty-value" aria-label={`${ariaLabel} time`}>-- : --</output>
-        </> : active ? <>
+        {active ? <>
           <DateInput
             className="selection-handle__date-input"
             aria-label={ariaLabel}
@@ -106,10 +101,12 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
             value={timeValue}
             onChange={(event) => onTimeChange?.(event.target.value)}
           />
-        </> : <>
-          <output className="selection-handle__date-value" aria-label={ariaLabel}>{empty ? "-- / -- / ----" : displayValue ?? value}</output>
-          <output className="selection-handle__time-value" aria-label={`${ariaLabel} time`}>{empty ? "-- : --" : displayTime ?? timeValue}</output>
-        </>}
+        </> : present?.checked
+          ? <output className="selection-handle__date-value" aria-label={ariaLabel}>Present</output>
+          : <>
+            <output className="selection-handle__date-value" aria-label={ariaLabel}>{displayValue ?? value}</output>
+            <output className="selection-handle__time-value" aria-label={`${ariaLabel} time`}>{displayTime ?? timeValue}</output>
+          </>}
       </div>
       {active && present && <div className="selection-handle__present-control">
         <span>Present</span>
