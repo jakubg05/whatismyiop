@@ -85,7 +85,7 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
         value={value}
         onChange={(event) => onChange?.(event.target.value)}
       /> : <output className="selection-handle__date-value" aria-label={ariaLabel}>{displayValue ?? value}</output>}
-      {present && <button
+      {active && present && <button
         className="selection-handle__present-toggle"
         type="button"
         role="switch"

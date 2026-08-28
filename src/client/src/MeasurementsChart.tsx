@@ -696,7 +696,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                 ariaLabel="Period end date"
                 value={hoveredRange.openEnded ? today : hoveredRange.end}
                 displayValue={displayDate(hoveredRange.openEnded ? today : hoveredRange.end)}
-                present={{ checked: hoveredRange.openEnded }}
               />
             </div>}
           </>}
