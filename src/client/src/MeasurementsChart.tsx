@@ -455,14 +455,18 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const annotationLabels = useMemo(() => {
     const labels: AnnotationLabel[] = [];
     for (const [index, range] of ranges.entries()) {
-      const start = dateTimeBoundary(range.start, range.startTime);
-      const end = range.openEnded ? presentTime : dateTimeBoundary(range.end, range.endTime, true);
+      const editing = focusedAnnotation === `range:${range.id}`;
+      const liveDomain = editing
+        ? draggedRangeFocus ?? rangeTimeDomain(draftRange.start, draftRange.startTime, draftRange.end, draftRange.endTime, draftRange.openEnded)
+        : rangeTimeDomain(range.start, range.startTime, range.end, range.endTime, range.openEnded);
+      const start = liveDomain?.[0] ?? null;
+      const end = liveDomain?.[1] ?? null;
       if (start !== null && end !== null && start <= domainEnd && end >= domainStart) {
         labels.push({
           id: range.id,
           focusId: `range:${range.id}`,
           kind: "range",
-          text: focusedAnnotation === `range:${range.id}` ? draftRangeLabel : range.label,
+          text: editing ? draftRangeLabel : range.label,
           time: Math.max(start, domainStart),
           endTime: Math.min(end, domainEnd),
           color: rangePalette(index).stroke,
@@ -499,7 +503,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         laneEnds[lane] = left + width;
         return { ...label, left, width, lane, fullWidth };
       });
-  }, [chartWidth, domainEnd, domainStart, draftEventLabel, draftEventTime, draftRange, draftRangeLabel, events, focusedAnnotation, mode, presentTime, ranges, visibleDraftRange]);
+  }, [chartWidth, domainEnd, domainStart, draftEventLabel, draftEventTime, draftRange, draftRangeLabel, draggedRangeFocus, events, focusedAnnotation, mode, presentTime, ranges, visibleDraftRange]);
   const annotationLaneCount = Math.max(1, ...annotationLabels.map((label) => label.lane + 1));
   const visibleRanges = focusedAnnotation?.startsWith("event:")
     ? []
