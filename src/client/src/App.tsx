@@ -463,6 +463,7 @@ export default function App() {
             draftEventTime={eventTimestamp(chartDraftEvent)}
             onDraftEventTime={setDraftEventTime}
             today={today}
+            presentTime={now}
             fullDomain={chartFullDomain}
             yDomain={chartYDomain}
           />

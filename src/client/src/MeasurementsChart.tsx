@@ -90,6 +90,7 @@ type Props = {
   draftEventTime: number | null;
   onDraftEventTime: (time: number) => void;
   today: string;
+  presentTime: number;
   fullDomain: TimeDomain;
   yDomain: TimeDomain;
 };
@@ -144,6 +145,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   draftEventTime,
   onDraftEventTime,
   today,
+  presentTime,
   fullDomain,
   yDomain,
 }: Props) {
@@ -316,8 +318,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
 
   function isAtPresent(ratio: number): boolean {
     const time = domainStart + ratio * (domainEnd - domainStart);
-    const tolerance = Math.max(1_000, (domainEnd - domainStart) * 0.000001);
-    return ratio >= 0.98 && Math.abs(time - fullDomainEnd) <= tolerance;
+    const plotWidth = Math.max(1, chartWidth - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
+    const tolerance = Math.max(60_000, ((domainEnd - domainStart) / plotWidth) * 8);
+    return Math.abs(time - presentTime) <= tolerance;
   }
 
   function ratioForTime(time: number): number {
@@ -423,7 +426,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   function updateRangePreview(edge: "start" | "end", ratio: number) {
     if (!rangePreview.current) return;
     const other = edge === "start"
-      ? ratioForTime(draftRange.openEnded ? fullDomainEnd : dateBoundary(draftRange.end, true) ?? domainEnd)
+      ? ratioForTime(draftRange.openEnded ? presentTime : dateBoundary(draftRange.end, true) ?? domainEnd)
       : ratioForTime(dateBoundary(draftRange.start) ?? domainStart);
     rangePreview.current.style.left = `${Math.min(ratio, other) * 100}%`;
     rangePreview.current.style.width = `${Math.abs(ratio - other) * 100}%`;
@@ -446,7 +449,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
 
   function visibleRange(start: string, end: string, openEnded: boolean): TimeDomain | null {
     const startTime = dateBoundary(start);
-    const endTime = openEnded ? fullDomainEnd : dateBoundary(end, true);
+    const endTime = openEnded ? presentTime : dateBoundary(end, true);
     if (startTime === null || endTime === null) return null;
     return clipDomain([startTime, endTime], domain);
   }
@@ -458,7 +461,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     const labels: AnnotationLabel[] = [];
     for (const [index, range] of ranges.entries()) {
       const start = dateBoundary(range.start);
-      const end = range.openEnded ? fullDomainEnd : dateBoundary(range.end, true);
+      const end = range.openEnded ? presentTime : dateBoundary(range.end, true);
       if (start !== null && end !== null && start <= domainEnd && end >= domainStart) {
         labels.push({
           id: range.id,
@@ -501,7 +504,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         laneEnds[lane] = left + width;
         return { ...label, left, width, lane, fullWidth };
       });
-  }, [chartWidth, domainEnd, domainStart, draftEventLabel, draftEventTime, draftRange, draftRangeLabel, events, focusedAnnotation, fullDomainEnd, mode, ranges, visibleDraftRange]);
+  }, [chartWidth, domainEnd, domainStart, draftEventLabel, draftEventTime, draftRange, draftRangeLabel, events, focusedAnnotation, mode, presentTime, ranges, visibleDraftRange]);
   const annotationLaneCount = Math.max(1, ...annotationLabels.map((label) => label.lane + 1));
   const visibleRanges = focusedAnnotation?.startsWith("event:")
     ? []
@@ -661,7 +664,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             <div className="annotation-date-anchor" style={{ left: `${ratioForTime(dateBoundary(hoveredRange.start) ?? domainStart) * 100}%` }}>
               <ChartDateTag ref={startDateTag} ariaLabel="Period start date" value={hoveredRange.start} displayValue={displayDate(hoveredRange.start)} />
             </div>
-            <div className="annotation-date-anchor" style={{ left: `${hoveredRange.openEnded ? 100 : ratioForTime(dateBoundary(hoveredRange.end, true) ?? domainEnd) * 100}%` }}>
+            {(!hoveredRange.openEnded || (presentTime >= domainStart && presentTime <= domainEnd)) && <div className="annotation-date-anchor" style={{ left: `${ratioForTime(hoveredRange.openEnded ? presentTime : dateBoundary(hoveredRange.end, true) ?? domainEnd) * 100}%` }}>
               <ChartDateTag
                 ref={endDateTag}
                 ariaLabel="Period end date"
@@ -669,7 +672,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                 displayValue={displayDate(hoveredRange.openEnded ? today : hoveredRange.end)}
                 present={{ checked: hoveredRange.openEnded }}
               />
-            </div>
+            </div>}
           </>}
           {hoveredEvent && <div className="annotation-date-anchor" style={{ left: `${ratioForTime(hoveredEvent.time) * 100}%` }}>
             <ChartDateTag
@@ -701,10 +704,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             value={draftRange.start}
             onChange={(value) => setDraftRange((current) => ({ ...current, start: value }))}
           /></div>}
-          {mode === "range" && draftRange.end && <div
+          {mode === "range" && draftRange.end && (!draftRange.openEnded || (presentTime >= domainStart && presentTime <= domainEnd)) && <div
             className="selection-handle selection-handle--range"
             data-handle="range-end"
-            style={{ left: `${draftRange.openEnded ? 100 : ratioForTime(dateBoundary(draftRange.end, true)!) * 100}%` }}
+            style={{ left: `${ratioForTime(draftRange.openEnded ? presentTime : dateBoundary(draftRange.end, true)!) * 100}%` }}
             onPointerDown={beginHandleDrag}
             onPointerMove={(event) => moveRangeHandle(event, "end")}
             onPointerUp={finishHandleDrag}
