@@ -16,6 +16,7 @@ import {
 } from "./analysis";
 import { panDomain, type TimeDomain } from "./chartNavigation";
 import { buildTrendSeries, interpolateTrend, splitTrendSegment, trendEstimatesForDomain, type EyeTrend, type TrendMode } from "./trend";
+import { tetherHorizontalOverlay } from "./tooltipPosition";
 
 type MeasurementPoint =
   | { kind: "raw"; id: string; time: number; eye: Eye; iop: number; measurement: Measurement }
@@ -116,14 +117,13 @@ function tooltipPosition(x: number, y: number, width: number, height: number) {
 }
 
 function trendTooltipPosition(x: number, y: number, width: number) {
-  const inset = 8;
-  const left = Math.max(inset, Math.min(x - TREND_TOOLTIP_WIDTH / 2, width - TREND_TOOLTIP_WIDTH - inset));
+  const horizontal = tetherHorizontalOverlay(x, TREND_TOOLTIP_WIDTH, width);
   return {
-    left,
+    left: horizontal.left,
     top: y - TOOLTIP_GAP,
     trendNotch: {
       side: "bottom" as const,
-      left: Math.max(14, Math.min(TREND_TOOLTIP_WIDTH - 14, x - left)),
+      left: horizontal.anchorOffset,
     },
   };
 }
