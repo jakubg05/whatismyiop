@@ -180,7 +180,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [sessionAggregation, setSessionAggregation] = useState<SessionAggregation>("median");
   const [trendMode, setTrendMode] = useState<TrendMode>("adjusted");
   const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
-  const [hoveredTrendEye, setHoveredTrendEye] = useState<Eye | null>(null);
+  const [focusedTrendEye, setFocusedTrendEye] = useState<Eye | null>(null);
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("all");
   const [qualityFilter, setQualityFilter] = useState("all");
   const [showPeriods, setShowPeriods] = useState(true);
@@ -214,7 +214,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
 
   const toggleTrendEye = useCallback((eye: Eye) => {
     setVisibleTrendEyes((current) => ({ ...current, [eye]: !current[eye] }));
-    setHoveredTrendEye((current) => current === eye ? null : current);
+    setFocusedTrendEye((current) => current === eye ? null : current);
   }, []);
 
   domainRef.current = domain;
@@ -264,7 +264,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const hoveredEvent = hoverFocus?.startsWith("event:")
     ? events.find((event) => hoverFocus === `event:${event.id}`) ?? null
     : null;
-  const visualHoverFocus = hoveredTrendEye ? `trend:${hoveredTrendEye}` : hoverFocus;
+  const visualHoverFocus = focusedTrendEye ? `trend:${focusedTrendEye}` : hoverFocus;
 
   function updateDateTagRows() {
     const start = startDateTag.current?.getBoundingClientRect();
@@ -731,7 +731,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           onAnnotationMove={moveAnnotation}
           onAnnotationEnd={finishAnnotation}
           onPlotHoverTimeChange={handlePlotHoverTimeChange}
-          onTrendHoverChange={setHoveredTrendEye}
+          onTrendFocusChange={setFocusedTrendEye}
           dimMeasurements={dimMeasurements}
           emphasizedRange={emphasizedRange}
           yMin={pressureDomain[0]}
@@ -892,7 +892,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             ]}
             onChange={(value) => {
               setTrendMode(value);
-              if (value === "off") setHoveredTrendEye(null);
+              if (value === "off") setFocusedTrendEye(null);
             }}
           />
           <div className="trend-eye-toggles" role="group" aria-label="Eyes shown as trends">
