@@ -46,7 +46,12 @@ type Props = {
 type Drag = { pointerId: number; x: number; domain: TimeDomain; moved: boolean; point: HoveredPoint | null };
 type AnnotationDrag = { pointerId: number };
 type NavigationModifier = "annotate" | "zoom" | null;
-type MeasurementEmphasis = { dimMeasurements: boolean; emphasizedRange: TimeDomain | null };
+type MeasurementVisibility = {
+  dimMeasurements: boolean;
+  emphasizedRange: TimeDomain | null;
+  focusedId: string | null;
+  focusedSessionId: number | null;
+};
 
 const COLORS = { OD: "#a63d74", OS: "#3f7d4e" } as const;
 export const MEASUREMENT_PLOT = { left: 52, right: 20, top: 12, bottom: 40 } as const;
@@ -91,11 +96,22 @@ function lowerBound<T extends { time: number }>(measurements: T[], time: number)
   return low;
 }
 
-function emphasisAlpha({ dimMeasurements, emphasizedRange }: MeasurementEmphasis, time: number): number {
-  return !dimMeasurements
+function visibilityAlpha(
+  { dimMeasurements, emphasizedRange, focusedId, focusedSessionId }: MeasurementVisibility,
+  time: number,
+  pointId: string,
+  pointSessionId: number | null,
+  baseAlpha: number,
+): number {
+  if (focusedId !== null) {
+    return focusedId === pointId || (focusedSessionId !== null && focusedSessionId === pointSessionId)
+      ? 1
+      : baseAlpha * 0.1;
+  }
+  return baseAlpha * (!dimMeasurements
     || (emphasizedRange !== null && time >= emphasizedRange[0] && time <= emphasizedRange[1])
     ? 1
-    : 0.18;
+    : 0.18);
 }
 
 export function MeasurementCanvas({
@@ -122,8 +138,8 @@ export function MeasurementCanvas({
   const pendingDomain = useRef<TimeDomain | null>(null);
   const animationFrame = useRef<number | null>(null);
   const redraw = useRef<(() => void) | null>(null);
-  const emphasisFrame = useRef<number | null>(null);
-  const emphasisAlphaAt = useRef<(time: number) => number>((time) => emphasisAlpha({ dimMeasurements, emphasizedRange }, time));
+  const visibilityFrame = useRef<number | null>(null);
+  const visibilityAlphaAt = useRef<(time: number, pointId: string, pointSessionId: number | null, baseAlpha: number) => number>((_time, _pointId, _pointSessionId, baseAlpha) => baseAlpha);
   const viewProgress = useRef(0);
   const selectionPop = useRef(0);
   const animatedSelectionPulse = useRef(0);
@@ -178,6 +194,8 @@ export function MeasurementCanvas({
   const positionedSelectedPoint = selectedPoint ? positionPoint(selectedPoint.point) : null;
   const focusedPoint = hovered ?? positionedSelectedPoint;
   const focusTarget = hovered?.point ?? selectedPoint?.point ?? null;
+  const focusedPointId = focusTarget?.id ?? null;
+  const focusedSessionId = focusTarget?.kind === "session" ? focusTarget.session.sessionId : null;
   const focusedSession = focusedPoint?.point.kind === "session" ? focusedPoint.point : null;
   const focusedSessionPoints = useMemo(
     () => focusedSession
@@ -274,8 +292,6 @@ export function MeasurementCanvas({
       const sessionRadius = SESSION_RADIUS;
       const rawAlpha = 0.92;
       const sessionAlpha = 0.92 * (1 - progress);
-      const focusedId = focusTarget?.id ?? null;
-      const focusedSessionId = focusTarget?.kind === "session" ? focusTarget.session.sessionId : null;
       if (focusedSession) {
         for (const point of focusedSessionPoints) {
           if (point.measurements.length < 2) continue;
@@ -287,7 +303,12 @@ export function MeasurementCanvas({
           const yMinimum = MEASUREMENT_PLOT.top + (1 - (minimum - yMin) / pressureSpan) * plotHeight;
           const yMaximum = MEASUREMENT_PLOT.top + (1 - (maximum - yMin) / pressureSpan) * plotHeight;
 
-          context.globalAlpha = emphasisAlphaAt.current(point.time);
+          context.globalAlpha = visibilityAlphaAt.current(
+            point.time,
+            `session:${point.sessionId}:${point.eye}`,
+            point.sessionId,
+            1,
+          );
           context.strokeStyle = COLORS[point.eye];
           context.lineWidth = 1.5;
           context.beginPath();
@@ -310,19 +331,13 @@ export function MeasurementCanvas({
         const pointSessionId = point.kind === "session"
           ? point.session.sessionId
           : sessionPointBySourceRow.get(point.measurement.sourceRow)?.session.sessionId;
-        const selected = focusedId === point.id || pointSessionId === focusedSessionId;
         const radius = (point.kind === "session" ? sessionRadius : rawRadius)
           * (selectedPoint?.point.id === point.id ? 1 + selectionPop.current : 1);
         const baseAlpha = point.kind === "session" ? sessionAlpha : rawAlpha;
 
         context.beginPath();
         context.arc(x, y, radius, 0, Math.PI * 2);
-        const interactionAlpha = selected
-          ? 1
-          : focusedId
-            ? baseAlpha * 0.1
-            : baseAlpha;
-        context.globalAlpha = interactionAlpha * emphasisAlphaAt.current(point.time);
+        context.globalAlpha = visibilityAlphaAt.current(point.time, point.id, pointSessionId ?? null, baseAlpha);
         context.fillStyle = COLORS[point.eye];
         context.fill();
       }
@@ -364,33 +379,34 @@ export function MeasurementCanvas({
   }, [chartPoints, domainEnd, domainStart, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, yMax, yMin]);
 
   useEffect(() => {
-    if (emphasisFrame.current !== null) window.cancelAnimationFrame(emphasisFrame.current);
-    const fromAlpha = emphasisAlphaAt.current;
-    const target = { dimMeasurements, emphasizedRange };
-    const targetAlpha = (time: number) => emphasisAlpha(target, time);
+    if (visibilityFrame.current !== null) window.cancelAnimationFrame(visibilityFrame.current);
+    const fromAlpha = visibilityAlphaAt.current;
+    const target = { dimMeasurements, emphasizedRange, focusedId: focusedPointId, focusedSessionId };
+    const targetAlpha = (time: number, pointId: string, pointSessionId: number | null, baseAlpha: number) =>
+      visibilityAlpha(target, time, pointId, pointSessionId, baseAlpha);
     const startedAt = performance.now();
 
     function animate(now: number) {
       const progress = Math.min(1, (now - startedAt) / 220);
       const eased = 1 - (1 - progress) ** 3;
-      emphasisAlphaAt.current = (time) => {
-        const from = fromAlpha(time);
-        return from + (targetAlpha(time) - from) * eased;
+      visibilityAlphaAt.current = (time, pointId, pointSessionId, baseAlpha) => {
+        const from = fromAlpha(time, pointId, pointSessionId, baseAlpha);
+        return from + (targetAlpha(time, pointId, pointSessionId, baseAlpha) - from) * eased;
       };
       redraw.current?.();
-      if (progress < 1) emphasisFrame.current = window.requestAnimationFrame(animate);
+      if (progress < 1) visibilityFrame.current = window.requestAnimationFrame(animate);
       else {
-        emphasisAlphaAt.current = targetAlpha;
-        emphasisFrame.current = null;
+        visibilityAlphaAt.current = targetAlpha;
+        visibilityFrame.current = null;
       }
     }
 
-    emphasisFrame.current = window.requestAnimationFrame(animate);
+    visibilityFrame.current = window.requestAnimationFrame(animate);
     return () => {
-      if (emphasisFrame.current !== null) window.cancelAnimationFrame(emphasisFrame.current);
-      emphasisFrame.current = null;
+      if (visibilityFrame.current !== null) window.cancelAnimationFrame(visibilityFrame.current);
+      visibilityFrame.current = null;
     };
-  }, [dimMeasurements, emphasizedRange]);
+  }, [dimMeasurements, emphasizedRange, focusedPointId, focusedSessionId]);
 
   function chartGeometry(canvas: HTMLCanvasElement) {
     const bounds = canvas.getBoundingClientRect();
@@ -423,7 +439,6 @@ export function MeasurementCanvas({
     const x = event.clientX - bounds.left;
     if (x < MEASUREMENT_PLOT.left || x > bounds.width - MEASUREMENT_PLOT.right) return;
 
-    onPlotHoverTimeChange(null);
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     if (event.ctrlKey) {
@@ -445,6 +460,7 @@ export function MeasurementCanvas({
 
   function moveNavigation(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (annotationDrag.current?.pointerId === event.pointerId) {
+      onPlotHoverTimeChange(null);
       const { bounds, plotWidth } = chartGeometry(event.currentTarget);
       const ratio = Math.max(0, Math.min(1, (event.clientX - bounds.left - MEASUREMENT_PLOT.left) / plotWidth));
       onAnnotationMove(domainStart + ratio * (domainEnd - domainStart), event.clientX);
@@ -467,6 +483,7 @@ export function MeasurementCanvas({
       if (Math.abs(activeDrag.x - x) < 4) return;
       activeDrag.moved = true;
       setHovered(null);
+      onPlotHoverTimeChange(null);
       setNavigating(true);
     }
     const offset = ((activeDrag.x - x) / plotWidth) * (activeDrag.domain[1] - activeDrag.domain[0]);
@@ -541,17 +558,6 @@ export function MeasurementCanvas({
   }
 
   function findNearest(event: ReactPointerEvent<HTMLCanvasElement>) {
-    if (selectedPoint) {
-      setHovered(null);
-      onPlotHoverTimeChange(null);
-      return;
-    }
-    const nearest = nearestPointAt(event.currentTarget, event.clientX, event.clientY);
-    setHovered(nearest);
-    if (nearest) {
-      onPlotHoverTimeChange(null);
-      return;
-    }
     const { bounds, plotWidth } = chartGeometry(event.currentTarget);
     const pointerX = event.clientX - bounds.left;
     const pointerY = event.clientY - bounds.top;
@@ -562,6 +568,12 @@ export function MeasurementCanvas({
     onPlotHoverTimeChange(insidePlot
       ? domainStart + ((pointerX - MEASUREMENT_PLOT.left) / plotWidth) * (domainEnd - domainStart)
       : null);
+    if (selectedPoint) {
+      setHovered(null);
+      return;
+    }
+    const nearest = nearestPointAt(event.currentTarget, event.clientX, event.clientY);
+    setHovered(nearest);
   }
 
   return (
