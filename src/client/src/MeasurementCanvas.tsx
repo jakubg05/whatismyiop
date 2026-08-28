@@ -14,6 +14,7 @@ import {
   type SessionPoint,
 } from "./analysis";
 import { panDomain, type TimeDomain } from "./chartNavigation";
+import { buildTrendSeries, interpolateTrend, splitTrendSegment, trendEstimatesForDomain, type TrendMode } from "./trend";
 
 type ChartPoint =
   | { kind: "raw"; id: string; time: number; eye: Eye; iop: number; measurement: Measurement }
@@ -29,7 +30,9 @@ type Props = {
   measurements: Measurement[];
   showRawReadings: boolean;
   sessionAggregation: SessionAggregation;
+  trendMode: TrendMode;
   visibleEyes: Record<Eye, boolean>;
+  visibleTrendEyes: Record<Eye, boolean>;
   domainStart: number;
   domainEnd: number;
   onDomainChange: (domain: TimeDomain) => void;
@@ -37,6 +40,7 @@ type Props = {
   onAnnotationMove: (time: number, clientX: number) => void;
   onAnnotationEnd: (time: number, ratio: number, clientX: number) => void;
   onPlotHoverTimeChange: (time: number | null) => void;
+  onTrendHoverChange: (eye: Eye | null) => void;
   dimMeasurements: boolean;
   emphasizedRange: TimeDomain | null;
   yMin: number;
@@ -63,6 +67,8 @@ const DIMMED_ALPHA_FACTOR = 0.18;
 const TOOLTIP_WIDTH = 224;
 const TOOLTIP_HEIGHT = 184;
 const TOOLTIP_GAP = 24;
+const TREND_TOOLTIP_WIDTH = 240;
+const TREND_TOOLTIP_HEIGHT = 112;
 
 function eyeLabel(eye: Eye): string {
   return eye === "OD" ? "Right" : "Left";
@@ -84,6 +90,18 @@ function tooltipPosition(x: number, y: number, width: number, height: number) {
   return y + TOOLTIP_GAP + TOOLTIP_HEIGHT <= height - inset
     ? { left, top: y + TOOLTIP_GAP }
     : { left, top: Math.max(inset, y - TOOLTIP_GAP - TOOLTIP_HEIGHT) };
+}
+
+function trendTooltipPosition(x: number, y: number, width: number, height: number) {
+  const inset = 8;
+  const left = Math.max(inset, Math.min(x - TREND_TOOLTIP_WIDTH / 2, width - TREND_TOOLTIP_WIDTH - inset));
+  const above = y - TOOLTIP_GAP - TREND_TOOLTIP_HEIGHT;
+  return {
+    left,
+    top: above >= inset
+      ? above
+      : Math.min(y + TOOLTIP_GAP, height - TREND_TOOLTIP_HEIGHT - inset),
+  };
 }
 
 function lowerBound<T extends { time: number }>(measurements: T[], time: number): number {
@@ -119,7 +137,9 @@ export function MeasurementCanvas({
   measurements,
   showRawReadings,
   sessionAggregation,
+  trendMode,
   visibleEyes,
+  visibleTrendEyes,
   domainStart,
   domainEnd,
   onDomainChange,
@@ -127,6 +147,7 @@ export function MeasurementCanvas({
   onAnnotationMove,
   onAnnotationEnd,
   onPlotHoverTimeChange,
+  onTrendHoverChange,
   dimMeasurements,
   emphasizedRange,
   yMin,
@@ -149,6 +170,7 @@ export function MeasurementCanvas({
   const [selectionPulse, setSelectionPulse] = useState(0);
   const [navigating, setNavigating] = useState(false);
   const [navigationModifier, setNavigationModifier] = useState<NavigationModifier>(null);
+  const [trendHover, setTrendHover] = useState<{ eye: Eye; time: number; left: number; top: number } | null>(null);
   const visibleMeasurements = useMemo(
     () => measurements.filter((measurement) => visibleEyes[measurement.eye]),
     [measurements, visibleEyes],
@@ -160,6 +182,10 @@ export function MeasurementCanvas({
   const visibleSessionPoints = useMemo(
     () => sessionPoints.filter((point) => visibleEyes[point.eye]),
     [sessionPoints, visibleEyes],
+  );
+  const trendSeries = useMemo(
+    () => buildTrendSeries(measurements, sessionAggregation, trendMode).filter((series) => visibleTrendEyes[series.eye]),
+    [measurements, sessionAggregation, trendMode, visibleTrendEyes],
   );
   const pairedSessionIds = useMemo(() => {
     const eyeCounts = new Map<number, number>();
@@ -193,10 +219,10 @@ export function MeasurementCanvas({
     return points;
   }, [chartPoints]);
   const positionedSelectedPoint = selectedPoint ? positionPoint(selectedPoint.point) : null;
-  const focusedPoint = hovered ?? positionedSelectedPoint;
+  const focusedPoint = trendHover ? null : hovered ?? positionedSelectedPoint;
   const focusTarget = hovered?.point ?? selectedPoint?.point ?? null;
-  const focusedPointId = focusTarget?.id ?? null;
-  const focusedSessionId = focusTarget?.kind === "session" ? focusTarget.session.sessionId : null;
+  const focusedPointId = trendHover ? `trend:${trendHover.eye}` : focusTarget?.id ?? null;
+  const focusedSessionId = trendHover ? null : focusTarget?.kind === "session" ? focusTarget.session.sessionId : null;
   const focusedSession = focusedPoint?.point.kind === "session" ? focusedPoint.point : null;
   const focusedSessionPoints = useMemo(
     () => focusedSession
@@ -343,6 +369,47 @@ export function MeasurementCanvas({
         context.fill();
       }
 
+      context.save();
+      context.beginPath();
+      context.rect(MEASUREMENT_PLOT.left, MEASUREMENT_PLOT.top, plotWidth, plotHeight);
+      context.clip();
+      for (const series of trendSeries) {
+        const visible = trendEstimatesForDomain(series.estimates, domainStart, domainEnd);
+        if (visible.length < 2) continue;
+        const xFor = (time: number) => MEASUREMENT_PLOT.left + ((time - domainStart) / timeSpan) * plotWidth;
+        const yFor = (iop: number) => MEASUREMENT_PLOT.top + (1 - (iop - yMin) / pressureSpan) * plotHeight;
+
+        context.fillStyle = COLORS[series.eye];
+        context.strokeStyle = COLORS[series.eye];
+        context.lineWidth = 1.65;
+        context.lineCap = "round";
+        for (let index = 1; index < visible.length; index += 1) {
+          const left = visible[index - 1];
+          const right = visible[index];
+          for (const [segmentLeft, segmentRight] of splitTrendSegment(left, right, emphasizedRange ?? [])) {
+            const midpoint = segmentLeft.time + (segmentRight.time - segmentLeft.time) / 2;
+            const trendId = `trend:${series.eye}`;
+            context.globalAlpha = visibilityAlphaAt.current(midpoint, trendId, null, 0.1);
+            context.beginPath();
+            context.moveTo(xFor(segmentLeft.time), yFor(segmentLeft.upper));
+            context.lineTo(xFor(segmentRight.time), yFor(segmentRight.upper));
+            context.lineTo(xFor(segmentRight.time), yFor(segmentRight.lower));
+            context.lineTo(xFor(segmentLeft.time), yFor(segmentLeft.lower));
+            context.closePath();
+            context.fill();
+
+            context.globalAlpha = visibilityAlphaAt.current(midpoint, trendId, null, 0.95);
+            context.setLineDash(segmentLeft.supported && segmentRight.supported ? [] : [14, 8]);
+            context.beginPath();
+            context.moveTo(xFor(segmentLeft.time), yFor(segmentLeft.iop));
+            context.lineTo(xFor(segmentRight.time), yFor(segmentRight.iop));
+            context.stroke();
+          }
+        }
+        context.setLineDash([]);
+      }
+      context.restore();
+
       context.globalAlpha = 1;
     }
 
@@ -377,7 +444,7 @@ export function MeasurementCanvas({
       observer.disconnect();
       if (viewFrame !== null) window.cancelAnimationFrame(viewFrame);
     };
-  }, [chartPoints, domainEnd, domainStart, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, yMax, yMin]);
+  }, [chartPoints, domainEnd, domainStart, emphasizedRange, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, trendHover, trendSeries, yMax, yMin]);
 
   useEffect(() => {
     if (visibilityFrame.current !== null) window.cancelAnimationFrame(visibilityFrame.current);
@@ -569,6 +636,28 @@ export function MeasurementCanvas({
     onPlotHoverTimeChange(insidePlot
       ? domainStart + ((pointerX - MEASUREMENT_PLOT.left) / plotWidth) * (domainEnd - domainStart)
       : null);
+    const hoverTime = domainStart + ((pointerX - MEASUREMENT_PLOT.left) / plotWidth) * (domainEnd - domainStart);
+    if (insidePlot && trendSeries.length > 0) {
+      let nearestTrend: { eye: Eye; value: number; y: number; distance: number } | null = null;
+      for (const series of trendSeries) {
+        const value = interpolateTrend(series.estimates, hoverTime);
+        if (value === null) continue;
+        const y = MEASUREMENT_PLOT.top + (1 - (value - yMin) / Math.max(1, yMax - yMin))
+          * Math.max(1, bounds.height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom);
+        const distance = Math.abs(y - pointerY);
+        if (distance <= HIT_RADIUS && (!nearestTrend || distance < nearestTrend.distance)) {
+          nearestTrend = { eye: series.eye, value, y, distance };
+        }
+      }
+      if (nearestTrend) {
+        setTrendHover({ eye: nearestTrend.eye, time: hoverTime, ...trendTooltipPosition(pointerX, nearestTrend.y, bounds.width, bounds.height) });
+        onTrendHoverChange(nearestTrend.eye);
+        setHovered(null);
+        return;
+      }
+    }
+    setTrendHover(null);
+    onTrendHoverChange(null);
     if (selectedPoint) {
       setHovered(null);
       return;
@@ -588,6 +677,8 @@ export function MeasurementCanvas({
         onPointerCancel={finishNavigation}
         onPointerLeave={() => {
           if (!navigating) setHovered(null);
+          setTrendHover(null);
+          onTrendHoverChange(null);
           onPlotHoverTimeChange(null);
         }}
         aria-label={`${measurements.length.toLocaleString()} pressure measurements`}
@@ -625,6 +716,26 @@ export function MeasurementCanvas({
             <div><dt>Source</dt><dd>Row {focusedPoint.point.measurement.sourceRow}</dd></div>
           </dl>
         </>}
+      </div>}
+      {!focusedPoint && trendHover && <div className="measurement-canvas-tooltip measurement-canvas-tooltip--trend" style={{ left: trendHover.left, top: trendHover.top }}>
+        <div className="measurement-canvas-tooltip__eyebrow">
+          <span>{trendMode === "adjusted" ? "Adjusted trend" : "Observed trend"}</span>
+          <span>{formatFullTime(trendHover.time)}</span>
+        </div>
+        <div className="measurement-canvas-tooltip__trend-values">
+          {trendSeries.filter((series) => series.eye === trendHover.eye).map((series) => {
+            const value = interpolateTrend(series.estimates, trendHover.time);
+            if (value === null) return null;
+            const previous = interpolateTrend(series.estimates, trendHover.time - 30 * 86_400_000);
+            const change = previous === null ? null : value - previous;
+            return <div key={series.eye} className="measurement-canvas-tooltip__trend-value">
+              <span className="measurement-canvas-tooltip__eye"><span className={`dot dot--${series.eye.toLowerCase()}`} aria-hidden="true" />{eyeLabel(series.eye)}</span>
+              <strong>{value.toFixed(1)} mmHg</strong>
+              <span>{change === null ? `${series.sessionCount} sessions` : `${change >= 0 ? "+" : ""}${change.toFixed(1)} over 30 days`}</span>
+            </div>;
+          })}
+        </div>
+        {trendMode === "adjusted" && <div className="measurement-canvas-tooltip__note">Standardized to 12:00, sitting</div>}
       </div>}
     </div>
   );
