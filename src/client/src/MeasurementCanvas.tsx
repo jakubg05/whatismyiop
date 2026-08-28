@@ -111,6 +111,8 @@ export function MeasurementCanvas({
   const currentDomain = useRef<TimeDomain>([domainStart, domainEnd]);
   const pendingDomain = useRef<TimeDomain | null>(null);
   const animationFrame = useRef<number | null>(null);
+  const redraw = useRef<(() => void) | null>(null);
+  const measurementEmphasis = useRef({ dimMeasurements, emphasizedRange });
   const viewProgress = useRef(0);
   const selectionPop = useRef(0);
   const animatedSelectionPulse = useRef(0);
@@ -173,6 +175,7 @@ export function MeasurementCanvas({
     [focusedSession, sessionPoints],
   );
   currentDomain.current = [domainStart, domainEnd];
+  measurementEmphasis.current = { dimMeasurements, emphasizedRange };
 
   function sessionCollisionOffset(
     point: Pick<SessionPoint, "sessionId" | "eye">,
@@ -262,8 +265,10 @@ export function MeasurementCanvas({
       const rawAlpha = 0.92;
       const sessionAlpha = 0.92 * (1 - progress);
       const emphasisAlpha = (time: number) => (
-        !dimMeasurements
-        || (emphasizedRange !== null && time >= emphasizedRange[0] && time <= emphasizedRange[1])
+        !measurementEmphasis.current.dimMeasurements
+        || (measurementEmphasis.current.emphasizedRange !== null
+          && time >= measurementEmphasis.current.emphasizedRange[0]
+          && time <= measurementEmphasis.current.emphasizedRange[1])
       ) ? 1 : 0.18;
       const focusedId = focusTarget?.id ?? null;
       const focusedSessionId = focusTarget?.kind === "session" ? focusTarget.session.sessionId : null;
@@ -321,6 +326,8 @@ export function MeasurementCanvas({
       context.globalAlpha = 1;
     }
 
+    redraw.current = draw;
+
     const targetProgress = showRawReadings ? 1 : 0;
     const startProgress = viewProgress.current;
     const startedAt = performance.now();
@@ -346,10 +353,15 @@ export function MeasurementCanvas({
     const observer = new ResizeObserver(draw);
     observer.observe(canvas);
     return () => {
+      if (redraw.current === draw) redraw.current = null;
       observer.disconnect();
       if (viewFrame !== null) window.cancelAnimationFrame(viewFrame);
     };
-  }, [chartPoints, dimMeasurements, domainEnd, domainStart, emphasizedRange, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, yMax, yMin]);
+  }, [chartPoints, domainEnd, domainStart, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, yMax, yMin]);
+
+  useEffect(() => {
+    redraw.current?.();
+  }, [dimMeasurements, emphasizedRange]);
 
   function chartGeometry(canvas: HTMLCanvasElement) {
     const bounds = canvas.getBoundingClientRect();
