@@ -606,7 +606,7 @@ export function MeasurementCanvas({
     }
   }
 
-  function nearestTrendAt(canvas: HTMLCanvasElement, clientX: number, clientY: number): HoveredPoint | null {
+  function nearestTrendAt(canvas: HTMLCanvasElement, clientX: number, clientY: number, trendId?: string): HoveredPoint | null {
     const { bounds, plotWidth } = chartGeometry(canvas);
     const plotHeight = Math.max(1, bounds.height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom);
     const pointerX = clientX - bounds.left;
@@ -621,6 +621,7 @@ export function MeasurementCanvas({
     const time = domainStart + ((pointerX - MEASUREMENT_PLOT.left) / plotWidth) * (domainEnd - domainStart);
     let nearest: { series: EyeTrend; value: number; y: number; distance: number } | null = null;
     for (const series of trendSeries) {
+      if (trendId && `trend:${series.eye}` !== trendId) continue;
       const value = interpolateTrend(series.estimates, time);
       if (value === null) continue;
       const y = MEASUREMENT_PLOT.top + (1 - (value - yMin) / Math.max(1, yMax - yMin)) * plotHeight;
@@ -702,6 +703,15 @@ export function MeasurementCanvas({
       : null);
     if (selectedPoint) {
       setHovered(null);
+      if (insidePlot && selectedPoint.point.kind === "trend") {
+        const selectedTrend = nearestTrendAt(
+          event.currentTarget,
+          event.clientX,
+          event.clientY,
+          selectedPoint.point.id,
+        );
+        if (selectedTrend) setSelectedPoint(selectedTrend);
+      }
       return;
     }
     const nearest = insidePlot ? nearestInteractivePointAt(event.currentTarget, event.clientX, event.clientY) : null;
