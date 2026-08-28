@@ -2,6 +2,7 @@ import Papa from "papaparse";
 
 export type Eye = "OD" | "OS";
 export type Quality = "Excellent" | "Good" | "Satisfactory" | string;
+export type SessionAggregation = "median" | "average";
 
 export type Measurement = {
   sourceRow: number;
@@ -13,6 +14,16 @@ export type Measurement = {
   qualityRaw: string;
   comment: string;
   position: string;
+};
+
+export type SessionPoint = {
+  sessionId: number;
+  sessionStart: number;
+  sessionEnd: number;
+  time: number;
+  eye: Eye;
+  iop: number;
+  measurements: Measurement[];
 };
 
 export type ParseResult = {
@@ -33,6 +44,7 @@ export type Summary = {
 const REQUIRED_COLUMNS = ["Date / Time", "IOP (OD)", "IOP (OS)"] as const;
 const NUMBER_PATTERN = /^\d+(?:\.\d+)?$/;
 const TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/;
+export const SESSION_WINDOW_MS = 10 * 60 * 1000;
 
 export function parseWallTime(value: string): number | null {
   const match = TIMESTAMP_PATTERN.exec(value.trim());
@@ -154,6 +166,55 @@ export function summarize(measurements: Measurement[]): Summary {
     min: values[0],
     max: values[values.length - 1],
   };
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
+export function coalesceMeasurementSessions(
+  measurements: Measurement[],
+  aggregation: SessionAggregation = "median",
+  sessionWindowMs = SESSION_WINDOW_MS,
+): SessionPoint[] {
+  if (measurements.length === 0) return [];
+
+  const ordered = [...measurements].sort((a, b) => a.time - b.time || a.sourceRow - b.sourceRow);
+  const sessions: Array<{ start: number; end: number; measurements: Measurement[] }> = [];
+
+  for (const measurement of ordered) {
+    const current = sessions.at(-1);
+    if (!current || measurement.time - current.start > sessionWindowMs) {
+      sessions.push({ start: measurement.time, end: measurement.time, measurements: [measurement] });
+      continue;
+    }
+    current.end = measurement.time;
+    current.measurements.push(measurement);
+  }
+
+  return sessions.flatMap((session, sessionId) => {
+    const sessionTime = session.start + (session.end - session.start) / 2;
+    return (["OD", "OS"] as Eye[]).flatMap((eye) => {
+      const eyeMeasurements = session.measurements.filter((measurement) => measurement.eye === eye);
+      if (eyeMeasurements.length === 0) return [];
+      const values = eyeMeasurements.map((measurement) => measurement.iop);
+      return [{
+        sessionId,
+        sessionStart: session.start,
+        sessionEnd: session.end,
+        time: sessionTime,
+        eye,
+        iop: aggregation === "median"
+          ? median(values)
+          : values.reduce((sum, value) => sum + value, 0) / values.length,
+        measurements: eyeMeasurements,
+      }];
+    });
+  });
 }
 
 export function dateBoundary(value: string, endOfDay = false): number | null {
