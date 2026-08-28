@@ -24,6 +24,7 @@ import {
 } from "./analysis";
 import { MeasurementsChart, type ChartMode, type DraftRange } from "./MeasurementsChart";
 import { TopNavigation } from "./TopNavigation";
+import { type TrendMode } from "./trend";
 import { Button, DateInput, SectionHeading, SegmentedControl } from "./ui";
 
 type SavedRange = DraftRange & { id: string };
@@ -181,6 +182,8 @@ export default function App() {
   const [rawCsv, setRawCsv] = useState("");
   const [error, setError] = useState("");
   const [visibleEyes, setVisibleEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
+  const [trendMode, setTrendMode] = useState<TrendMode>("adjusted");
+  const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [diurnalEye, setDiurnalEye] = useState<Eye>("OD");
   const [mode, setMode] = useState<ChartMode>(null);
   const [now, setNow] = useState(Date.now());
@@ -393,6 +396,17 @@ export default function App() {
   const toggleEye = useCallback((eye: Eye) => {
     setVisibleEyes((current) => ({ ...current, [eye]: !current[eye] }));
   }, []);
+  const toggleTrendEye = useCallback((eye: Eye) => {
+    setVisibleTrendEyes((current) => ({ ...current, [eye]: !current[eye] }));
+  }, []);
+  const toggleTrendSettings = useCallback(() => {
+    setMode((current) => current === "trend" ? null : "trend");
+    setDraftRange(emptyDraftRange());
+    setDraftEvent({ label: "", date: "", clock: "" });
+    setEditingRangeId(null);
+    setEditingEventId(null);
+    setError("");
+  }, []);
   const chartFullDomain = useMemo(() => [fullDomainStart, fullDomainEnd] as [number, number], [fullDomainEnd, fullDomainStart]);
   const chartYDomain = useMemo(() => [minimumIop, maximumIop] as [number, number], [maximumIop, minimumIop]);
 
@@ -427,6 +441,9 @@ export default function App() {
             measurements={measurements}
             visibleEyes={visibleEyes}
             onToggleEye={toggleEye}
+            trendMode={trendMode}
+            visibleTrendEyes={visibleTrendEyes}
+            onOpenTrendSettings={toggleTrendSettings}
             ranges={ranges}
             events={events}
             mode={mode}
@@ -508,10 +525,10 @@ export default function App() {
             <div className="editor-drawer__inner">
               {mode && <>
               <div className="editor-drawer__toolbar">
-                <span>{(mode === "range" ? draftRange.label : draftEvent.label).trim() || "Untitled"}</span>
+                <span>{mode === "trend" ? "Trend" : (mode === "range" ? draftRange.label : draftEvent.label).trim() || "Untitled"}</span>
                 <div className="editor-drawer__actions">
                   {(editingRangeId || editingEventId) && <button type="button" className="editor-drawer__delete" onClick={deleteDraft}>Delete</button>}
-                  <Button type="submit" form={`${mode}-editor-form`} variant="editorPrimary" className="draft-action">Save</Button>
+                  {mode !== "trend" && <Button type="submit" form={`${mode}-editor-form`} variant="editorPrimary" className="draft-action">Save</Button>}
                   <button type="button" className="editor-drawer__close" aria-label="Close editor" onClick={cancelDraft}>
                     <svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-424 284-228q-11 11-28 11t-28-11q-11-11-11-28t11-28l196-196-196-196q-11-11-11-28t11-28q11-11 28-11t28 11l196 196 196-196q11-11 28-11t28 11q11 11 11 28t-11 28L536-480l196 196q11 11 11 28t-11 28q-11 11-28 11t-28-11L480-424Z" /></svg>
                   </button>
@@ -520,6 +537,37 @@ export default function App() {
               </>}
               {mode === "range" && <form id="range-editor-form" onSubmit={(event) => { event.preventDefault(); addRange(); }} />}
               {mode === "event" && <form id="event-editor-form" onSubmit={(event) => { event.preventDefault(); addEvent(); }} />}
+              {mode === "trend" && <div className="trend-settings">
+                <section className="trend-settings__section" aria-labelledby="trend-type-heading">
+                  <div className="trend-settings__heading">
+                    <h2 id="trend-type-heading">Type</h2>
+                    <p>Choose how the long-term pressure trend is calculated.</p>
+                  </div>
+                  <div className="trend-settings__options" role="radiogroup" aria-labelledby="trend-type-heading">
+                    {([
+                      ["adjusted", "Adjusted", "Accounts for session timing and measurement position."],
+                      ["observed", "Observed", "Shows the trend directly from recorded session values."],
+                      ["off", "Off", "Hides all trend lines without changing eye settings."],
+                    ] as const).map(([value, label, description]) => <label key={value} className="trend-settings__option">
+                      <input type="radio" name="trend-type" value={value} checked={trendMode === value} onChange={() => setTrendMode(value)} />
+                      <span><strong>{label}</strong><small>{description}</small></span>
+                    </label>)}
+                  </div>
+                </section>
+                <section className="trend-settings__section" aria-labelledby="trend-eyes-heading">
+                  <div className="trend-settings__heading">
+                    <h2 id="trend-eyes-heading">Eyes</h2>
+                    <p>Select which eye trends are visible independently of the measurements.</p>
+                  </div>
+                  <div className="trend-settings__options" role="group" aria-labelledby="trend-eyes-heading">
+                    {(["OD", "OS"] as Eye[]).map((eye) => <label key={eye} className="trend-settings__option trend-settings__option--eye">
+                      <input type="checkbox" checked={visibleTrendEyes[eye]} onChange={() => toggleTrendEye(eye)} />
+                      <span className={`dot dot--${eye.toLowerCase()}`} aria-hidden="true" />
+                      <span><strong>{eye === "OD" ? "Right eye" : "Left eye"}</strong><small>{eye}</small></span>
+                    </label>)}
+                  </div>
+                </section>
+              </div>}
             </div>
           </aside>
           </div>

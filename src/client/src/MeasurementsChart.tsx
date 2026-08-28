@@ -27,7 +27,7 @@ import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
 import { type TrendMode } from "./trend";
 import { ChartDateTag, ChartSelect, ChartToggle } from "./ui";
 
-export type ChartMode = "range" | "event" | null;
+export type ChartMode = "range" | "event" | "trend" | null;
 type PositionFilter = "all" | "sitting" | "laying";
 
 export type DraftRange = {
@@ -78,6 +78,9 @@ type Props = {
   measurements: Measurement[];
   visibleEyes: Record<Eye, boolean>;
   onToggleEye: (eye: Eye) => void;
+  trendMode: TrendMode;
+  visibleTrendEyes: Record<Eye, boolean>;
+  onOpenTrendSettings: () => void;
   ranges: ChartRange[];
   events: ChartEvent[];
   mode: ChartMode;
@@ -138,6 +141,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   measurements,
   visibleEyes,
   onToggleEye,
+  trendMode,
+  visibleTrendEyes,
+  onOpenTrendSettings,
   ranges,
   events,
   mode,
@@ -178,8 +184,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [draggedRangeFocus, setDraggedRangeFocus] = useState<TimeDomain | null>(null);
   const [measurementView, setMeasurementView] = useState<"sessions" | "raw">("sessions");
   const [sessionAggregation, setSessionAggregation] = useState<SessionAggregation>("median");
-  const [trendMode, setTrendMode] = useState<TrendMode>("adjusted");
-  const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("all");
   const [qualityFilter, setQualityFilter] = useState("all");
   const [showPeriods, setShowPeriods] = useState(true);
@@ -210,10 +214,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     () => daylightBackground(domain),
     [domain],
   );
-
-  const toggleTrendEye = useCallback((eye: Eye) => {
-    setVisibleTrendEyes((current) => ({ ...current, [eye]: !current[eye] }));
-  }, []);
 
   domainRef.current = domain;
 
@@ -876,24 +876,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           />
           <button className="measurement-view-control__raw" type="button" aria-pressed={measurementView === "raw"} onClick={() => setMeasurementView("raw")}>Raw</button>
         </div>
-        <div className="trend-controls" role="group" aria-label="Trend visibility">
-          <ChartSelect
-            className="chart-filter chart-filter--trend"
-            label="Trend"
-            value={trendMode}
-            options={[
-              { value: "adjusted", label: "Adjusted" },
-              { value: "observed", label: "Observed" },
-              { value: "off", label: "Off" },
-            ]}
-            onChange={setTrendMode}
-          />
-          <div className="trend-eye-toggles" role="group" aria-label="Eyes shown as trends">
-            {(["OD", "OS"] as Eye[]).map((eye) => (
-              <ChartToggle key={eye} label={eyeLabel(eye)} colorClass={`dot--${eye.toLowerCase()}`} checked={visibleTrendEyes[eye]} onChange={() => toggleTrendEye(eye)} />
-            ))}
-          </div>
-        </div>
+        <button className="chart-settings-trigger" type="button" aria-pressed={mode === "trend"} onClick={onOpenTrendSettings}>Trend</button>
         <div className="annotation-toggles" role="group" aria-label="Annotation visibility">
           <ChartToggle label="Periods" checked={showPeriods} onChange={() => setShowPeriods((current) => !current)} />
           <ChartToggle label="Events" checked={showEvents} onChange={() => setShowEvents((current) => !current)} />
