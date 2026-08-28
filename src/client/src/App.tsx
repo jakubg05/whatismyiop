@@ -508,7 +508,7 @@ export default function App() {
             <div className="editor-drawer__inner">
               {mode && <>
               <div className="editor-drawer__toolbar">
-                <span>{mode === "range" ? "Period" : "Event"}</span>
+                <span>{(mode === "range" ? draftRange.label : draftEvent.label).trim() || "Untitled"}</span>
                 <div className="editor-drawer__actions">
                   {(editingRangeId || editingEventId) && <button type="button" className="editor-drawer__delete" onClick={deleteDraft}>Delete</button>}
                   <Button type="submit" form={`${mode}-editor-form`} variant="editorPrimary" className="draft-action">Save</Button>
