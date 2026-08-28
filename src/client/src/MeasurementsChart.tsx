@@ -678,6 +678,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                 value={hoveredRange.openEnded ? today : hoveredRange.end}
                 timeValue={hoveredRange.openEnded ? formatTimeInput(presentTime) : hoveredRange.endTime}
                 displayValue={displayDate(hoveredRange.openEnded ? today : hoveredRange.end)}
+                empty={hoveredRange.openEnded}
               />
             </div>}
           </>}
@@ -714,7 +715,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             onChange={(value) => setDraftRange((current) => ({ ...current, start: value }))}
             onTimeChange={(startTime) => setDraftRange((current) => ({ ...current, startTime }))}
           /></div>}
-          {mode === "range" && draftRange.end && (!draftRange.openEnded || (presentTime >= domainStart && presentTime <= domainEnd)) && <div
+          {mode === "range" && (draftRange.end || draftRange.openEnded) && (!draftRange.openEnded || (presentTime >= domainStart && presentTime <= domainEnd)) && <div
             className="selection-handle selection-handle--range"
             data-handle="range-end"
             style={{ left: `${ratioForTime(draftRange.openEnded ? presentTime : dateTimeBoundary(draftRange.end, draftRange.endTime, true)!) * 100}%` }}
@@ -727,6 +728,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             active
             ariaLabel="Period end date"
             disabled={draftRange.openEnded}
+            empty={draftRange.openEnded}
             value={draftRange.openEnded ? today : draftRange.end}
             timeValue={draftRange.openEnded ? formatTimeInput(presentTime) : draftRange.endTime}
             onChange={(value) => setDraftRange((current) => ({ ...current, end: value, openEnded: false }))}
@@ -736,8 +738,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               onChange: () => setDraftRange((current) => ({
                 ...current,
                 openEnded: !current.openEnded,
-                end: today,
-                endTime: formatTimeInput(presentTime),
+                end: current.openEnded ? today : "",
+                endTime: current.openEnded ? formatTimeInput(presentTime) : "",
               })),
             }}
           />

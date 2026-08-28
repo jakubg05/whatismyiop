@@ -269,7 +269,8 @@ export default function App() {
       setRanges(state.ranges.map((range) => ({
         ...range,
         startTime: typeof range.startTime === "string" ? range.startTime : "00:00",
-        endTime: typeof range.endTime === "string" ? range.endTime : "23:59",
+        end: range.openEnded ? "" : range.end,
+        endTime: range.openEnded ? "" : typeof range.endTime === "string" ? range.endTime : "23:59",
       })));
       setEvents(state.events);
     } catch {
@@ -330,7 +331,12 @@ export default function App() {
       setError("Range start must be before its end.");
       return;
     }
-    const saved = { ...draftRange, end: effectiveEnd, endTime: effectiveEndTime, label: draftRange.label.trim() };
+    const saved = {
+      ...draftRange,
+      end: draftRange.openEnded ? "" : effectiveEnd,
+      endTime: draftRange.openEnded ? "" : effectiveEndTime,
+      label: draftRange.label.trim(),
+    };
     setRanges((current) => editingRangeId
       ? current.map((range) => range.id === editingRangeId ? { ...saved, id: range.id } : range)
       : [...current, { ...saved, id: crypto.randomUUID() }]);
