@@ -71,7 +71,6 @@ const TOOLTIP_WIDTH = 224;
 const TOOLTIP_HEIGHT = 184;
 const TOOLTIP_GAP = 24;
 const TREND_TOOLTIP_WIDTH = 240;
-const TREND_TOOLTIP_HEIGHT = 112;
 
 function eyeLabel(eye: Eye): string {
   return eye === "OD" ? "Right" : "Left";
@@ -95,7 +94,7 @@ function TrendTooltipContent({ point, mode }: { point: TrendPoint; mode: TrendMo
     </div>
     <dl className="measurement-canvas-tooltip__rows measurement-canvas-tooltip__trend-row">
       <div>
-        <dt>{change === null ? "Sessions" : "30-day change"}</dt>
+        <dt>{change === null ? "Sessions" : "30d change"}</dt>
         <dd>{change === null ? point.trend.sessionCount : `${change >= 0 ? "+" : ""}${change.toFixed(1)} mmHg`}</dd>
       </div>
     </dl>
@@ -116,18 +115,14 @@ function tooltipPosition(x: number, y: number, width: number, height: number) {
     : { left, top: Math.max(inset, y - TOOLTIP_GAP - TOOLTIP_HEIGHT) };
 }
 
-function trendTooltipPosition(x: number, y: number, width: number, height: number) {
+function trendTooltipPosition(x: number, y: number, width: number) {
   const inset = 8;
   const left = Math.max(inset, Math.min(x - TREND_TOOLTIP_WIDTH / 2, width - TREND_TOOLTIP_WIDTH - inset));
-  const above = y - TOOLTIP_GAP - TREND_TOOLTIP_HEIGHT;
-  const placeAbove = above >= inset;
   return {
     left,
-    top: placeAbove
-      ? above
-      : Math.min(y + TOOLTIP_GAP, height - TREND_TOOLTIP_HEIGHT - inset),
+    top: y - TOOLTIP_GAP,
     trendNotch: {
-      side: placeAbove ? "bottom" as const : "top" as const,
+      side: "bottom" as const,
       left: Math.max(14, Math.min(TREND_TOOLTIP_WIDTH - 14, x - left)),
     },
   };
@@ -522,7 +517,7 @@ export function MeasurementCanvas({
     const x = baseX + pointCollisionOffset(point, baseX, width - MEASUREMENT_PLOT.right);
     const y = MEASUREMENT_PLOT.top + (1 - (point.iop - yMin) / Math.max(1, yMax - yMin)) * plotHeight;
     const tooltip = point.kind === "trend"
-      ? trendTooltipPosition(baseX, y, width, height)
+      ? trendTooltipPosition(baseX, y, width)
       : tooltipPosition(x, y, width, height);
     return {
       point,
@@ -642,7 +637,7 @@ export function MeasurementCanvas({
             iop: nearest.value,
             trend: nearest.series,
           },
-          ...trendTooltipPosition(pointerX, nearest.y, bounds.width, bounds.height),
+          ...trendTooltipPosition(pointerX, nearest.y, bounds.width),
         }
       : null;
   }
