@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clipDomain, constrainDomain, daylightBackground, navigateWheelDomain, panDomain, zoomDomain } from "./chartNavigation";
+import { clipDomain, constrainDomain, daylightBackground, intersectDomains, navigateWheelDomain, panDomain, zoomDomain } from "./chartNavigation";
 
 describe("chart navigation", () => {
   const fullDomain = [0, 1_000_000] as const;
@@ -43,6 +43,12 @@ describe("chart navigation", () => {
     expect(clipDomain([100_000, 900_000], [300_000, 600_000])).toEqual([300_000, 600_000]);
     expect(clipDomain([100_000, 400_000], [300_000, 600_000])).toEqual([300_000, 400_000]);
     expect(clipDomain([100_000, 200_000], [300_000, 600_000])).toBeNull();
+  });
+
+  it("finds the conjunction of overlapping hovered periods", () => {
+    expect(intersectDomains([[100, 500], [250, 700], [300, 450]])).toEqual([300, 450]);
+    expect(intersectDomains([[100, 200], [300, 400]])).toBeNull();
+    expect(intersectDomains([])).toBeNull();
   });
 
   it("aligns programmatic daylight bands to midnight", () => {

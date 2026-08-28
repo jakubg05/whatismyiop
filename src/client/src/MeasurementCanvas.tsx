@@ -36,6 +36,7 @@ type Props = {
   onAnnotationStart: (time: number, clientX: number) => void;
   onAnnotationMove: (time: number, clientX: number) => void;
   onAnnotationEnd: (time: number, ratio: number, clientX: number) => void;
+  onPlotHoverTimeChange: (time: number | null) => void;
   dimMeasurements: boolean;
   emphasizedRange: TimeDomain | null;
   yMin: number;
@@ -108,6 +109,7 @@ export function MeasurementCanvas({
   onAnnotationStart,
   onAnnotationMove,
   onAnnotationEnd,
+  onPlotHoverTimeChange,
   dimMeasurements,
   emphasizedRange,
   yMin,
@@ -421,6 +423,7 @@ export function MeasurementCanvas({
     const x = event.clientX - bounds.left;
     if (x < MEASUREMENT_PLOT.left || x > bounds.width - MEASUREMENT_PLOT.right) return;
 
+    onPlotHoverTimeChange(null);
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     if (event.ctrlKey) {
@@ -451,6 +454,7 @@ export function MeasurementCanvas({
     if (!activeDrag || activeDrag.pointerId !== event.pointerId) {
       if (event.ctrlKey || event.shiftKey) {
         setHovered(null);
+        onPlotHoverTimeChange(null);
         return;
       }
       findNearest(event);
@@ -539,9 +543,25 @@ export function MeasurementCanvas({
   function findNearest(event: ReactPointerEvent<HTMLCanvasElement>) {
     if (selectedPoint) {
       setHovered(null);
+      onPlotHoverTimeChange(null);
       return;
     }
-    setHovered(nearestPointAt(event.currentTarget, event.clientX, event.clientY));
+    const nearest = nearestPointAt(event.currentTarget, event.clientX, event.clientY);
+    setHovered(nearest);
+    if (nearest) {
+      onPlotHoverTimeChange(null);
+      return;
+    }
+    const { bounds, plotWidth } = chartGeometry(event.currentTarget);
+    const pointerX = event.clientX - bounds.left;
+    const pointerY = event.clientY - bounds.top;
+    const insidePlot = pointerX >= MEASUREMENT_PLOT.left
+      && pointerX <= bounds.width - MEASUREMENT_PLOT.right
+      && pointerY >= MEASUREMENT_PLOT.top
+      && pointerY <= bounds.height - MEASUREMENT_PLOT.bottom;
+    onPlotHoverTimeChange(insidePlot
+      ? domainStart + ((pointerX - MEASUREMENT_PLOT.left) / plotWidth) * (domainEnd - domainStart)
+      : null);
   }
 
   return (
@@ -555,6 +575,7 @@ export function MeasurementCanvas({
         onPointerCancel={finishNavigation}
         onPointerLeave={() => {
           if (!navigating) setHovered(null);
+          onPlotHoverTimeChange(null);
         }}
         aria-label={`${measurements.length.toLocaleString()} pressure measurements`}
       />

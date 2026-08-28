@@ -143,3 +143,10 @@ export function clipDomain(domain: TimeDomain, viewport: TimeDomain): TimeDomain
   const end = Math.min(domain[1], viewport[1]);
   return end > start ? [start, end] : null;
 }
+
+export function intersectDomains(domains: TimeDomain[]): TimeDomain | null {
+  if (domains.length === 0) return null;
+  const start = Math.max(...domains.map((domain) => domain[0]));
+  const end = Math.min(...domains.map((domain) => domain[1]));
+  return end >= start ? [start, end] : null;
+}

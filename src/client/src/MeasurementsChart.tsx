@@ -22,7 +22,7 @@ import {
   YAxis,
 } from "recharts";
 import { dateTimeBoundary, formatChartTime, formatDateInput, type Eye, type Measurement, type SessionAggregation } from "./analysis";
-import { clipDomain, daylightBackground, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
+import { clipDomain, daylightBackground, intersectDomains, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
 import { ChartDateTag, ChartSelect, ChartToggle } from "./ui";
 
@@ -173,6 +173,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [chartWidth, setChartWidth] = useState(0);
   const [focusedAnnotation, setFocusedAnnotation] = useState<string | null>(null);
   const [hoveredAnnotation, setHoveredAnnotation] = useState<string | null>(null);
+  const [hoveredRegionRangeIds, setHoveredRegionRangeIds] = useState<string[]>([]);
   const [draggedRangeFocus, setDraggedRangeFocus] = useState<TimeDomain | null>(null);
   const [measurementView, setMeasurementView] = useState<"sessions" | "raw">("sessions");
   const [sessionAggregation, setSessionAggregation] = useState<SessionAggregation>("median");
@@ -232,6 +233,20 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       return current;
     });
   }, [showEvents, showPeriods]);
+
+  const handlePlotHoverTimeChange = useCallback((time: number | null) => {
+    const nextIds = time === null || !showPeriods || focusedAnnotation !== null || mode !== null
+      ? []
+      : ranges.flatMap((range) => {
+        const start = dateTimeBoundary(range.start, range.startTime);
+        const end = range.openEnded ? presentTime : dateTimeBoundary(range.end, range.endTime, true);
+        return start !== null && end !== null && time >= start && time <= end ? [range.id] : [];
+      });
+    setHoveredRegionRangeIds((current) =>
+      current.length === nextIds.length && current.every((id, index) => id === nextIds[index])
+        ? current
+        : nextIds);
+  }, [focusedAnnotation, mode, presentTime, ranges, showPeriods]);
 
   const hoverFocus = focusedAnnotation === null ? hoveredAnnotation : null;
   const hoveredRange = hoverFocus?.startsWith("range:")
@@ -556,12 +571,18 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const activeRange = activeAnnotation?.startsWith("range:")
     ? ranges.find((range) => activeAnnotation === `range:${range.id}`) ?? null
     : null;
+  const hoveredRegionConjunction = intersectDomains(hoveredRegionRangeIds.flatMap((id) => {
+    const range = ranges.find((item) => item.id === id);
+    if (!range) return [];
+    const rangeDomain = rangeTimeDomain(range.start, range.startTime, range.end, range.endTime, range.openEnded);
+    return rangeDomain ? [rangeDomain] : [];
+  }));
   const emphasizedRange = draggedRangeFocus
     ?? (mode === "range"
       ? rangeTimeDomain(draftRange.start, draftRange.startTime, draftRange.end, draftRange.endTime, draftRange.openEnded)
       : activeRange
         ? rangeTimeDomain(activeRange.start, activeRange.startTime, activeRange.end, activeRange.endTime, activeRange.openEnded)
-        : null);
+        : hoveredRegionConjunction);
   const dimMeasurements = mode === "range"
     || mode === "event"
     || activeAnnotation?.startsWith("event:") === true
@@ -601,7 +622,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                 event.preventDefault();
                 focusAnnotation(label);
               }}
-              onPointerEnter={() => label.focusId && setHoveredAnnotation(label.focusId)}
+              onPointerEnter={() => {
+                setHoveredRegionRangeIds([]);
+                if (label.focusId) setHoveredAnnotation(label.focusId);
+              }}
               onPointerLeave={() => setHoveredAnnotation(null)}
               style={{
                 left: `${label.left}px`,
@@ -690,6 +714,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           onAnnotationStart={startAnnotation}
           onAnnotationMove={moveAnnotation}
           onAnnotationEnd={finishAnnotation}
+          onPlotHoverTimeChange={handlePlotHoverTimeChange}
           dimMeasurements={dimMeasurements}
           emphasizedRange={emphasizedRange}
           yMin={pressureDomain[0]}
