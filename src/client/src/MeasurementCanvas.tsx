@@ -46,13 +46,14 @@ type Drag = { pointerId: number; x: number; domain: TimeDomain; moved: boolean; 
 type AnnotationDrag = { pointerId: number };
 type NavigationModifier = "annotate" | "zoom" | null;
 
-const COLORS = { OD: "#d9623d", OS: "#237c78" } as const;
+const COLORS = { OD: "#a63d74", OS: "#3f7d4e" } as const;
 export const MEASUREMENT_PLOT = { left: 52, right: 20, top: 12, bottom: 40 } as const;
 const HIT_RADIUS = 12;
 const RAW_RADIUS = 2;
 const SESSION_RADIUS = 4;
+const COLLIDING_SESSION_GAP = 2;
 const TOOLTIP_WIDTH = 224;
-const TOOLTIP_HEIGHT = 152;
+const TOOLTIP_HEIGHT = 184;
 const TOOLTIP_GAP = 24;
 
 function eyeLabel(eye: Eye): string {
@@ -130,6 +131,11 @@ export function MeasurementCanvas({
     () => sessionPoints.filter((point) => visibleEyes[point.eye]),
     [sessionPoints, visibleEyes],
   );
+  const pairedSessionIds = useMemo(() => {
+    const eyeCounts = new Map<number, number>();
+    for (const point of sessionPoints) eyeCounts.set(point.sessionId, (eyeCounts.get(point.sessionId) ?? 0) + 1);
+    return new Set([...eyeCounts.entries()].filter(([, count]) => count > 1).map(([sessionId]) => sessionId));
+  }, [sessionPoints]);
   const chartPoints = useMemo<ChartPoint[]>(() => [
     ...visibleMeasurements.map((measurement) => ({
       kind: "raw" as const,
@@ -148,11 +154,41 @@ export function MeasurementCanvas({
       session,
     })),
   ].sort((a, b) => a.time - b.time), [visibleMeasurements, visibleSessionPoints]);
+  const sessionPointBySourceRow = useMemo(() => {
+    const points = new Map<number, Extract<ChartPoint, { kind: "session" }>>();
+    for (const point of chartPoints) {
+      if (point.kind !== "session") continue;
+      for (const measurement of point.session.measurements) points.set(measurement.sourceRow, point);
+    }
+    return points;
+  }, [chartPoints]);
   const positionedSelectedPoint = selectedPoint ? positionPoint(selectedPoint.point) : null;
   const focusedPoint = hovered ?? positionedSelectedPoint;
   const focusTarget = hovered?.point ?? selectedPoint?.point ?? null;
   const focusedSession = focusedPoint?.point.kind === "session" ? focusedPoint.point : null;
+  const focusedSessionPoints = useMemo(
+    () => focusedSession
+      ? sessionPoints.filter((point) => point.sessionId === focusedSession.session.sessionId)
+      : [],
+    [focusedSession, sessionPoints],
+  );
   currentDomain.current = [domainStart, domainEnd];
+
+  function sessionCollisionOffset(
+    point: Pick<SessionPoint, "sessionId" | "eye">,
+    baseX: number,
+    plotRight: number,
+  ): number {
+    if (!pairedSessionIds.has(point.sessionId)) return 0;
+    const separation = SESSION_RADIUS * 2 + COLLIDING_SESSION_GAP;
+    if (baseX - separation / 2 < MEASUREMENT_PLOT.left) return point.eye === "OD" ? 0 : separation;
+    if (baseX + separation / 2 > plotRight) return point.eye === "OD" ? -separation : 0;
+    return point.eye === "OD" ? -separation / 2 : separation / 2;
+  }
+
+  function pointCollisionOffset(point: ChartPoint, baseX: number, plotRight: number): number {
+    return point.kind === "session" ? sessionCollisionOffset(point.session, baseX, plotRight) : 0;
+  }
 
   function scheduleDomain(nextDomain: TimeDomain) {
     currentDomain.current = nextDomain;
@@ -172,7 +208,7 @@ export function MeasurementCanvas({
   useEffect(() => {
     setHovered(null);
     setSelectedPoint(null);
-  }, [sessionAggregation, showRawReadings, visibleEyes]);
+  }, [measurements, sessionAggregation, showRawReadings, visibleEyes]);
 
   useEffect(() => {
     function updateModifier(event: KeyboardEvent) {
@@ -222,17 +258,19 @@ export function MeasurementCanvas({
       const pressureSpan = Math.max(1, yMax - yMin);
       const progress = viewProgress.current;
       const rawRadius = RAW_RADIUS + (SESSION_RADIUS - RAW_RADIUS) * progress;
-      const sessionRadius = SESSION_RADIUS - (SESSION_RADIUS - RAW_RADIUS) * progress;
-      const rawAlpha = 0.22 + 0.7 * progress;
+      const sessionRadius = SESSION_RADIUS;
+      const rawAlpha = 0.92;
       const sessionAlpha = 0.92 * (1 - progress);
       const focusedId = focusTarget?.id ?? null;
+      const focusedSessionId = focusTarget?.kind === "session" ? focusTarget.session.sessionId : null;
       if (focusedSession) {
-        for (const point of [focusedSession.session]) {
+        for (const point of focusedSessionPoints) {
           if (point.measurements.length < 2) continue;
           const values = point.measurements.map((measurement) => measurement.iop);
           const minimum = Math.min(...values);
           const maximum = Math.max(...values);
-          const x = MEASUREMENT_PLOT.left + ((point.time - domainStart) / timeSpan) * plotWidth;
+          const baseX = MEASUREMENT_PLOT.left + ((point.time - domainStart) / timeSpan) * plotWidth;
+          const x = baseX + sessionCollisionOffset(point, baseX, width - MEASUREMENT_PLOT.right);
           const yMinimum = MEASUREMENT_PLOT.top + (1 - (minimum - yMin) / pressureSpan) * plotHeight;
           const yMaximum = MEASUREMENT_PLOT.top + (1 - (maximum - yMin) / pressureSpan) * plotHeight;
 
@@ -253,21 +291,25 @@ export function MeasurementCanvas({
       for (let index = firstVisibleIndex; index < chartPoints.length; index += 1) {
         const point = chartPoints[index];
         if (point.time > domainEnd) break;
-        const x = MEASUREMENT_PLOT.left + ((point.time - domainStart) / timeSpan) * plotWidth;
+        const baseX = MEASUREMENT_PLOT.left + ((point.time - domainStart) / timeSpan) * plotWidth;
+        const x = baseX + pointCollisionOffset(point, baseX, width - MEASUREMENT_PLOT.right);
         const y = MEASUREMENT_PLOT.top + (1 - (point.iop - yMin) / pressureSpan) * plotHeight;
-        const selected = focusedId === point.id;
+        const pointSessionId = point.kind === "session"
+          ? point.session.sessionId
+          : sessionPointBySourceRow.get(point.measurement.sourceRow)?.session.sessionId;
+        const selected = focusedId === point.id || pointSessionId === focusedSessionId;
         const radius = (point.kind === "session" ? sessionRadius : rawRadius)
           * (selectedPoint?.point.id === point.id ? 1 + selectionPop.current : 1);
         const baseAlpha = point.kind === "session" ? sessionAlpha : rawAlpha;
 
         context.beginPath();
         context.arc(x, y, radius, 0, Math.PI * 2);
-        context.fillStyle = COLORS[point.eye];
         context.globalAlpha = selected
           ? 1
           : focusedId
             ? baseAlpha * 0.1
             : baseAlpha;
+        context.fillStyle = COLORS[point.eye];
         context.fill();
       }
 
@@ -302,7 +344,7 @@ export function MeasurementCanvas({
       observer.disconnect();
       if (viewFrame !== null) window.cancelAnimationFrame(viewFrame);
     };
-  }, [chartPoints, domainEnd, domainStart, focusTarget, focusedPoint, focusedSession, selectedPoint, selectionPulse, showRawReadings, yMax, yMin]);
+  }, [chartPoints, domainEnd, domainStart, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, yMax, yMin]);
 
   function chartGeometry(canvas: HTMLCanvasElement) {
     const bounds = canvas.getBoundingClientRect();
@@ -319,7 +361,8 @@ export function MeasurementCanvas({
     const height = canvas.clientHeight;
     const plotWidth = Math.max(1, width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
     const plotHeight = Math.max(1, height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom);
-    const x = MEASUREMENT_PLOT.left + ((point.time - domainStart) / Math.max(1, domainEnd - domainStart)) * plotWidth;
+    const baseX = MEASUREMENT_PLOT.left + ((point.time - domainStart) / Math.max(1, domainEnd - domainStart)) * plotWidth;
+    const x = baseX + pointCollisionOffset(point, baseX, width - MEASUREMENT_PLOT.right);
     const y = MEASUREMENT_PLOT.top + (1 - (point.iop - yMin) / Math.max(1, yMax - yMin)) * plotHeight;
     const tooltip = tooltipPosition(x, y, width, height);
     return {
@@ -429,16 +472,20 @@ export function MeasurementCanvas({
 
     for (let index = start; index < end; index += 1) {
       const point = chartPoints[index];
-      if (showRawReadings ? point.kind !== "raw" : point.kind !== "session") continue;
-      const x = MEASUREMENT_PLOT.left + ((point.time - domainStart) / timeSpan) * plotWidth;
+      if (showRawReadings && point.kind !== "raw") continue;
+      const baseX = MEASUREMENT_PLOT.left + ((point.time - domainStart) / timeSpan) * plotWidth;
+      const x = baseX + pointCollisionOffset(point, baseX, bounds.width - MEASUREMENT_PLOT.right);
       if (Math.abs(x - pointerX) > HIT_RADIUS) continue;
       const y = MEASUREMENT_PLOT.top + (1 - (point.iop - yMin) / pressureSpan) * plotHeight;
       const distanceSquared = (x - pointerX) ** 2 + (y - pointerY) ** 2;
       if (distanceSquared <= bestDistanceSquared) {
         bestDistanceSquared = distanceSquared;
         const tooltip = tooltipPosition(x, y, bounds.width, bounds.height);
+        const tooltipPoint = !showRawReadings && point.kind === "raw"
+          ? sessionPointBySourceRow.get(point.measurement.sourceRow) ?? point
+          : point;
         best = {
-          point,
+          point: tooltipPoint,
           ...tooltip,
         };
       }
@@ -469,25 +516,38 @@ export function MeasurementCanvas({
         aria-label={`${measurements.length.toLocaleString()} pressure measurements`}
       />
       {focusedPoint && <div className="measurement-canvas-tooltip" style={{ left: focusedPoint.left, top: focusedPoint.top }}>
-        <div className="measurement-canvas-tooltip__eyebrow">
-          <span className="measurement-canvas-tooltip__eye"><span className={`dot dot--${focusedPoint.point.eye.toLowerCase()}`} aria-hidden="true" />{eyeLabel(focusedPoint.point.eye)}</span>
-          <span>{formatFullTime(focusedPoint.point.time)}</span>
-        </div>
-        <div className="measurement-canvas-tooltip__primary">
-          <span className="measurement-canvas-tooltip__value">{formatIop(focusedPoint.point.iop)}</span>
-          {focusedPoint.point.kind === "session" && <span className="measurement-canvas-tooltip__statistic">{sessionAggregation}</span>}
-          <span className="measurement-canvas-tooltip__unit">mmHg</span>
-        </div>
-        <dl className="measurement-canvas-tooltip__rows">
-          {focusedPoint.point.kind === "session" ? <>
-            <div><dt>Readings</dt><dd>{focusedPoint.point.session.measurements.length}</dd></div>
-            <div><dt>Values</dt><dd>{focusedPoint.point.session.measurements.map((measurement) => measurement.iop).join(", ")} mmHg</dd></div>
-          </> : <>
+        {focusedPoint.point.kind === "session" ? <>
+          <div className="measurement-canvas-tooltip__eyebrow">
+            <span>{sessionAggregation}</span>
+            <span>{formatFullTime(focusedPoint.point.time)}</span>
+          </div>
+          <div className="measurement-canvas-tooltip__session-values">
+            {focusedSessionPoints.map((point) => <div key={point.eye} className="measurement-canvas-tooltip__session-value">
+              <span className="measurement-canvas-tooltip__eye"><span className={`dot dot--${point.eye.toLowerCase()}`} aria-hidden="true" />{eyeLabel(point.eye)}</span>
+              <span className="measurement-canvas-tooltip__session-reading"><span className="measurement-canvas-tooltip__value">{formatIop(point.iop)}</span><span className="measurement-canvas-tooltip__unit">mmHg</span></span>
+            </div>)}
+          </div>
+          <dl className="measurement-canvas-tooltip__rows">
+            {focusedSessionPoints.map((point) => <div key={point.eye}>
+              <dt>{eyeLabel(point.eye)}</dt>
+              <dd>{point.measurements.map((measurement) => measurement.iop).join(", ")} mmHg</dd>
+            </div>)}
+          </dl>
+        </> : <>
+          <div className="measurement-canvas-tooltip__eyebrow">
+            <span className="measurement-canvas-tooltip__eye"><span className={`dot dot--${focusedPoint.point.eye.toLowerCase()}`} aria-hidden="true" />{eyeLabel(focusedPoint.point.eye)}</span>
+            <span>{formatFullTime(focusedPoint.point.time)}</span>
+          </div>
+          <div className="measurement-canvas-tooltip__primary">
+            <span className="measurement-canvas-tooltip__value">{formatIop(focusedPoint.point.iop)}</span>
+            <span className="measurement-canvas-tooltip__unit">mmHg</span>
+          </div>
+          <dl className="measurement-canvas-tooltip__rows">
             <div><dt>Quality</dt><dd>{focusedPoint.point.measurement.quality}</dd></div>
             {focusedPoint.point.measurement.position && <div><dt>Position</dt><dd>{focusedPoint.point.measurement.position}</dd></div>}
             <div><dt>Source</dt><dd>Row {focusedPoint.point.measurement.sourceRow}</dd></div>
-          </>}
-        </dl>
+          </dl>
+        </>}
       </div>}
     </div>
   );
