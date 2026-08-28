@@ -21,11 +21,12 @@ import {
   YAxis,
 } from "recharts";
 import { dateBoundary, formatChartTime, formatDateInput, type Eye, type Measurement, type SessionAggregation } from "./analysis";
-import { clipDomain, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
+import { clipDomain, daylightBackground, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
-import { ChartToggle, DateInput } from "./ui";
+import { ChartSelect, ChartToggle, DateInput } from "./ui";
 
 export type ChartMode = "range" | "event" | null;
+type PositionFilter = "all" | "sitting" | "laying";
 
 export type DraftRange = {
   label: string;
@@ -49,6 +50,25 @@ type AnnotationLabel = {
 
 type AnnotationDrag = { start: number; current: number; startX: number; moved: boolean };
 type HandleDrag = { kind: "range-start" | "range-end" | "event"; time: number; ratio: number };
+
+const RANGE_PALETTE = [
+  { stroke: "#5f7f9d", fill: "#a9c2d6" },
+  { stroke: "#9a7632", fill: "#e5c982" },
+  { stroke: "#66856f", fill: "#b8d0bd" },
+  { stroke: "#7d6b9b", fill: "#c9bddd" },
+  { stroke: "#9a6674", fill: "#ddb8c1" },
+  { stroke: "#4f8585", fill: "#a9cecc" },
+] as const;
+
+const EVENT_COLORS = ["#8f6aa8", "#b56f8a", "#b47b5c", "#5d9290", "#7384b5", "#8b9253"] as const;
+
+function rangePalette(index: number) {
+  return RANGE_PALETTE[index % RANGE_PALETTE.length];
+}
+
+function eventColor(index: number) {
+  return EVENT_COLORS[index % EVENT_COLORS.length];
+}
 
 type Props = {
   measurements: Measurement[];
@@ -76,6 +96,14 @@ type Props = {
 
 function eyeLabel(eye: Eye): string {
   return eye === "OD" ? "Right" : "Left";
+}
+
+function matchesPositionFilter(position: string, filter: PositionFilter): boolean {
+  if (filter === "all") return true;
+  const normalized = position.trim().toLowerCase();
+  return filter === "sitting"
+    ? normalized.includes("sitt") || normalized.includes("seat")
+    : normalized.includes("supine") || normalized.includes("lying") || normalized.includes("laying") || normalized.includes("recumbent");
 }
 
 function displayDate(value: string): string {
@@ -120,7 +148,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   yDomain,
 }: Props) {
   const chart = useRef<HTMLDivElement>(null);
-  const aggregationMenu = useRef<HTMLDivElement>(null);
   const annotationLabelInput = useRef<HTMLInputElement>(null);
   const startDateTag = useRef<HTMLDivElement>(null);
   const endDateTag = useRef<HTMLDivElement>(null);
@@ -139,7 +166,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [hoveredAnnotation, setHoveredAnnotation] = useState<string | null>(null);
   const [measurementView, setMeasurementView] = useState<"sessions" | "raw">("sessions");
   const [sessionAggregation, setSessionAggregation] = useState<SessionAggregation>("median");
-  const [aggregationMenuOpen, setAggregationMenuOpen] = useState(false);
+  const [positionFilter, setPositionFilter] = useState<PositionFilter>("all");
+  const [qualityFilter, setQualityFilter] = useState("all");
   const [domainStart, domainEnd] = domain;
   const [fullDomainStart, fullDomainEnd] = fullDomain;
   const pressureDomain = useMemo(() => {
@@ -152,6 +180,20 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     for (let value = pressureDomain[0]; value <= pressureDomain[1]; value += 5) ticks.push(value);
     return ticks;
   }, [pressureDomain]);
+  const qualityOptions = useMemo(
+    () => [...new Set(measurements.map((measurement) => measurement.quality))].sort((a, b) => a.localeCompare(b)),
+    [measurements],
+  );
+  const filteredMeasurements = useMemo(
+    () => measurements.filter((measurement) =>
+      matchesPositionFilter(measurement.position, positionFilter)
+      && (qualityFilter === "all" || measurement.quality === qualityFilter)),
+    [measurements, positionFilter, qualityFilter],
+  );
+  const daylight = useMemo(
+    () => daylightBackground(domain),
+    [domain],
+  );
 
   domainRef.current = domain;
   fullDomainRef.current = fullDomain;
@@ -169,20 +211,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }, [focusedAnnotation]);
 
   useEffect(() => {
-    if (!aggregationMenuOpen) return;
-    function closeOutside(event: PointerEvent) {
-      if (!aggregationMenu.current?.contains(event.target as Node)) setAggregationMenuOpen(false);
-    }
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setAggregationMenuOpen(false);
-    }
-    document.addEventListener("pointerdown", closeOutside);
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [aggregationMenuOpen]);
+    if (qualityFilter !== "all" && !qualityOptions.includes(qualityFilter)) setQualityFilter("all");
+  }, [qualityFilter, qualityOptions]);
 
   function updateDateTagRows() {
     const start = startDateTag.current?.getBoundingClientRect();
@@ -428,20 +458,20 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           text: focusedAnnotation === `range:${range.id}` ? draftRangeLabel : range.label,
           time: Math.max(start, domainStart),
           endTime: Math.min(end, domainEnd),
-          color: index % 2 === 0 ? "#6c8eac" : "#b9892d",
+          color: rangePalette(index).stroke,
         });
       }
     }
-    for (const event of events) {
+    for (const [index, event] of events.entries()) {
       if (event.time >= domainStart && event.time <= domainEnd) {
-        labels.push({ id: event.id, focusId: `event:${event.id}`, kind: "event", text: focusedAnnotation === `event:${event.id}` ? draftEventLabel : event.label, time: event.time });
+        labels.push({ id: event.id, focusId: `event:${event.id}`, kind: "event", text: focusedAnnotation === `event:${event.id}` ? draftEventLabel : event.label, time: event.time, color: eventColor(index) });
       }
     }
     if (mode === "range" && visibleDraftRange) {
-      labels.push({ id: "draft-range", kind: "range", text: draftRangeLabel.trim() || "Period", time: visibleDraftRange[0], endTime: visibleDraftRange[1], color: "#6c8eac", draft: true });
+      labels.push({ id: "draft-range", kind: "range", text: draftRangeLabel.trim() || "Period", time: visibleDraftRange[0], endTime: visibleDraftRange[1], color: rangePalette(ranges.length).stroke, draft: true });
     }
     if (mode === "event" && draftEventTime !== null && draftEventTime >= domainStart && draftEventTime <= domainEnd) {
-      labels.push({ id: "draft-event", kind: "event", text: draftEventLabel.trim() || "Event", time: draftEventTime, draft: true });
+      labels.push({ id: "draft-event", kind: "event", text: draftEventLabel.trim() || "Event", time: draftEventTime, color: eventColor(events.length), draft: true });
     }
 
     const plotWidth = Math.max(1, chartWidth - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
@@ -478,7 +508,12 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const focusedRangeIndex = activeAnnotation?.startsWith("range:")
     ? ranges.findIndex((range) => activeAnnotation === `range:${range.id}`)
     : -1;
-  const selectionColor = focusedRangeIndex >= 0 && focusedRangeIndex % 2 === 1 ? "#b9892d" : "#6c8eac";
+  const focusedEventIndex = activeAnnotation?.startsWith("event:")
+    ? events.findIndex((event) => activeAnnotation === `event:${event.id}`)
+    : -1;
+  const selectionColor = mode === "event" || focusedEventIndex >= 0
+    ? eventColor(focusedEventIndex >= 0 ? focusedEventIndex : events.length)
+    : rangePalette(focusedRangeIndex >= 0 ? focusedRangeIndex : ranges.length).stroke;
   const hoverFocus = focusedAnnotation === null ? hoveredAnnotation : null;
   const hoveredRange = hoverFocus?.startsWith("range:")
     ? ranges.find((range) => hoverFocus === `range:${range.id}`) ?? null
@@ -554,36 +589,52 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             </div>
           ))}
         </div>
+        {daylight && <div
+          aria-hidden="true"
+          className="chart-daylight-background"
+          style={{ opacity: daylight.opacity }}
+        >
+          {daylight.days.map((day) => <div
+            key={day.start}
+            className="chart-daylight-day"
+            style={{
+              left: `${(day.start - domainStart) / (domainEnd - domainStart) * 100}%`,
+              width: `${86_400_000 / (domainEnd - domainStart) * 100}%`,
+              "--sunrise": `${day.sunrisePercent}%`,
+              "--sunset": `${day.sunsetPercent}%`,
+            } as CSSProperties}
+          />)}
+        </div>}
         <ResponsiveContainer width="100%" height="100%">
           <ScatterChart margin={{ top: 12, right: 20, bottom: 10, left: 0 }}>
-            <CartesianGrid stroke="var(--line)" vertical={false} />
+            <CartesianGrid stroke="rgb(0 0 0 / 10%)" vertical={false} />
             <XAxis type="number" dataKey="time" domain={domain} allowDataOverflow tickFormatter={formatChartTime} tick={{ fill: "var(--muted)", fontSize: 12 }} minTickGap={48} />
             <YAxis width={52} type="number" dataKey="iop" domain={pressureDomain} ticks={pressureTicks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
             {visibleRanges.map((range) => {
               const index = ranges.indexOf(range);
               const visible = visibleRange(range.start, range.end, range.openEnded);
               if (!visible) return null;
-              const color = index % 2 === 0 ? "#6c8eac" : "#b9892d";
+              const color = rangePalette(index);
               const muted = hoverFocus !== null && hoverFocus !== `range:${range.id}`;
               return <Fragment key={range.id}>
-                <ReferenceArea x1={visible[0]} x2={visible[1]} fill={index % 2 === 0 ? "#8aa8c4" : "#d9ad54"} fillOpacity={muted ? 0 : 0.14} stroke="none" />
-                <ReferenceLine x={visible[0]} stroke={color} strokeOpacity={muted ? 0 : 0.55} />
-                <ReferenceLine x={visible[1]} stroke={color} strokeOpacity={muted ? 0 : 0.55} />
+                <ReferenceArea x1={visible[0]} x2={visible[1]} fill={color.fill} fillOpacity={muted ? 0 : 0.14} stroke="none" />
+                <ReferenceLine x={visible[0]} stroke={color.stroke} strokeOpacity={muted ? 0 : 0.55} />
+                <ReferenceLine x={visible[1]} stroke={color.stroke} strokeOpacity={muted ? 0 : 0.55} />
               </Fragment>;
             })}
             {focusedAnnotation === null && visibleDraftRange && (
-              <ReferenceArea x1={visibleDraftRange[0]} x2={visibleDraftRange[1]} fill="#6c8eac" fillOpacity={0.2} stroke="none" />
+              <ReferenceArea x1={visibleDraftRange[0]} x2={visibleDraftRange[1]} fill={rangePalette(ranges.length).fill} fillOpacity={0.2} stroke="none" />
             )}
             {visibleEvents.map((event) => (
-              <ReferenceLine key={event.id} x={event.time} stroke="#7656a0" strokeWidth={2} strokeOpacity={hoverFocus && hoverFocus !== `event:${event.id}` ? 0 : 1} />
+              <ReferenceLine key={event.id} x={event.time} stroke={eventColor(events.indexOf(event))} strokeWidth={2} strokeOpacity={hoverFocus && hoverFocus !== `event:${event.id}` ? 0 : 1} />
             ))}
             {focusedAnnotation === null && mode === "event" && draftEventTime !== null && (
-              <ReferenceLine x={draftEventTime} stroke="#7656a0" strokeWidth={2} strokeDasharray="4 3" />
+              <ReferenceLine x={draftEventTime} stroke={eventColor(events.length)} strokeWidth={2} strokeDasharray="4 3" />
             )}
           </ScatterChart>
         </ResponsiveContainer>
         <MeasurementCanvas
-          measurements={measurements}
+          measurements={filteredMeasurements}
           showRawReadings={measurementView === "raw"}
           sessionAggregation={sessionAggregation}
           visibleEyes={visibleEyes}
@@ -687,45 +738,46 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         </div>
       </div>
       <div className="chart-toolbar">
+        <div className="chart-filters" role="group" aria-label="Measurement filters">
+          <ChartSelect
+            className="chart-filter chart-filter--position"
+            label="Position"
+            value={positionFilter}
+            options={[
+              { value: "all", label: "All positions" },
+              { value: "sitting", label: "Sitting" },
+              { value: "laying", label: "Laying down" },
+            ]}
+            onChange={setPositionFilter}
+          />
+          <ChartSelect
+            className="chart-filter chart-filter--quality"
+            label="Quality"
+            value={qualityFilter}
+            options={[
+              { value: "all", label: "All qualities" },
+              ...qualityOptions.map((quality) => ({ value: quality, label: quality })),
+            ]}
+            onChange={setQualityFilter}
+          />
+        </div>
         <div className="measurement-view-control" role="group" aria-label="Measurement view">
-          <div ref={aggregationMenu} className={`measurement-view-control__sessions${measurementView === "sessions" ? " measurement-view-control__sessions--active" : ""}`}>
-            <button
-              className="measurement-view-control__sessions-trigger"
-              type="button"
-              aria-pressed={measurementView === "sessions"}
-              aria-haspopup="menu"
-              aria-expanded={aggregationMenuOpen}
-              onClick={() => {
-                setMeasurementView("sessions");
-                setAggregationMenuOpen((open) => !open);
-              }}
-            >
-              <span className="measurement-view-control__sessions-main">Sessions</span>
-              <span className="measurement-view-control__aggregation">
-                <span>{sessionAggregation === "median" ? "Median" : "Average"}</span>
-                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
-              </span>
-            </button>
-            {aggregationMenuOpen && <div className="measurement-view-menu" role="menu" aria-label="Session value">
-              {(["median", "average"] as SessionAggregation[]).map((aggregation) => (
-                <button
-                  key={aggregation}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={sessionAggregation === aggregation}
-                  onClick={() => {
-                    setSessionAggregation(aggregation);
-                    setMeasurementView("sessions");
-                    setAggregationMenuOpen(false);
-                  }}
-                >
-                  <span>{aggregation === "median" ? "Median" : "Average"}</span>
-                  {sessionAggregation === aggregation && <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg>}
-                </button>
-              ))}
-            </div>}
-          </div>
-          <button className="measurement-view-control__raw" type="button" aria-pressed={measurementView === "raw"} onClick={() => { setMeasurementView("raw"); setAggregationMenuOpen(false); }}>Raw</button>
+          <ChartSelect
+            className={`measurement-view-control__sessions${measurementView === "sessions" ? " measurement-view-control__sessions--active" : ""}`}
+            label="Sessions"
+            value={sessionAggregation}
+            options={[
+              { value: "median", label: "Median" },
+              { value: "average", label: "Average" },
+            ]}
+            pressed={measurementView === "sessions"}
+            onTrigger={() => setMeasurementView("sessions")}
+            onChange={(aggregation) => {
+              setSessionAggregation(aggregation);
+              setMeasurementView("sessions");
+            }}
+          />
+          <button className="measurement-view-control__raw" type="button" aria-pressed={measurementView === "raw"} onClick={() => setMeasurementView("raw")}>Raw</button>
         </div>
         <div className="eye-toggles">
           {(["OD", "OS"] as Eye[]).map((eye) => (

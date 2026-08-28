@@ -1,4 +1,4 @@
-import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useEffect, useRef, useState, type FocusEvent, type InputHTMLAttributes, type ReactNode } from "react";
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "quiet" | "danger" | "editor" | "editorPrimary";
@@ -60,5 +60,76 @@ export function ChartToggle({ label, colorClass, checked, onChange }: {
       <span className={`dot ${colorClass}`} aria-hidden="true" />
       <span>{label}</span>
     </label>
+  );
+}
+
+export function ChartSelect<T extends string>({ label, value, options, onChange, onTrigger, pressed, className = "" }: {
+  label: string;
+  value: T;
+  options: readonly { value: T; label: string }[];
+  onChange: (value: T) => void;
+  onTrigger?: () => void;
+  pressed?: boolean;
+  className?: string;
+}) {
+  const root = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const selectedLabel = options.find((option) => option.value === value)?.label ?? value;
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOutside(event: PointerEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  function closeOnBlur(event: FocusEvent<HTMLDivElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+  }
+
+  return (
+    <div ref={root} className={`ui-chart-select ${className}`.trim()} onBlur={closeOnBlur}>
+      <button
+        className="ui-chart-select__trigger"
+        type="button"
+        aria-pressed={pressed}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          onTrigger?.();
+          setOpen((current) => !current);
+        }}
+      >
+        <span className="ui-chart-select__label">{label}</span>
+        <span className="ui-chart-select__value">
+          <span>{selectedLabel}</span>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+        </span>
+      </button>
+      {open && <div className="ui-chart-select__menu" role="menu" aria-label={label}>
+        {options.map((option) => <button
+          key={option.value}
+          type="button"
+          role="menuitemradio"
+          aria-checked={value === option.value}
+          onClick={() => {
+            onChange(option.value);
+            setOpen(false);
+          }}
+        >
+          <span>{option.label}</span>
+          {value === option.value && <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg>}
+        </button>)}
+      </div>}
+    </div>
   );
 }
