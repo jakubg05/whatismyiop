@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import {
   formatDateInput,
+  formatTimeInput,
   inDateRange,
   dateTimeBoundary,
   parseMeasurementsCsv,
@@ -23,9 +24,10 @@ import {
   type Summary,
 } from "./analysis";
 import { MeasurementsChart, type ChartMode, type DraftRange } from "./MeasurementsChart";
+import { normalizeRangeEdges } from "./range";
 import { TopNavigation } from "./TopNavigation";
 import { type TrendMode } from "./trend";
-import { Button, DateInput, SectionHeading, SegmentedControl } from "./ui";
+import { Button, DateInput, SectionHeading, SegmentedControl, Toggle } from "./ui";
 
 type SavedRange = DraftRange & { id: string };
 
@@ -60,11 +62,6 @@ const STORAGE_KEY = "icare-analytics:v1";
 
 function emptyDraftRange(): DraftRange {
   return { label: "", start: "", startTime: "00:00", end: "", endTime: "23:59", openEnded: false };
-}
-
-function formatTimeInput(time: number): string {
-  const date = new Date(time);
-  return `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
 }
 
 function eyeLabel(eye: Eye): string {
@@ -193,7 +190,7 @@ export default function App() {
   const [draftEvent, setDraftEvent] = useState({ label: "", date: "", clock: "" });
   const [editingRangeId, setEditingRangeId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const chartDraftRange = useDeferredValue(draftRange);
+  const chartDraftRange = draftRange;
   const chartDraftEvent = useDeferredValue(draftEvent);
 
   const measurements = data?.measurements ?? [];
@@ -294,20 +291,21 @@ export default function App() {
   }
 
   function addRange() {
-    const effectiveEnd = draftRange.openEnded ? today : draftRange.end;
-    const effectiveEndTime = draftRange.openEnded ? currentTime : draftRange.endTime;
-    if (!draftRange.label.trim() || !draftRange.start || !effectiveEnd) return;
-    const startBoundary = dateTimeBoundary(draftRange.start, draftRange.startTime);
+    const orderedRange = normalizeRangeEdges(draftRange, now);
+    const effectiveEnd = orderedRange.openEnded ? today : orderedRange.end;
+    const effectiveEndTime = orderedRange.openEnded ? currentTime : orderedRange.endTime;
+    if (!orderedRange.label.trim() || !orderedRange.start || !effectiveEnd) return;
+    const startBoundary = dateTimeBoundary(orderedRange.start, orderedRange.startTime);
     const endBoundary = dateTimeBoundary(effectiveEnd, effectiveEndTime, true);
     if (startBoundary === null || endBoundary === null || startBoundary > endBoundary) {
       setError("Range start must be before its end.");
       return;
     }
     const saved = {
-      ...draftRange,
-      end: draftRange.openEnded ? "" : effectiveEnd,
-      endTime: draftRange.openEnded ? "" : effectiveEndTime,
-      label: draftRange.label.trim(),
+      ...orderedRange,
+      end: orderedRange.openEnded ? "" : effectiveEnd,
+      endTime: orderedRange.openEnded ? "" : effectiveEndTime,
+      label: orderedRange.label.trim(),
     };
     setRanges((current) => editingRangeId
       ? current.map((range) => range.id === editingRangeId ? { ...saved, id: range.id } : range)

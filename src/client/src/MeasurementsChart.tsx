@@ -3,7 +3,6 @@ import {
   memo,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -21,23 +20,17 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { dateTimeBoundary, formatChartTime, formatDateInput, type Eye, type Measurement, type SessionAggregation } from "./analysis";
+import { dateTimeBoundary, formatChartTime, formatDateInput, formatTimeInput, type Eye, type Measurement, type SessionAggregation } from "./analysis";
 import { clipDomain, daylightBackground, intersectDomains, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
+import { moveRangeEdge, rangeTimeDomain, type EditableRange } from "./range";
 import { type TrendMode } from "./trend";
 import { ChartDateTag, ChartSelect, ChartToggle } from "./ui";
 
 export type ChartMode = "range" | "event" | "trend" | null;
 type PositionFilter = "all" | "sitting" | "laying";
 
-export type DraftRange = {
-  label: string;
-  start: string;
-  startTime: string;
-  end: string;
-  endTime: string;
-  openEnded: boolean;
-};
+export type DraftRange = EditableRange;
 
 type ChartRange = DraftRange & { id: string };
 type ChartEvent = { id: string; label: string; time: number };
@@ -52,8 +45,9 @@ type AnnotationLabel = {
   draft?: boolean;
 };
 
-type AnnotationDrag = { start: number; current: number; startX: number; moved: boolean };
-type HandleDrag = { kind: "range-start" | "range-end" | "event"; time: number; ratio: number };
+type AnnotationDrag = { start: number; startX: number; moved: boolean };
+type RangeEdge = "start" | "end";
+type HandleDrag = { kind: RangeEdge | "event"; time: number };
 
 const RANGE_PALETTE = [
   { stroke: "#5f7f9d", fill: "#a9c2d6" },
@@ -119,22 +113,8 @@ function displayDate(value: string): string {
   return match ? `${match[3]}.${match[2]}.${match[1]}` : "";
 }
 
-function dragLabel(time: number, includeTime = false): string {
-  const date = new Date(time);
-  const day = displayDate(formatDateInput(time));
-  if (!includeTime) return day;
-  return `${day} ${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
-}
-
-function formatTimeInput(time: number): string {
-  const date = new Date(time);
-  return `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
-}
-
-function placeHandleLabel(label: HTMLElement | null, ratio: number, alwaysRight = false) {
-  if (!label) return;
-  label.style.left = !alwaysRight && ratio > 0.8 ? "auto" : "7px";
-  label.style.right = !alwaysRight && ratio > 0.8 ? "7px" : "auto";
+function alignDateTagToPlot(tag: HTMLElement | null, ratio: number) {
+  tag?.classList.toggle("selection-handle__date-control--right", ratio > 0.8);
 }
 
 export const MeasurementsChart = memo(function MeasurementsChart({
@@ -166,13 +146,12 @@ export const MeasurementsChart = memo(function MeasurementsChart({
 }: Props) {
   const chart = useRef<HTMLDivElement>(null);
   const focusedRangeLabel = useRef<HTMLDivElement>(null);
-  const startDateTag = useRef<HTMLDivElement>(null);
-  const endDateTag = useRef<HTMLDivElement>(null);
-  const selectionLayer = useRef<HTMLDivElement>(null);
+  const plotOverlayRef = useRef<HTMLDivElement>(null);
   const dragPreview = useRef<HTMLDivElement>(null);
   const rangePreview = useRef<HTMLDivElement>(null);
   const dragRef = useRef<AnnotationDrag | null>(null);
   const handleDrag = useRef<HandleDrag | null>(null);
+  const draftRangeRef = useRef(draftRange);
   const [domain, setDomain] = useState<TimeDomain>(fullDomain);
   const domainRef = useRef(domain);
   const pendingDomain = useRef<TimeDomain | null>(null);
@@ -188,6 +167,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [qualityFilter, setQualityFilter] = useState("all");
   const [showPeriods, setShowPeriods] = useState(true);
   const [showEvents, setShowEvents] = useState(true);
+  const [periodHandleEdges, setPeriodHandleEdges] = useState<readonly [RangeEdge, RangeEdge]>(["start", "end"]);
+  const annotationEditorOpen = mode === "range" || mode === "event";
   const [domainStart, domainEnd] = domain;
   const [fullDomainStart, fullDomainEnd] = fullDomain;
   const pressureDomain = useMemo(() => {
@@ -214,6 +195,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     () => daylightBackground(domain),
     [domain],
   );
+
+  if (!handleDrag.current || handleDrag.current.kind === "event") draftRangeRef.current = draftRange;
 
   domainRef.current = domain;
 
@@ -242,7 +225,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }, [showEvents, showPeriods]);
 
   const handlePlotHoverTimeChange = useCallback((time: number | null) => {
-    const nextIds = time === null || !showPeriods || focusedAnnotation !== null || mode !== null
+    const nextIds = time === null || !showPeriods || focusedAnnotation !== null || annotationEditorOpen
       ? []
       : ranges.flatMap((range) => {
         const start = dateTimeBoundary(range.start, range.startTime);
@@ -253,33 +236,30 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       current.length === nextIds.length && current.every((id, index) => id === nextIds[index])
         ? current
         : nextIds);
-  }, [focusedAnnotation, mode, presentTime, ranges, showPeriods]);
+  }, [annotationEditorOpen, focusedAnnotation, presentTime, ranges, showPeriods]);
 
-  const hoverFocus = focusedAnnotation === null ? hoveredAnnotation : null;
+  const hoverFocus = !annotationEditorOpen && focusedAnnotation === null ? hoveredAnnotation : null;
   const hoveredRange = hoverFocus?.startsWith("range:")
     ? ranges.find((range) => hoverFocus === `range:${range.id}`) ?? null
     : null;
   const hoveredEvent = hoverFocus?.startsWith("event:")
     ? events.find((event) => hoverFocus === `event:${event.id}`) ?? null
     : null;
+  const hoveredPeriodStart = hoveredRange
+    ? dateTimeBoundary(hoveredRange.start, hoveredRange.startTime) ?? domainStart
+    : null;
+  const hoveredPeriodEnd = hoveredRange
+    ? hoveredRange.openEnded
+      ? presentTime
+      : dateTimeBoundary(hoveredRange.end, hoveredRange.endTime, true) ?? domainEnd
+    : null;
 
-  function updateDateTagRows() {
-    const start = startDateTag.current?.getBoundingClientRect();
-    const end = endDateTag.current?.getBoundingClientRect();
-    if (!start || !end) {
-      endDateTag.current?.classList.remove("selection-handle__date-control--stacked");
-      return;
-    }
-    const gap = 8;
-    endDateTag.current?.classList.toggle(
-      "selection-handle__date-control--stacked",
-      start.left < end.right + gap && start.right + gap > end.left,
-    );
+  function annotationIsMuted(focusId: string | undefined): boolean {
+    if (hoverFocus) return hoverFocus !== focusId;
+    if (hoveredRegionRangeIds.length === 0) return false;
+    return !focusId?.startsWith("range:")
+      || !hoveredRegionRangeIds.some((id) => focusId === `range:${id}`);
   }
-
-  useLayoutEffect(() => {
-    updateDateTagRows();
-  }, [chartWidth, domainEnd, domainStart, draftRange.end, draftRange.openEnded, draftRange.start, hoveredRange, mode]);
 
   useEffect(() => {
     const element = chart.current;
@@ -340,11 +320,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }, []);
 
   useEffect(() => {
-    if (mode !== null) return;
-    setFocusedAnnotation(null);
     setHoveredAnnotation(null);
     setHoveredRegionRangeIds([]);
     setDraggedRangeFocus(null);
+    if (mode === null) setFocusedAnnotation(null);
   }, [mode]);
 
   function changeDomain(next: TimeDomain) {
@@ -358,7 +337,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   function timeFromClientX(clientX: number): { time: number; ratio: number } {
-    const bounds = selectionLayer.current?.getBoundingClientRect();
+    const bounds = plotOverlayRef.current?.getBoundingClientRect();
     if (!bounds) return { time: domainStart, ratio: 0 };
     const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
     return { time: domainStart + ratio * (domainEnd - domainStart), ratio };
@@ -366,14 +345,13 @@ export const MeasurementsChart = memo(function MeasurementsChart({
 
   function startAnnotation(time: number, clientX: number) {
     if (mode) return;
-    dragRef.current = { start: time, current: time, startX: clientX, moved: false };
+    dragRef.current = { start: time, startX: clientX, moved: false };
     if (dragPreview.current) dragPreview.current.style.display = "none";
   }
 
   function moveAnnotation(time: number, clientX: number) {
     const current = dragRef.current;
     if (!current) return;
-    current.current = time;
     current.moved ||= Math.abs(clientX - current.startX) >= 4;
     if (!current.moved || !dragPreview.current) return;
     const left = ratioForTime(Math.min(current.start, time)) * 100;
@@ -404,31 +382,41 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     if (dragPreview.current) dragPreview.current.style.display = "none";
   }
 
-  function beginHandleDrag(event: ReactPointerEvent<HTMLDivElement>) {
+  function beginHandleDrag(event: ReactPointerEvent<HTMLDivElement>, kind: HandleDrag["kind"]) {
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
-    const kind = event.currentTarget.dataset.handle as HandleDrag["kind"];
-    handleDrag.current = { kind, ...timeFromClientX(event.clientX) };
+    handleDrag.current = { kind, time: timeFromClientX(event.clientX).time };
   }
 
-  function moveRangeHandle(event: ReactPointerEvent<HTMLDivElement>, edge: "start" | "end") {
+  function moveRangeHandle(event: ReactPointerEvent<HTMLDivElement>) {
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
     const { time, ratio } = timeFromClientX(event.clientX);
-    handleDrag.current = { kind: edge === "start" ? "range-start" : "range-end", time, ratio };
+    const active = handleDrag.current;
+    if (!active || active.kind === "event") return;
+    const edge = active.kind;
+    const current = draftRangeRef.current;
+    const otherTime = edge === "start"
+      ? current.openEnded ? presentTime : dateTimeBoundary(current.end, current.endTime, true) ?? domainEnd
+      : dateTimeBoundary(current.start, current.startTime) ?? domainStart;
+    const crossed = edge === "start" ? time > otherTime : time < otherTime;
+    const nextEdge: RangeEdge = crossed ? edge === "start" ? "end" : "start" : edge;
+    const nextRange = moveRangeEdge(current, edge, time, presentTime);
+    draftRangeRef.current = nextRange;
+    setDraftRange(nextRange);
+    if (crossed) setPeriodHandleEdges(([first, second]) => [second, first]);
+    handleDrag.current = { kind: nextEdge, time };
     event.currentTarget.style.left = `${ratio * 100}%`;
     const tag = event.currentTarget.querySelector<HTMLElement>(".selection-handle__date-control");
     const input = tag?.querySelector<HTMLInputElement>(".selection-handle__date-input");
     const timeInput = tag?.querySelector<HTMLInputElement>(".selection-handle__time-input");
-    const labelText = dragLabel(time);
     if (input) input.value = formatDateInput(time);
-    else if (tag) tag.textContent = labelText;
     if (timeInput) timeInput.value = formatTimeInput(time);
-    placeHandleLabel(tag, ratio, true);
-    updateDateTagRows();
-    updateRangePreview(edge, ratio);
-    const otherTime = edge === "start"
-      ? draftRange.openEnded ? presentTime : dateTimeBoundary(draftRange.end, draftRange.endTime, true) ?? domainEnd
-      : dateTimeBoundary(draftRange.start, draftRange.startTime) ?? domainStart;
+    alignDateTagToPlot(tag, ratio);
+    if (rangePreview.current) {
+      const otherRatio = ratioForTime(otherTime);
+      rangePreview.current.style.left = `${Math.min(ratio, otherRatio) * 100}%`;
+      rangePreview.current.style.width = `${Math.abs(ratio - otherRatio) * 100}%`;
+    }
     const liveRange = [Math.min(time, otherTime), Math.max(time, otherTime)] as TimeDomain;
     updateFocusedRangeLabel(liveRange);
     setDraggedRangeFocus(liveRange);
@@ -450,23 +438,14 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   function moveEventHandle(event: ReactPointerEvent<HTMLDivElement>) {
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
     const next = timeFromClientX(event.clientX);
-    handleDrag.current = { kind: "event", ...next };
+    handleDrag.current = { kind: "event", time: next.time };
     event.currentTarget.style.left = `${next.ratio * 100}%`;
     const tag = event.currentTarget.querySelector<HTMLElement>(".selection-handle__date-control");
     const dateInput = tag?.querySelector<HTMLInputElement>(".selection-handle__date-input");
     const timeInput = tag?.querySelector<HTMLInputElement>(".selection-handle__time-input");
     if (dateInput) dateInput.value = formatDateInput(next.time);
     if (timeInput) timeInput.value = formatTimeInput(next.time);
-    placeHandleLabel(tag, next.ratio);
-  }
-
-  function updateRangePreview(edge: "start" | "end", ratio: number) {
-    if (!rangePreview.current) return;
-    const other = edge === "start"
-      ? ratioForTime(draftRange.openEnded ? presentTime : dateTimeBoundary(draftRange.end, draftRange.endTime, true) ?? domainEnd)
-      : ratioForTime(dateTimeBoundary(draftRange.start, draftRange.startTime) ?? domainStart);
-    rangePreview.current.style.left = `${Math.min(ratio, other) * 100}%`;
-    rangePreview.current.style.width = `${Math.abs(ratio - other) * 100}%`;
+    alignDateTagToPlot(tag, next.ratio);
   }
 
   function finishHandleDrag(event: ReactPointerEvent<HTMLDivElement>) {
@@ -474,14 +453,12 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     const pending = handleDrag.current;
     handleDrag.current = null;
     setDraggedRangeFocus(null);
+    setPeriodHandleEdges(["start", "end"]);
     if (!pending) return;
     if (pending.kind === "event") {
       onDraftEventTime(pending.time);
       return;
     }
-    setDraftRange((current) => pending.kind === "range-start"
-      ? { ...current, start: formatDateInput(pending.time), startTime: formatTimeInput(pending.time) }
-      : { ...current, end: formatDateInput(pending.time), endTime: formatTimeInput(pending.time), openEnded: false });
   }
 
   function updateDraftEventDateTime(date: string, clock: string) {
@@ -489,20 +466,13 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     if (time !== null) onDraftEventTime(time);
   }
 
-  function rangeTimeDomain(start: string, startClock: string, end: string, endClock: string, openEnded: boolean): TimeDomain | null {
-    const startBoundary = dateTimeBoundary(start, startClock);
-    const endBoundary = openEnded ? presentTime : dateTimeBoundary(end, endClock, true);
-    if (startBoundary === null || endBoundary === null) return null;
-    return [startBoundary, endBoundary];
-  }
-
-  function visibleRange(start: string, startClock: string, end: string, endClock: string, openEnded: boolean): TimeDomain | null {
-    const rangeDomain = rangeTimeDomain(start, startClock, end, endClock, openEnded);
-    return rangeDomain ? clipDomain(rangeDomain, domain) : null;
+  function visibleRangeDomain(range: EditableRange): TimeDomain | null {
+    const period = rangeTimeDomain(range, presentTime);
+    return period ? clipDomain(period, domain) : null;
   }
 
   const visibleDraftRange = mode === "range"
-    ? visibleRange(draftRange.start, draftRange.startTime, draftRange.end, draftRange.endTime, draftRange.openEnded)
+    ? visibleRangeDomain(draftRange)
     : null;
   const annotationLabels = useMemo(() => {
     const labels: AnnotationLabel[] = [];
@@ -510,8 +480,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       const editing = focusedAnnotation === `range:${range.id}`;
       if (!showPeriods && !editing) continue;
       const liveDomain = editing
-        ? draggedRangeFocus ?? rangeTimeDomain(draftRange.start, draftRange.startTime, draftRange.end, draftRange.endTime, draftRange.openEnded)
-        : rangeTimeDomain(range.start, range.startTime, range.end, range.endTime, range.openEnded);
+        ? draggedRangeFocus ?? rangeTimeDomain(draftRange, presentTime)
+        : rangeTimeDomain(range, presentTime);
       const start = liveDomain?.[0] ?? null;
       const end = liveDomain?.[1] ?? null;
       if (start !== null && end !== null && start <= domainEnd && end >= domainStart) {
@@ -569,7 +539,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     : focusedAnnotation?.startsWith("event:")
       ? events.filter((event) => focusedAnnotation === `event:${event.id}`)
       : showEvents ? events : [];
-  const activeAnnotation = focusedAnnotation ?? hoveredAnnotation;
+  const activeAnnotation = focusedAnnotation ?? hoverFocus;
   const focusedRangeIndex = activeAnnotation?.startsWith("range:")
     ? ranges.findIndex((range) => activeAnnotation === `range:${range.id}`)
     : -1;
@@ -585,14 +555,14 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const hoveredRegionConjunction = intersectDomains(hoveredRegionRangeIds.flatMap((id) => {
     const range = ranges.find((item) => item.id === id);
     if (!range) return [];
-    const rangeDomain = rangeTimeDomain(range.start, range.startTime, range.end, range.endTime, range.openEnded);
+    const rangeDomain = rangeTimeDomain(range, presentTime);
     return rangeDomain ? [rangeDomain] : [];
   }));
   const emphasizedRange = draggedRangeFocus
     ?? (mode === "range"
-      ? rangeTimeDomain(draftRange.start, draftRange.startTime, draftRange.end, draftRange.endTime, draftRange.openEnded)
+      ? rangeTimeDomain(draftRange, presentTime)
       : activeRange
-        ? rangeTimeDomain(activeRange.start, activeRange.startTime, activeRange.end, activeRange.endTime, activeRange.openEnded)
+        ? rangeTimeDomain(activeRange, presentTime)
         : hoveredRegionConjunction);
   const dimMeasurements = mode === "range"
     || mode === "event"
@@ -616,6 +586,53 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     }
   }
 
+  function renderPeriodHandle(edge: RangeEdge, slot: number) {
+    const isStart = edge === "start";
+    if (!isStart && ((!draftRange.end && !draftRange.openEnded)
+      || (draftRange.openEnded && (presentTime < domainStart || presentTime > domainEnd)))) return null;
+
+    const time = isStart
+      ? dateTimeBoundary(draftRange.start, draftRange.startTime)
+      : draftRange.openEnded
+        ? presentTime
+        : dateTimeBoundary(draftRange.end, draftRange.endTime, true);
+    if (time === null) return null;
+    const ratio = ratioForTime(time);
+
+    return <div
+      key={`period-handle-${slot}`}
+      className="selection-handle selection-handle--range"
+      style={{ left: `${ratio * 100}%` }}
+      onPointerDown={(event) => beginHandleDrag(event, edge)}
+      onPointerMove={moveRangeHandle}
+      onPointerUp={finishHandleDrag}
+      onPointerCancel={finishHandleDrag}
+    ><span /><ChartDateTag
+      active
+      alignRight={ratio > 0.8}
+      secondRow={!isStart}
+      ariaLabel={`Period ${edge} date`}
+      disabled={!isStart && draftRange.openEnded}
+      value={isStart ? draftRange.start : draftRange.openEnded ? today : draftRange.end}
+      timeValue={isStart ? draftRange.startTime : draftRange.openEnded ? formatTimeInput(presentTime) : draftRange.endTime}
+      onChange={isStart
+        ? (start) => setDraftRange((current) => ({ ...current, start }))
+        : (end) => setDraftRange((current) => ({ ...current, end, openEnded: false }))}
+      onTimeChange={isStart
+        ? (startTime) => setDraftRange((current) => ({ ...current, startTime }))
+        : (endTime) => setDraftRange((current) => ({ ...current, endTime, openEnded: false }))}
+      present={!isStart ? {
+        checked: draftRange.openEnded,
+        onChange: () => setDraftRange((current) => ({
+          ...current,
+          openEnded: !current.openEnded,
+          end: current.openEnded ? today : "",
+          endTime: current.openEnded ? formatTimeInput(presentTime) : "",
+        })),
+      } : undefined}
+    /></div>;
+  }
+
   return (
     <section className="panel chart-panel">
       <div ref={chart} className="chart-wrap" style={{ marginTop: `${annotationLaneCount * 22}px` }}>
@@ -624,7 +641,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             <div
               key={label.id}
               ref={label.kind === "range" && label.focusId === focusedAnnotation ? focusedRangeLabel : undefined}
-              className={`chart-annotation-label chart-annotation-label--${label.kind}${label.fullWidth ? " chart-annotation-label--range-wide" : ""}${label.draft ? " chart-annotation-label--draft" : ""}${hoverFocus && hoverFocus !== label.focusId ? " chart-annotation-label--muted" : ""}`}
+              className={`chart-annotation-label chart-annotation-label--${label.kind}${label.fullWidth ? " chart-annotation-label--range-wide" : ""}${label.draft ? " chart-annotation-label--draft" : ""}${annotationIsMuted(label.focusId) ? " chart-annotation-label--muted" : ""}`}
               role={label.focusId ? "button" : undefined}
               tabIndex={label.focusId ? 0 : undefined}
               onClick={() => label.focusId && focusAnnotation(label)}
@@ -693,21 +710,22 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             <YAxis width={52} type="number" dataKey="iop" domain={pressureDomain} ticks={pressureTicks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
             {visibleRanges.map((range) => {
               const index = ranges.indexOf(range);
-              const visible = visibleRange(range.start, range.startTime, range.end, range.endTime, range.openEnded);
+              const visible = visibleRangeDomain(range);
               if (!visible) return null;
               const color = rangePalette(index);
-              const muted = hoverFocus !== null && hoverFocus !== `range:${range.id}`;
+              const editing = focusedAnnotation === `range:${range.id}`;
+              const muted = annotationIsMuted(`range:${range.id}`);
               return <Fragment key={range.id}>
                 <ReferenceArea x1={visible[0]} x2={visible[1]} fill={color.fill} fillOpacity={muted ? 0.035 : 0.14} stroke="none" />
-                <ReferenceLine x={visible[0]} stroke={color.stroke} strokeOpacity={muted ? 0.14 : 0.55} />
-                <ReferenceLine x={visible[1]} stroke={color.stroke} strokeOpacity={muted ? 0.14 : 0.55} />
+                <ReferenceLine x={visible[0]} stroke={color.stroke} strokeWidth={2} strokeDasharray={editing ? "4 3" : undefined} strokeOpacity={muted ? 0.14 : 0.55} />
+                <ReferenceLine x={visible[1]} stroke={color.stroke} strokeWidth={2} strokeDasharray={editing ? "4 3" : undefined} strokeOpacity={muted ? 0.14 : 0.55} />
               </Fragment>;
             })}
             {focusedAnnotation === null && visibleDraftRange && (
               <ReferenceArea x1={visibleDraftRange[0]} x2={visibleDraftRange[1]} fill={rangePalette(ranges.length).fill} fillOpacity={0.2} stroke="none" />
             )}
             {visibleEvents.map((event) => (
-              <ReferenceLine key={event.id} x={event.time} stroke={eventColor(events.indexOf(event))} strokeWidth={2} strokeOpacity={hoverFocus && hoverFocus !== `event:${event.id}` ? 0.2 : 1} />
+              <ReferenceLine key={event.id} x={event.time} stroke={eventColor(events.indexOf(event))} strokeWidth={2} strokeOpacity={annotationIsMuted(`event:${event.id}`) ? 0.2 : 1} />
             ))}
             {focusedAnnotation === null && mode === "event" && draftEventTime !== null && (
               <ReferenceLine x={draftEventTime} stroke={eventColor(events.length)} strokeWidth={2} strokeDasharray="4 3" />
@@ -734,17 +752,24 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           yMax={pressureDomain[1]}
         />
         <div
-          ref={selectionLayer}
+          ref={plotOverlayRef}
           className="chart-selection-layer"
           style={{ "--selection-color": selectionColor } as CSSProperties}
         >
           {hoveredRange && <>
-            <div className="annotation-date-anchor" style={{ left: `${ratioForTime(dateTimeBoundary(hoveredRange.start, hoveredRange.startTime) ?? domainStart) * 100}%` }}>
-              <ChartDateTag ref={startDateTag} ariaLabel="Period start date" value={hoveredRange.start} timeValue={hoveredRange.startTime} displayValue={displayDate(hoveredRange.start)} />
-            </div>
-            {(!hoveredRange.openEnded || (presentTime >= domainStart && presentTime <= domainEnd)) && <div className="annotation-date-anchor" style={{ left: `${ratioForTime(hoveredRange.openEnded ? presentTime : dateTimeBoundary(hoveredRange.end, hoveredRange.endTime, true) ?? domainEnd) * 100}%` }}>
+            <div className="annotation-date-anchor" style={{ left: `${ratioForTime(hoveredPeriodStart ?? domainStart) * 100}%` }}>
               <ChartDateTag
-                ref={endDateTag}
+                alignRight={ratioForTime(hoveredPeriodStart ?? domainStart) > 0.8}
+                ariaLabel="Period start date"
+                value={hoveredRange.start}
+                timeValue={hoveredRange.startTime}
+                displayValue={displayDate(hoveredRange.start)}
+              />
+            </div>
+            {(!hoveredRange.openEnded || (presentTime >= domainStart && presentTime <= domainEnd)) && <div className="annotation-date-anchor" style={{ left: `${ratioForTime(hoveredPeriodEnd ?? domainEnd) * 100}%` }}>
+              <ChartDateTag
+                alignRight={ratioForTime(hoveredPeriodEnd ?? domainEnd) > 0.8}
+                secondRow
                 ariaLabel="Period end date"
                 value={hoveredRange.openEnded ? today : hoveredRange.end}
                 timeValue={hoveredRange.openEnded ? formatTimeInput(presentTime) : hoveredRange.endTime}
@@ -769,56 +794,11 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             className="selection-drag-preview selection-drag-preview--draft"
             style={{ left: `${ratioForTime(visibleDraftRange[0]) * 100}%`, width: `${(ratioForTime(visibleDraftRange[1]) - ratioForTime(visibleDraftRange[0])) * 100}%` }}
           />}
-          {mode === "range" && draftRange.start && <div
-            className="selection-handle selection-handle--range"
-            data-handle="range-start"
-            style={{ left: `${ratioForTime(dateTimeBoundary(draftRange.start, draftRange.startTime)!) * 100}%` }}
-            onPointerDown={beginHandleDrag}
-            onPointerMove={(event) => moveRangeHandle(event, "start")}
-            onPointerUp={finishHandleDrag}
-            onPointerCancel={finishHandleDrag}
-          ><span /><ChartDateTag
-            ref={startDateTag}
-            active
-            ariaLabel="Period start date"
-            value={draftRange.start}
-            timeValue={draftRange.startTime}
-            onChange={(value) => setDraftRange((current) => ({ ...current, start: value }))}
-            onTimeChange={(startTime) => setDraftRange((current) => ({ ...current, startTime }))}
-          /></div>}
-          {mode === "range" && (draftRange.end || draftRange.openEnded) && (!draftRange.openEnded || (presentTime >= domainStart && presentTime <= domainEnd)) && <div
-            className="selection-handle selection-handle--range"
-            data-handle="range-end"
-            style={{ left: `${ratioForTime(draftRange.openEnded ? presentTime : dateTimeBoundary(draftRange.end, draftRange.endTime, true)!) * 100}%` }}
-            onPointerDown={beginHandleDrag}
-            onPointerMove={(event) => moveRangeHandle(event, "end")}
-            onPointerUp={finishHandleDrag}
-            onPointerCancel={finishHandleDrag}
-          ><span /><ChartDateTag
-            ref={endDateTag}
-            active
-            ariaLabel="Period end date"
-            disabled={draftRange.openEnded}
-            value={draftRange.openEnded ? today : draftRange.end}
-            timeValue={draftRange.openEnded ? formatTimeInput(presentTime) : draftRange.endTime}
-            onChange={(value) => setDraftRange((current) => ({ ...current, end: value, openEnded: false }))}
-            onTimeChange={(endTime) => setDraftRange((current) => ({ ...current, endTime, openEnded: false }))}
-            present={{
-              checked: draftRange.openEnded,
-              onChange: () => setDraftRange((current) => ({
-                ...current,
-                openEnded: !current.openEnded,
-                end: current.openEnded ? today : "",
-                endTime: current.openEnded ? formatTimeInput(presentTime) : "",
-              })),
-            }}
-          />
-          </div>}
+          {mode === "range" && periodHandleEdges.map(renderPeriodHandle)}
           {mode === "event" && draftEventTime !== null && <div
             className="selection-handle selection-handle--event"
-            data-handle="event"
             style={{ left: `${ratioForTime(draftEventTime) * 100}%` }}
-            onPointerDown={beginHandleDrag}
+            onPointerDown={(event) => beginHandleDrag(event, "event")}
             onPointerMove={moveEventHandle}
             onPointerUp={finishHandleDrag}
             onPointerCancel={finishHandleDrag}

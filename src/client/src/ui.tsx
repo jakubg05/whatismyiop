@@ -57,6 +57,7 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
   active?: boolean;
   disabled?: boolean;
   alignRight?: boolean;
+  secondRow?: boolean;
   className?: string;
   style?: CSSProperties;
   onChange?: (value: string) => void;
@@ -71,6 +72,7 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
   active = false,
   disabled = false,
   alignRight = false,
+  secondRow = false,
   className = "",
   style,
   onChange,
@@ -81,7 +83,7 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
     <div
       ref={ref}
       style={style}
-      className={`selection-handle__date-control${active ? " selection-handle__date-control--active" : " selection-handle__date-control--readonly"}${!active && present?.checked ? " selection-handle__date-control--present" : ""}${alignRight ? " selection-handle__date-control--right" : ""} ${className}`.trim()}
+      className={`selection-handle__date-control${active ? " selection-handle__date-control--active" : " selection-handle__date-control--readonly"}${!active && present?.checked ? " selection-handle__date-control--present" : ""}${alignRight ? " selection-handle__date-control--right" : ""}${secondRow ? " selection-handle__date-control--second-row" : ""} ${className}`.trim()}
       onPointerDown={(event) => active && event.stopPropagation()}
     >
       <div className="selection-handle__date-fields">
@@ -110,17 +112,13 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
       </div>
       {active && present && <div className="selection-handle__present-control">
         <span>Present</span>
-        <button
+        <Toggle
           className="selection-handle__present-toggle"
-          type="button"
-          role="switch"
-          aria-checked={present.checked}
-          aria-label={`Present: ${present.checked ? "on" : "off"}`}
+          label="Present"
+          checked={present.checked}
           disabled={!present.onChange}
-          onClick={present.onChange}
-        >
-          <span className="publication-switch-track" aria-hidden="true"><span /></span>
-        </button>
+          onChange={present.onChange}
+        />
       </div>}
     </div>
   );
@@ -138,6 +136,28 @@ export function ChartToggle({ label, colorClass, checked, onChange }: {
       {colorClass && <span className={`dot ${colorClass}`} aria-hidden="true" />}
       <span>{label}</span>
     </label>
+  );
+}
+
+export function Toggle({ label, checked, disabled = false, className = "", onChange }: {
+  label: string;
+  checked: boolean;
+  disabled?: boolean;
+  className?: string;
+  onChange?: () => void;
+}) {
+  return (
+    <button
+      className={`ui-toggle ${className}`.trim()}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onChange}
+    >
+      <span className="publication-switch-track" aria-hidden="true"><span /></span>
+    </button>
   );
 }
 

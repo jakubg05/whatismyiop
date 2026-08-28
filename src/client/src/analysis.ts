@@ -242,6 +242,11 @@ export function formatDateInput(time: number): string {
   return `${year}-${month}-${day}`;
 }
 
+export function formatTimeInput(time: number): string {
+  const date = new Date(time);
+  return `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
+}
+
 export function inDateRange(measurement: Measurement, start: string, end: string, startClock?: string, endClock?: string): boolean {
   const startTime = startClock ? dateTimeBoundary(start, startClock) : dateBoundary(start);
   const endTime = endClock ? dateTimeBoundary(end, endClock, true) : dateBoundary(end, true);
