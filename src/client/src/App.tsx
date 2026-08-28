@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type Ref } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   ErrorBar,
@@ -27,36 +27,6 @@ import { TopNavigation } from "./TopNavigation";
 import { Button, DateInput, SectionHeading, SegmentedControl } from "./ui";
 
 type SavedRange = DraftRange & { id: string };
-
-function EditorInput({ label, fieldName, value, onChange, inputRef, inputMode, placeholder, maxLength }: {
-  label: string;
-  fieldName: string;
-  value: string;
-  onChange: (value: string) => void;
-  inputRef?: Ref<HTMLInputElement>;
-  inputMode?: "text" | "numeric";
-  placeholder?: string;
-  maxLength?: number;
-}) {
-  return (
-    <label className="builder-field">
-      <span className="builder-field-copy"><span>{label}</span></span>
-      <input
-        ref={inputRef}
-        type="text"
-        name={fieldName}
-        autoComplete="off"
-        data-1p-ignore
-        data-lpignore="true"
-        inputMode={inputMode}
-        placeholder={placeholder}
-        maxLength={maxLength}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
-  );
-}
 
 type SavedEvent = {
   id: string;
@@ -220,7 +190,6 @@ export default function App() {
   const [draftEvent, setDraftEvent] = useState({ label: "", date: "", clock: "" });
   const [editingRangeId, setEditingRangeId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const draftNameInput = useRef<HTMLInputElement>(null);
   const chartDraftRange = useDeferredValue(draftRange);
   const chartDraftEvent = useDeferredValue(draftEvent);
 
@@ -427,11 +396,6 @@ export default function App() {
   const chartFullDomain = useMemo(() => [fullDomainStart, fullDomainEnd] as [number, number], [fullDomainEnd, fullDomainStart]);
   const chartYDomain = useMemo(() => [minimumIop, maximumIop] as [number, number], [maximumIop, minimumIop]);
 
-  useEffect(() => {
-    if (!mode) return;
-    draftNameInput.current?.focus();
-  }, [mode]);
-
   return (
     <main>
       <input ref={fileInput} hidden type="file" accept=".csv,text/csv" onClick={(event) => {
@@ -554,17 +518,8 @@ export default function App() {
                 </div>
               </div>
               </>}
-              {mode === "range" && <form id="range-editor-form" className="editor-form" autoComplete="off" onSubmit={(event) => { event.preventDefault(); addRange(); }}>
-                <section className="editor-fields" aria-label="Period fields">
-                  <EditorInput label="Label" fieldName="period-label" inputRef={draftNameInput} value={draftRange.label} onChange={(label) => setDraftRange((value) => ({ ...value, label }))} />
-                </section>
-              </form>}
-              {mode === "event" && <form id="event-editor-form" className="editor-form" autoComplete="off" onSubmit={(event) => { event.preventDefault(); addEvent(); }}>
-                <section className="editor-fields" aria-label="Event fields">
-                  <EditorInput label="Label" fieldName="event-label" inputRef={draftNameInput} value={draftEvent.label} onChange={(label) => setDraftEvent((value) => ({ ...value, label }))} />
-                  <EditorInput label="Time" fieldName="event-time" inputMode="numeric" placeholder="HH:MM" maxLength={5} value={draftEvent.clock} onChange={(clock) => setDraftEvent((value) => ({ ...value, clock: clock.replace(/[^\d:]/g, "") }))} />
-                </section>
-              </form>}
+              {mode === "range" && <form id="range-editor-form" onSubmit={(event) => { event.preventDefault(); addRange(); }} />}
+              {mode === "event" && <form id="event-editor-form" onSubmit={(event) => { event.preventDefault(); addEvent(); }} />}
             </div>
           </aside>
           </div>

@@ -1,6 +1,7 @@
 import {
   Fragment,
   memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -157,7 +158,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   yDomain,
 }: Props) {
   const chart = useRef<HTMLDivElement>(null);
-  const annotationLabelInput = useRef<HTMLInputElement>(null);
   const focusedRangeLabel = useRef<HTMLDivElement>(null);
   const startDateTag = useRef<HTMLDivElement>(null);
   const endDateTag = useRef<HTMLDivElement>(null);
@@ -213,11 +213,11 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     setDomain(fullDomain);
   }, [fullDomainStart, fullDomainEnd, measurements]);
 
-  useEffect(() => {
-    if (!focusedAnnotation) return;
-    annotationLabelInput.current?.focus();
-    annotationLabelInput.current?.select();
-  }, [focusedAnnotation]);
+  const focusAnnotationLabelInput = useCallback((input: HTMLInputElement | null) => {
+    if (!input) return;
+    input.focus();
+    input.select();
+  }, []);
 
   useEffect(() => {
     if (qualityFilter !== "all" && !qualityOptions.includes(qualityFilter)) setQualityFilter("all");
@@ -601,7 +601,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               }}
             >
               {label.draft || label.focusId === focusedAnnotation ? <input
-                ref={annotationLabelInput}
+                ref={focusAnnotationLabelInput}
                 className="chart-annotation-label__input"
                 type="text"
                 name={`${label.kind}-graph-label`}
