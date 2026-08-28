@@ -89,16 +89,16 @@ function TrendTooltipContent({ point, mode }: { point: TrendPoint; mode: TrendMo
       <span>{mode === "adjusted" ? "Adjusted" : "Observed"}</span>
       <span>{formatFullTime(point.time)}</span>
     </div>
-    <div className="measurement-canvas-tooltip__trend-values">
-      <div className="measurement-canvas-tooltip__trend-value">
-        <span className="measurement-canvas-tooltip__eye"><span className={`dot dot--${point.eye.toLowerCase()}`} aria-hidden="true" />{eyeLabel(point.eye)}</span>
-        <span className="measurement-canvas-tooltip__trend-reading"><span className="measurement-canvas-tooltip__value">{point.iop.toFixed(1)}</span><span className="measurement-canvas-tooltip__unit">mmHg</span></span>
-      </div>
-      <div className="measurement-canvas-tooltip__trend-value">
-        <span className="measurement-canvas-tooltip__trend-label">{change === null ? "Sessions" : "30-day change"}</span>
-        <span className="measurement-canvas-tooltip__trend-reading"><span className="measurement-canvas-tooltip__trend-change">{change === null ? point.trend.sessionCount : `${change >= 0 ? "+" : ""}${change.toFixed(1)}`}</span>{change !== null && <span className="measurement-canvas-tooltip__unit">mmHg</span>}</span>
-      </div>
+    <div className="measurement-canvas-tooltip__trend-primary">
+      <span className="measurement-canvas-tooltip__eye"><span className={`dot dot--${point.eye.toLowerCase()}`} aria-hidden="true" />{eyeLabel(point.eye)}</span>
+      <span className="measurement-canvas-tooltip__trend-reading"><span className="measurement-canvas-tooltip__value">{point.iop.toFixed(1)}</span><span className="measurement-canvas-tooltip__unit">mmHg</span></span>
     </div>
+    <dl className="measurement-canvas-tooltip__rows measurement-canvas-tooltip__trend-row">
+      <div>
+        <dt>{change === null ? "Sessions" : "30-day change"}</dt>
+        <dd>{change === null ? point.trend.sessionCount : `${change >= 0 ? "+" : ""}${change.toFixed(1)} mmHg`}</dd>
+      </div>
+    </dl>
   </>;
 }
 
