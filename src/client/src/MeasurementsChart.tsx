@@ -20,7 +20,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { dateBoundary, formatChartTime, formatDateInput, type Eye, type Measurement } from "./analysis";
+import { dateBoundary, formatChartTime, formatDateInput, type Eye, type Measurement, type SessionAggregation } from "./analysis";
 import { clipDomain, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
 import { ChartToggle, DateInput } from "./ui";
@@ -120,6 +120,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   yDomain,
 }: Props) {
   const chart = useRef<HTMLDivElement>(null);
+  const aggregationMenu = useRef<HTMLDivElement>(null);
   const annotationLabelInput = useRef<HTMLInputElement>(null);
   const startDateTag = useRef<HTMLDivElement>(null);
   const endDateTag = useRef<HTMLDivElement>(null);
@@ -136,8 +137,21 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [chartWidth, setChartWidth] = useState(0);
   const [focusedAnnotation, setFocusedAnnotation] = useState<string | null>(null);
   const [hoveredAnnotation, setHoveredAnnotation] = useState<string | null>(null);
+  const [measurementView, setMeasurementView] = useState<"sessions" | "raw">("sessions");
+  const [sessionAggregation, setSessionAggregation] = useState<SessionAggregation>("median");
+  const [aggregationMenuOpen, setAggregationMenuOpen] = useState(false);
   const [domainStart, domainEnd] = domain;
   const [fullDomainStart, fullDomainEnd] = fullDomain;
+  const pressureDomain = useMemo(() => {
+    const lower = Math.floor(yDomain[0] / 5) * 5;
+    const upper = Math.ceil(yDomain[1] / 5) * 5;
+    return (lower === upper ? [lower - 5, upper + 5] : [lower, upper]) as TimeDomain;
+  }, [yDomain]);
+  const pressureTicks = useMemo(() => {
+    const ticks: number[] = [];
+    for (let value = pressureDomain[0]; value <= pressureDomain[1]; value += 5) ticks.push(value);
+    return ticks;
+  }, [pressureDomain]);
 
   domainRef.current = domain;
   fullDomainRef.current = fullDomain;
@@ -153,6 +167,22 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     annotationLabelInput.current?.focus();
     annotationLabelInput.current?.select();
   }, [focusedAnnotation]);
+
+  useEffect(() => {
+    if (!aggregationMenuOpen) return;
+    function closeOutside(event: PointerEvent) {
+      if (!aggregationMenu.current?.contains(event.target as Node)) setAggregationMenuOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setAggregationMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [aggregationMenuOpen]);
 
   function updateDateTagRows() {
     const start = startDateTag.current?.getBoundingClientRect();
@@ -528,7 +558,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           <ScatterChart margin={{ top: 12, right: 20, bottom: 10, left: 0 }}>
             <CartesianGrid stroke="var(--line)" vertical={false} />
             <XAxis type="number" dataKey="time" domain={domain} allowDataOverflow tickFormatter={formatChartTime} tick={{ fill: "var(--muted)", fontSize: 12 }} minTickGap={48} />
-            <YAxis width={52} type="number" dataKey="iop" domain={yDomain} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
+            <YAxis width={52} type="number" dataKey="iop" domain={pressureDomain} ticks={pressureTicks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
             {visibleRanges.map((range) => {
               const index = ranges.indexOf(range);
               const visible = visibleRange(range.start, range.end, range.openEnded);
@@ -554,6 +584,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         </ResponsiveContainer>
         <MeasurementCanvas
           measurements={measurements}
+          showRawReadings={measurementView === "raw"}
+          sessionAggregation={sessionAggregation}
           visibleEyes={visibleEyes}
           domainStart={domainStart}
           domainEnd={domainEnd}
@@ -563,8 +595,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           onAnnotationStart={startAnnotation}
           onAnnotationMove={moveAnnotation}
           onAnnotationEnd={finishAnnotation}
-          yMin={yDomain[0]}
-          yMax={yDomain[1]}
+          yMin={pressureDomain[0]}
+          yMax={pressureDomain[1]}
         />
         <div
           ref={selectionLayer}
@@ -655,6 +687,46 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         </div>
       </div>
       <div className="chart-toolbar">
+        <div className="measurement-view-control" role="group" aria-label="Measurement view">
+          <div ref={aggregationMenu} className={`measurement-view-control__sessions${measurementView === "sessions" ? " measurement-view-control__sessions--active" : ""}`}>
+            <button
+              className="measurement-view-control__sessions-trigger"
+              type="button"
+              aria-pressed={measurementView === "sessions"}
+              aria-haspopup="menu"
+              aria-expanded={aggregationMenuOpen}
+              onClick={() => {
+                setMeasurementView("sessions");
+                setAggregationMenuOpen((open) => !open);
+              }}
+            >
+              <span className="measurement-view-control__sessions-main">Sessions</span>
+              <span className="measurement-view-control__aggregation">
+                <span>{sessionAggregation === "median" ? "Median" : "Average"}</span>
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+              </span>
+            </button>
+            {aggregationMenuOpen && <div className="measurement-view-menu" role="menu" aria-label="Session value">
+              {(["median", "average"] as SessionAggregation[]).map((aggregation) => (
+                <button
+                  key={aggregation}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={sessionAggregation === aggregation}
+                  onClick={() => {
+                    setSessionAggregation(aggregation);
+                    setMeasurementView("sessions");
+                    setAggregationMenuOpen(false);
+                  }}
+                >
+                  <span>{aggregation === "median" ? "Median" : "Average"}</span>
+                  {sessionAggregation === aggregation && <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg>}
+                </button>
+              ))}
+            </div>}
+          </div>
+          <button className="measurement-view-control__raw" type="button" aria-pressed={measurementView === "raw"} onClick={() => { setMeasurementView("raw"); setAggregationMenuOpen(false); }}>Raw</button>
+        </div>
         <div className="eye-toggles">
           {(["OD", "OS"] as Eye[]).map((eye) => (
             <ChartToggle key={eye} label={eyeLabel(eye)} colorClass={`dot--${eye.toLowerCase()}`} checked={visibleEyes[eye]} onChange={() => onToggleEye(eye)} />

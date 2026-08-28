@@ -5,17 +5,30 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { formatFullTime, type Eye, type Measurement } from "./analysis";
+import {
+  coalesceMeasurementSessions,
+  formatFullTime,
+  type Eye,
+  type Measurement,
+  type SessionAggregation,
+  type SessionPoint,
+} from "./analysis";
 import { panDomain, type TimeDomain } from "./chartNavigation";
 
+type ChartPoint =
+  | { kind: "raw"; id: string; time: number; eye: Eye; iop: number; measurement: Measurement }
+  | { kind: "session"; id: string; time: number; eye: Eye; iop: number; session: SessionPoint };
+
 type HoveredPoint = {
-  measurement: Measurement;
+  point: ChartPoint;
   left: number;
   top: number;
 };
 
 type Props = {
   measurements: Measurement[];
+  showRawReadings: boolean;
+  sessionAggregation: SessionAggregation;
   visibleEyes: Record<Eye, boolean>;
   domainStart: number;
   domainEnd: number;
@@ -29,18 +42,42 @@ type Props = {
   yMax: number;
 };
 
-type Drag = { pointerId: number; x: number; domain: TimeDomain };
+type Drag = { pointerId: number; x: number; domain: TimeDomain; moved: boolean; point: HoveredPoint | null };
 type AnnotationDrag = { pointerId: number };
+type NavigationModifier = "annotate" | "zoom" | null;
 
 const COLORS = { OD: "#d9623d", OS: "#237c78" } as const;
 export const MEASUREMENT_PLOT = { left: 52, right: 20, top: 12, bottom: 40 } as const;
 const HIT_RADIUS = 12;
+const RAW_RADIUS = 2;
+const SESSION_RADIUS = 4;
+const TOOLTIP_WIDTH = 224;
+const TOOLTIP_HEIGHT = 152;
+const TOOLTIP_GAP = 24;
 
 function eyeLabel(eye: Eye): string {
-  return eye === "OD" ? "Right eye" : "Left eye";
+  return eye === "OD" ? "Right" : "Left";
 }
 
-function lowerBound(measurements: Measurement[], time: number): number {
+function formatIop(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function tooltipPosition(x: number, y: number, width: number, height: number) {
+  const inset = 8;
+  if (x + TOOLTIP_GAP + TOOLTIP_WIDTH <= width - inset) {
+    return { left: x + TOOLTIP_GAP, top: Math.max(inset, Math.min(y - TOOLTIP_HEIGHT / 2, height - TOOLTIP_HEIGHT - inset)) };
+  }
+  if (x - TOOLTIP_GAP - TOOLTIP_WIDTH >= inset) {
+    return { left: x - TOOLTIP_GAP - TOOLTIP_WIDTH, top: Math.max(inset, Math.min(y - TOOLTIP_HEIGHT / 2, height - TOOLTIP_HEIGHT - inset)) };
+  }
+  const left = Math.max(inset, Math.min(x - TOOLTIP_WIDTH / 2, width - TOOLTIP_WIDTH - inset));
+  return y + TOOLTIP_GAP + TOOLTIP_HEIGHT <= height - inset
+    ? { left, top: y + TOOLTIP_GAP }
+    : { left, top: Math.max(inset, y - TOOLTIP_GAP - TOOLTIP_HEIGHT) };
+}
+
+function lowerBound<T extends { time: number }>(measurements: T[], time: number): number {
   let low = 0;
   let high = measurements.length;
   while (low < high) {
@@ -53,6 +90,8 @@ function lowerBound(measurements: Measurement[], time: number): number {
 
 export function MeasurementCanvas({
   measurements,
+  showRawReadings,
+  sessionAggregation,
   visibleEyes,
   domainStart,
   domainEnd,
@@ -66,18 +105,53 @@ export function MeasurementCanvas({
   yMax,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const crosshairRef = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
   const annotationDrag = useRef<AnnotationDrag | null>(null);
   const currentDomain = useRef<TimeDomain>([domainStart, domainEnd]);
   const pendingDomain = useRef<TimeDomain | null>(null);
   const animationFrame = useRef<number | null>(null);
+  const viewProgress = useRef(0);
+  const selectionPop = useRef(0);
+  const animatedSelectionPulse = useRef(0);
   const [hovered, setHovered] = useState<HoveredPoint | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<HoveredPoint | null>(null);
+  const [selectionPulse, setSelectionPulse] = useState(0);
   const [navigating, setNavigating] = useState(false);
+  const [navigationModifier, setNavigationModifier] = useState<NavigationModifier>(null);
   const visibleMeasurements = useMemo(
     () => measurements.filter((measurement) => visibleEyes[measurement.eye]),
     [measurements, visibleEyes],
   );
+  const sessionPoints = useMemo(
+    () => coalesceMeasurementSessions(measurements, sessionAggregation),
+    [measurements, sessionAggregation],
+  );
+  const visibleSessionPoints = useMemo(
+    () => sessionPoints.filter((point) => visibleEyes[point.eye]),
+    [sessionPoints, visibleEyes],
+  );
+  const chartPoints = useMemo<ChartPoint[]>(() => [
+    ...visibleMeasurements.map((measurement) => ({
+      kind: "raw" as const,
+      id: `raw:${measurement.sourceRow}:${measurement.eye}`,
+      time: measurement.time,
+      eye: measurement.eye,
+      iop: measurement.iop,
+      measurement,
+    })),
+    ...visibleSessionPoints.map((session) => ({
+      kind: "session" as const,
+      id: `session:${session.sessionId}:${session.eye}`,
+      time: session.time,
+      eye: session.eye,
+      iop: session.iop,
+      session,
+    })),
+  ].sort((a, b) => a.time - b.time), [visibleMeasurements, visibleSessionPoints]);
+  const positionedSelectedPoint = selectedPoint ? positionPoint(selectedPoint.point) : null;
+  const focusedPoint = hovered ?? positionedSelectedPoint;
+  const focusTarget = hovered?.point ?? selectedPoint?.point ?? null;
+  const focusedSession = focusedPoint?.point.kind === "session" ? focusedPoint.point : null;
   currentDomain.current = [domainStart, domainEnd];
 
   function scheduleDomain(nextDomain: TimeDomain) {
@@ -96,6 +170,34 @@ export function MeasurementCanvas({
   }, []);
 
   useEffect(() => {
+    setHovered(null);
+    setSelectedPoint(null);
+  }, [sessionAggregation, showRawReadings, visibleEyes]);
+
+  useEffect(() => {
+    function updateModifier(event: KeyboardEvent) {
+      const nextModifier: NavigationModifier = event.shiftKey ? "zoom" : event.ctrlKey ? "annotate" : null;
+      setNavigationModifier(nextModifier);
+      if (nextModifier) {
+        setHovered(null);
+      }
+    }
+
+    function clearModifier() {
+      setNavigationModifier(null);
+    }
+
+    window.addEventListener("keydown", updateModifier);
+    window.addEventListener("keyup", updateModifier);
+    window.addEventListener("blur", clearModifier);
+    return () => {
+      window.removeEventListener("keydown", updateModifier);
+      window.removeEventListener("keyup", updateModifier);
+      window.removeEventListener("blur", clearModifier);
+    };
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -105,8 +207,10 @@ export function MeasurementCanvas({
       if (width <= MEASUREMENT_PLOT.left + MEASUREMENT_PLOT.right || height <= MEASUREMENT_PLOT.top + MEASUREMENT_PLOT.bottom) return;
 
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-      canvas!.width = Math.round(width * pixelRatio);
-      canvas!.height = Math.round(height * pixelRatio);
+      const renderWidth = Math.round(width * pixelRatio);
+      const renderHeight = Math.round(height * pixelRatio);
+      if (canvas!.width !== renderWidth) canvas!.width = renderWidth;
+      if (canvas!.height !== renderHeight) canvas!.height = renderHeight;
       const context = canvas!.getContext("2d");
       if (!context) return;
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
@@ -116,35 +220,89 @@ export function MeasurementCanvas({
       const plotHeight = height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom;
       const timeSpan = Math.max(1, domainEnd - domainStart);
       const pressureSpan = Math.max(1, yMax - yMin);
-      const paths: Record<Eye, Path2D> = { OD: new Path2D(), OS: new Path2D() };
-      const radius = 4;
+      const progress = viewProgress.current;
+      const rawRadius = RAW_RADIUS + (SESSION_RADIUS - RAW_RADIUS) * progress;
+      const sessionRadius = SESSION_RADIUS - (SESSION_RADIUS - RAW_RADIUS) * progress;
+      const rawAlpha = 0.22 + 0.7 * progress;
+      const sessionAlpha = 0.92 * (1 - progress);
+      const focusedId = focusTarget?.id ?? null;
+      if (focusedSession) {
+        for (const point of [focusedSession.session]) {
+          if (point.measurements.length < 2) continue;
+          const values = point.measurements.map((measurement) => measurement.iop);
+          const minimum = Math.min(...values);
+          const maximum = Math.max(...values);
+          const x = MEASUREMENT_PLOT.left + ((point.time - domainStart) / timeSpan) * plotWidth;
+          const yMinimum = MEASUREMENT_PLOT.top + (1 - (minimum - yMin) / pressureSpan) * plotHeight;
+          const yMaximum = MEASUREMENT_PLOT.top + (1 - (maximum - yMin) / pressureSpan) * plotHeight;
 
-      const firstVisibleIndex = lowerBound(measurements, domainStart);
-      for (let index = firstVisibleIndex; index < measurements.length; index += 1) {
-        const measurement = measurements[index];
-        if (measurement.time > domainEnd) break;
-        if (!visibleEyes[measurement.eye]) continue;
-        const x = MEASUREMENT_PLOT.left + ((measurement.time - domainStart) / timeSpan) * plotWidth;
-        const y = MEASUREMENT_PLOT.top + (1 - (measurement.iop - yMin) / pressureSpan) * plotHeight;
-        const path = paths[measurement.eye];
-        path.moveTo(x + radius, y);
-        path.arc(x, y, radius, 0, Math.PI * 2);
+          context.globalAlpha = 1;
+          context.strokeStyle = COLORS[point.eye];
+          context.lineWidth = 1.5;
+          context.beginPath();
+          context.moveTo(x, yMaximum);
+          context.lineTo(x, yMinimum);
+          context.moveTo(x - 4, yMaximum);
+          context.lineTo(x + 4, yMaximum);
+          context.moveTo(x - 4, yMinimum);
+          context.lineTo(x + 4, yMinimum);
+          context.stroke();
+        }
+      }
+      const firstVisibleIndex = lowerBound(chartPoints, domainStart);
+      for (let index = firstVisibleIndex; index < chartPoints.length; index += 1) {
+        const point = chartPoints[index];
+        if (point.time > domainEnd) break;
+        const x = MEASUREMENT_PLOT.left + ((point.time - domainStart) / timeSpan) * plotWidth;
+        const y = MEASUREMENT_PLOT.top + (1 - (point.iop - yMin) / pressureSpan) * plotHeight;
+        const selected = focusedId === point.id;
+        const radius = (point.kind === "session" ? sessionRadius : rawRadius)
+          * (selectedPoint?.point.id === point.id ? 1 + selectionPop.current : 1);
+        const baseAlpha = point.kind === "session" ? sessionAlpha : rawAlpha;
+
+        context.beginPath();
+        context.arc(x, y, radius, 0, Math.PI * 2);
+        context.fillStyle = COLORS[point.eye];
+        context.globalAlpha = selected
+          ? 1
+          : focusedId
+            ? baseAlpha * 0.1
+            : baseAlpha;
+        context.fill();
       }
 
-      context.globalAlpha = 1;
-      for (const eye of ["OD", "OS"] as Eye[]) {
-        if (!visibleEyes[eye]) continue;
-        context.fillStyle = COLORS[eye];
-        context.fill(paths[eye]);
-      }
       context.globalAlpha = 1;
     }
 
-    draw();
+    const targetProgress = showRawReadings ? 1 : 0;
+    const startProgress = viewProgress.current;
+    const startedAt = performance.now();
+    const animateSelection = selectionPulse !== animatedSelectionPulse.current;
+    if (animateSelection) animatedSelectionPulse.current = selectionPulse;
+    let viewFrame: number | null = null;
+
+    function animate(now: number) {
+      const elapsed = Math.min(1, (now - startedAt) / 240);
+      const eased = 1 - (1 - elapsed) ** 3;
+      viewProgress.current = startProgress + (targetProgress - startProgress) * eased;
+      selectionPop.current = animateSelection ? Math.sin(Math.PI * elapsed) * 0.35 : 0;
+      draw();
+      if (elapsed < 1 && (startProgress !== targetProgress || animateSelection)) viewFrame = window.requestAnimationFrame(animate);
+    }
+
+    if (startProgress === targetProgress && !animateSelection) {
+      selectionPop.current = 0;
+      draw();
+    } else {
+      viewFrame = window.requestAnimationFrame(animate);
+    }
     const observer = new ResizeObserver(draw);
     observer.observe(canvas);
-    return () => observer.disconnect();
-  }, [domainEnd, domainStart, measurements, visibleEyes, yMax, yMin]);
+    return () => {
+      observer.disconnect();
+      if (viewFrame !== null) window.cancelAnimationFrame(viewFrame);
+    };
+  }, [chartPoints, domainEnd, domainStart, focusTarget, focusedPoint, focusedSession, selectedPoint, selectionPulse, showRawReadings, yMax, yMin]);
 
   function chartGeometry(canvas: HTMLCanvasElement) {
     const bounds = canvas.getBoundingClientRect();
@@ -154,11 +312,20 @@ export function MeasurementCanvas({
     };
   }
 
-  function setCrosshair(x: number | null) {
-    const crosshair = crosshairRef.current;
-    if (!crosshair) return;
-    crosshair.style.opacity = x === null ? "0" : "1";
-    if (x !== null) crosshair.style.transform = `translateX(${x}px)`;
+  function positionPoint(point: ChartPoint): HoveredPoint | null {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const plotWidth = Math.max(1, width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
+    const plotHeight = Math.max(1, height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom);
+    const x = MEASUREMENT_PLOT.left + ((point.time - domainStart) / Math.max(1, domainEnd - domainStart)) * plotWidth;
+    const y = MEASUREMENT_PLOT.top + (1 - (point.iop - yMin) / Math.max(1, yMax - yMin)) * plotHeight;
+    const tooltip = tooltipPosition(x, y, width, height);
+    return {
+      point,
+      ...tooltip,
+    };
   }
 
   function startNavigation(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -168,18 +335,22 @@ export function MeasurementCanvas({
     if (x < MEASUREMENT_PLOT.left || x > bounds.width - MEASUREMENT_PLOT.right) return;
 
     event.preventDefault();
-    setCrosshair(null);
     event.currentTarget.setPointerCapture(event.pointerId);
-    if (!event.ctrlKey) {
+    if (event.ctrlKey) {
+      setSelectedPoint(null);
       const plotWidth = Math.max(1, bounds.width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
       const ratio = Math.max(0, Math.min(1, (x - MEASUREMENT_PLOT.left) / plotWidth));
       annotationDrag.current = { pointerId: event.pointerId };
       onAnnotationStart(domainStart + ratio * (domainEnd - domainStart), event.clientX);
       return;
     }
-    drag.current = { pointerId: event.pointerId, x, domain: currentDomain.current };
-    setHovered(null);
-    setNavigating(true);
+    drag.current = {
+      pointerId: event.pointerId,
+      x,
+      domain: currentDomain.current,
+      moved: false,
+      point: nearestPointAt(event.currentTarget, event.clientX, event.clientY),
+    };
   }
 
   function moveNavigation(event: ReactPointerEvent<HTMLCanvasElement>) {
@@ -191,6 +362,10 @@ export function MeasurementCanvas({
     }
     const activeDrag = drag.current;
     if (!activeDrag || activeDrag.pointerId !== event.pointerId) {
+      if (event.ctrlKey || event.shiftKey) {
+        setHovered(null);
+        return;
+      }
       findNearest(event);
       return;
     }
@@ -198,6 +373,12 @@ export function MeasurementCanvas({
     const { bounds, plotWidth } = chartGeometry(event.currentTarget);
     const fullDomain: TimeDomain = [fullDomainStart, fullDomainEnd];
     const x = event.clientX - bounds.left;
+    if (!activeDrag.moved) {
+      if (Math.abs(activeDrag.x - x) < 4) return;
+      activeDrag.moved = true;
+      setHovered(null);
+      setNavigating(true);
+    }
     const offset = ((activeDrag.x - x) / plotWidth) * (activeDrag.domain[1] - activeDrag.domain[0]);
     scheduleDomain(panDomain(activeDrag.domain, offset, fullDomain));
   }
@@ -211,76 +392,102 @@ export function MeasurementCanvas({
       return;
     }
     if (drag.current?.pointerId !== event.pointerId) return;
+    const completedDrag = drag.current;
     drag.current = null;
     setNavigating(false);
+    if (!completedDrag.moved) {
+      const pressedPoint = completedDrag.point;
+      if (pressedPoint && pressedPoint.point.id !== selectedPoint?.point.id) {
+        setSelectedPoint(pressedPoint);
+        setSelectionPulse((current) => current + 1);
+      } else if (!pressedPoint) {
+        setSelectedPoint(null);
+      }
+      setHovered(null);
+    }
   }
 
-  function findNearest(event: ReactPointerEvent<HTMLCanvasElement>) {
-    const bounds = event.currentTarget.getBoundingClientRect();
+  function nearestPointAt(canvas: HTMLCanvasElement, clientX: number, clientY: number): HoveredPoint | null {
+    const bounds = canvas.getBoundingClientRect();
     const plotWidth = bounds.width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right;
     const plotHeight = bounds.height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom;
-    const pointerX = event.clientX - bounds.left;
-    const pointerY = event.clientY - bounds.top;
+    const pointerX = clientX - bounds.left;
+    const pointerY = clientY - bounds.top;
     if (pointerX < MEASUREMENT_PLOT.left || pointerX > bounds.width - MEASUREMENT_PLOT.right || pointerY < MEASUREMENT_PLOT.top || pointerY > bounds.height - MEASUREMENT_PLOT.bottom) {
-      setCrosshair(null);
-      setHovered(null);
-      return;
+      return null;
     }
-    setCrosshair(pointerX);
-    if (visibleMeasurements.length === 0) {
-      setHovered(null);
-      return;
-    }
+    if (chartPoints.length === 0) return null;
 
     const timeSpan = Math.max(1, domainEnd - domainStart);
     const pressureSpan = Math.max(1, yMax - yMin);
     const targetTime = domainStart + ((pointerX - MEASUREMENT_PLOT.left) / plotWidth) * timeSpan;
-    const insertion = lowerBound(visibleMeasurements, targetTime);
+    const insertion = lowerBound(chartPoints, targetTime);
     let best: HoveredPoint | null = null;
     let bestDistanceSquared = HIT_RADIUS * HIT_RADIUS;
     const start = Math.max(0, insertion - 128);
-    const end = Math.min(visibleMeasurements.length, insertion + 128);
+    const end = Math.min(chartPoints.length, insertion + 128);
 
     for (let index = start; index < end; index += 1) {
-      const measurement = visibleMeasurements[index];
-      const x = MEASUREMENT_PLOT.left + ((measurement.time - domainStart) / timeSpan) * plotWidth;
+      const point = chartPoints[index];
+      if (showRawReadings ? point.kind !== "raw" : point.kind !== "session") continue;
+      const x = MEASUREMENT_PLOT.left + ((point.time - domainStart) / timeSpan) * plotWidth;
       if (Math.abs(x - pointerX) > HIT_RADIUS) continue;
-      const y = MEASUREMENT_PLOT.top + (1 - (measurement.iop - yMin) / pressureSpan) * plotHeight;
+      const y = MEASUREMENT_PLOT.top + (1 - (point.iop - yMin) / pressureSpan) * plotHeight;
       const distanceSquared = (x - pointerX) ** 2 + (y - pointerY) ** 2;
       if (distanceSquared <= bestDistanceSquared) {
         bestDistanceSquared = distanceSquared;
+        const tooltip = tooltipPosition(x, y, bounds.width, bounds.height);
         best = {
-          measurement,
-          left: Math.max(8, Math.min(x + 12, bounds.width - 210)),
-          top: Math.max(8, Math.min(y - 105, bounds.height - 150)),
+          point,
+          ...tooltip,
         };
       }
     }
-    setHovered(best);
+    return best;
+  }
+
+  function findNearest(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (selectedPoint) {
+      setHovered(null);
+      return;
+    }
+    setHovered(nearestPointAt(event.currentTarget, event.clientX, event.clientY));
   }
 
   return (
     <div className="measurement-canvas-layer">
       <canvas
         ref={canvasRef}
-        className={`measurement-canvas ${navigating ? "measurement-canvas--navigating" : ""}`}
+        className={`measurement-canvas${navigationModifier ? ` measurement-canvas--${navigationModifier}-ready` : ""}${navigating ? " measurement-canvas--navigating" : ""}`}
         onPointerDown={startNavigation}
         onPointerMove={moveNavigation}
         onPointerUp={finishNavigation}
         onPointerCancel={finishNavigation}
         onPointerLeave={() => {
-          setCrosshair(null);
           if (!navigating) setHovered(null);
         }}
         aria-label={`${measurements.length.toLocaleString()} pressure measurements`}
       />
-      <div ref={crosshairRef} className="measurement-crosshair" aria-hidden="true" />
-      {hovered && <div className="chart-tooltip measurement-canvas-tooltip" style={{ left: hovered.left, top: hovered.top }}>
-        <strong>{eyeLabel(hovered.measurement.eye)} · {hovered.measurement.iop} mmHg</strong>
-        <span>{formatFullTime(hovered.measurement.time)}</span>
-        <span>Quality: {hovered.measurement.quality}</span>
-        {hovered.measurement.position && <span>Position: {hovered.measurement.position}</span>}
-        <span className="source-row">Source row {hovered.measurement.sourceRow}</span>
+      {focusedPoint && <div className="measurement-canvas-tooltip" style={{ left: focusedPoint.left, top: focusedPoint.top }}>
+        <div className="measurement-canvas-tooltip__eyebrow">
+          <span className="measurement-canvas-tooltip__eye"><span className={`dot dot--${focusedPoint.point.eye.toLowerCase()}`} aria-hidden="true" />{eyeLabel(focusedPoint.point.eye)}</span>
+          <span>{formatFullTime(focusedPoint.point.time)}</span>
+        </div>
+        <div className="measurement-canvas-tooltip__primary">
+          <span className="measurement-canvas-tooltip__value">{formatIop(focusedPoint.point.iop)}</span>
+          {focusedPoint.point.kind === "session" && <span className="measurement-canvas-tooltip__statistic">{sessionAggregation}</span>}
+          <span className="measurement-canvas-tooltip__unit">mmHg</span>
+        </div>
+        <dl className="measurement-canvas-tooltip__rows">
+          {focusedPoint.point.kind === "session" ? <>
+            <div><dt>Readings</dt><dd>{focusedPoint.point.session.measurements.length}</dd></div>
+            <div><dt>Values</dt><dd>{focusedPoint.point.session.measurements.map((measurement) => measurement.iop).join(", ")} mmHg</dd></div>
+          </> : <>
+            <div><dt>Quality</dt><dd>{focusedPoint.point.measurement.quality}</dd></div>
+            {focusedPoint.point.measurement.position && <div><dt>Position</dt><dd>{focusedPoint.point.measurement.position}</dd></div>}
+            <div><dt>Source</dt><dd>Row {focusedPoint.point.measurement.sourceRow}</dd></div>
+          </>}
+        </dl>
       </div>}
     </div>
   );
