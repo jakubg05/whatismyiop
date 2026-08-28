@@ -13,6 +13,11 @@ describe("chart navigation", () => {
     expect(panDomain([200_000, 600_000], 900_000, fullDomain)).toEqual([600_000, 1_000_000]);
   });
 
+  it("pans beyond the recorded period when navigation is unbounded", () => {
+    expect(panDomain([200_000, 600_000], -500_000, null)).toEqual([-300_000, 100_000]);
+    expect(panDomain([200_000, 600_000], 900_000, null)).toEqual([1_100_000, 1_500_000]);
+  });
+
   it("does not zoom beyond the recorded period or below one minute", () => {
     expect(zoomDomain([0, 100_000], 100, 0.5, fullDomain)).toEqual(fullDomain);
     expect(constrainDomain(400_000, 400_001, ...fullDomain)).toEqual([400_000, 460_000]);
@@ -20,6 +25,10 @@ describe("chart navigation", () => {
 
   it("turns a modified wheel gesture into horizontal panning", () => {
     expect(navigateWheelDomain([200_000, 600_000], fullDomain, "pan", 0, 100, 0.5, 1_000)).toEqual([240_000, 640_000]);
+  });
+
+  it("zooms out beyond the measurement extent when navigation is unbounded", () => {
+    expect(zoomDomain([0, 1_000_000], 2, 0.5, null)).toEqual([-500_000, 1_500_000]);
   });
 
   it("turns either wheel axis into cursor-anchored zooming", () => {

@@ -12,6 +12,7 @@ export type DaylightDay = {
 };
 
 const MINIMUM_WINDOW_MS = 60_000;
+const OPEN_DOMAIN_LIMITS: TimeDomain = [-62_135_596_800_000, 253_402_300_799_999];
 const DAY_MS = 86_400_000;
 const DAYLIGHT_FADE_START_DAYS = 20;
 const DAYLIGHT_FULL_STRENGTH_DAYS = 3;
@@ -98,7 +99,7 @@ export function zoomDomain(
   domain: TimeDomain,
   scale: number,
   anchorRatio: number,
-  fullDomain: TimeDomain,
+  fullDomain: TimeDomain | null,
 ): TimeDomain {
   const [start, end] = domain;
   const span = end - start;
@@ -108,23 +109,21 @@ export function zoomDomain(
   return constrainDomain(
     anchor - nextSpan * ratio,
     anchor + nextSpan * (1 - ratio),
-    fullDomain[0],
-    fullDomain[1],
+    ...(fullDomain ?? OPEN_DOMAIN_LIMITS),
   );
 }
 
-export function panDomain(domain: TimeDomain, offset: number, fullDomain: TimeDomain): TimeDomain {
+export function panDomain(domain: TimeDomain, offset: number, fullDomain: TimeDomain | null): TimeDomain {
   return constrainDomain(
     domain[0] + offset,
     domain[1] + offset,
-    fullDomain[0],
-    fullDomain[1],
+    ...(fullDomain ?? OPEN_DOMAIN_LIMITS),
   );
 }
 
 export function navigateWheelDomain(
   domain: TimeDomain,
-  fullDomain: TimeDomain,
+  fullDomain: TimeDomain | null,
   action: "pan" | "zoom",
   deltaX: number,
   deltaY: number,

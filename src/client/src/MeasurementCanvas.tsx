@@ -32,8 +32,6 @@ type Props = {
   visibleEyes: Record<Eye, boolean>;
   domainStart: number;
   domainEnd: number;
-  fullDomainStart: number;
-  fullDomainEnd: number;
   onDomainChange: (domain: TimeDomain) => void;
   onAnnotationStart: (time: number, clientX: number) => void;
   onAnnotationMove: (time: number, clientX: number) => void;
@@ -96,8 +94,6 @@ export function MeasurementCanvas({
   visibleEyes,
   domainStart,
   domainEnd,
-  fullDomainStart,
-  fullDomainEnd,
   onDomainChange,
   onAnnotationStart,
   onAnnotationMove,
@@ -414,7 +410,6 @@ export function MeasurementCanvas({
     }
 
     const { bounds, plotWidth } = chartGeometry(event.currentTarget);
-    const fullDomain: TimeDomain = [fullDomainStart, fullDomainEnd];
     const x = event.clientX - bounds.left;
     if (!activeDrag.moved) {
       if (Math.abs(activeDrag.x - x) < 4) return;
@@ -423,7 +418,7 @@ export function MeasurementCanvas({
       setNavigating(true);
     }
     const offset = ((activeDrag.x - x) / plotWidth) * (activeDrag.domain[1] - activeDrag.domain[0]);
-    scheduleDomain(panDomain(activeDrag.domain, offset, fullDomain));
+    scheduleDomain(panDomain(activeDrag.domain, offset, null));
   }
 
   function finishNavigation(event: ReactPointerEvent<HTMLCanvasElement>) {

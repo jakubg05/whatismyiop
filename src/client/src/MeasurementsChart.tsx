@@ -158,7 +158,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const handleDrag = useRef<HandleDrag | null>(null);
   const [domain, setDomain] = useState<TimeDomain>(fullDomain);
   const domainRef = useRef(domain);
-  const fullDomainRef = useRef(fullDomain);
   const pendingDomain = useRef<TimeDomain | null>(null);
   const wheelFrame = useRef<number | null>(null);
   const [chartWidth, setChartWidth] = useState(0);
@@ -196,7 +195,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   );
 
   domainRef.current = domain;
-  fullDomainRef.current = fullDomain;
 
   useEffect(() => {
     domainRef.current = fullDomain;
@@ -251,10 +249,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       const deltaX = event.deltaX * unit;
       const deltaY = event.deltaY * unit;
       const current = domainRef.current;
-      const complete = fullDomainRef.current;
       const next = navigateWheelDomain(
         current,
-        complete,
+        null,
         event.shiftKey ? "zoom" : "pan",
         deltaX,
         deltaY,
@@ -310,7 +307,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   function isAtPresent(ratio: number): boolean {
-    return ratio >= 0.98 && domainEnd >= fullDomainEnd;
+    const time = domainStart + ratio * (domainEnd - domainStart);
+    const tolerance = Math.max(1_000, (domainEnd - domainStart) * 0.000001);
+    return ratio >= 0.98 && Math.abs(time - fullDomainEnd) <= tolerance;
   }
 
   function ratioForTime(time: number): number {
@@ -640,8 +639,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           visibleEyes={visibleEyes}
           domainStart={domainStart}
           domainEnd={domainEnd}
-          fullDomainStart={fullDomainStart}
-          fullDomainEnd={fullDomainEnd}
           onDomainChange={changeDomain}
           onAnnotationStart={startAnnotation}
           onAnnotationMove={moveAnnotation}
