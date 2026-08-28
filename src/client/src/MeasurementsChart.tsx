@@ -840,8 +840,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           <button className="measurement-view-control__raw" type="button" aria-pressed={measurementView === "raw"} onClick={() => setMeasurementView("raw")}>Raw</button>
         </div>
         <div className="annotation-toggles" role="group" aria-label="Annotation visibility">
-          <ChartToggle label="Periods" colorClass="dot--periods" checked={showPeriods} onChange={() => setShowPeriods((current) => !current)} />
-          <ChartToggle label="Events" colorClass="dot--events" checked={showEvents} onChange={() => setShowEvents((current) => !current)} />
+          <ChartToggle label="Periods" checked={showPeriods} onChange={() => setShowPeriods((current) => !current)} />
+          <ChartToggle label="Events" checked={showEvents} onChange={() => setShowEvents((current) => !current)} />
         </div>
         <div className="eye-toggles">
           {(["OD", "OS"] as Eye[]).map((eye) => (

@@ -131,14 +131,14 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
 
 export function ChartToggle({ label, colorClass, checked, onChange }: {
   label: string;
-  colorClass: string;
+  colorClass?: string;
   checked: boolean;
   onChange: () => void;
 }) {
   return (
     <label className="ui-chart-toggle">
       <input type="checkbox" checked={checked} onChange={onChange} />
-      <span className={`dot ${colorClass}`} aria-hidden="true" />
+      {colorClass && <span className={`dot ${colorClass}`} aria-hidden="true" />}
       <span>{label}</span>
     </label>
   );
