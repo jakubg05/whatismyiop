@@ -23,7 +23,7 @@ import {
 import { dateBoundary, formatChartTime, formatDateInput, type Eye, type Measurement, type SessionAggregation } from "./analysis";
 import { clipDomain, daylightBackground, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
-import { ChartSelect, ChartToggle, DateInput } from "./ui";
+import { ChartDateTag, ChartSelect, ChartToggle } from "./ui";
 
 export type ChartMode = "range" | "event" | null;
 type PositionFilter = "all" | "sitting" | "laying";
@@ -212,6 +212,14 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     if (qualityFilter !== "all" && !qualityOptions.includes(qualityFilter)) setQualityFilter("all");
   }, [qualityFilter, qualityOptions]);
 
+  const hoverFocus = focusedAnnotation === null ? hoveredAnnotation : null;
+  const hoveredRange = hoverFocus?.startsWith("range:")
+    ? ranges.find((range) => hoverFocus === `range:${range.id}`) ?? null
+    : null;
+  const hoveredEvent = hoverFocus?.startsWith("event:")
+    ? events.find((event) => hoverFocus === `event:${event.id}`) ?? null
+    : null;
+
   function updateDateTagRows() {
     const start = startDateTag.current?.getBoundingClientRect();
     const end = endDateTag.current?.getBoundingClientRect();
@@ -228,7 +236,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
 
   useLayoutEffect(() => {
     updateDateTagRows();
-  }, [chartWidth, domainEnd, domainStart, draftRange.end, draftRange.openEnded, draftRange.start, mode]);
+  }, [chartWidth, domainEnd, domainStart, draftRange.end, draftRange.openEnded, draftRange.start, hoveredRange, mode]);
 
   useEffect(() => {
     const element = chart.current;
@@ -391,11 +399,12 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     const { time, ratio } = timeFromClientX(event.clientX);
     handleDrag.current = { kind: edge === "start" ? "range-start" : "range-end", time, ratio };
     event.currentTarget.style.left = `${ratio * 100}%`;
-    const label = event.currentTarget.querySelector<HTMLElement>(".selection-handle__label, .selection-handle__date-input");
+    const tag = event.currentTarget.querySelector<HTMLElement>(".selection-handle__date-control");
+    const input = tag?.querySelector<HTMLInputElement>(".selection-handle__date-input");
     const labelText = edge === "end" && isAtPresent(ratio) ? "Present" : dragLabel(time);
-    if (label instanceof HTMLInputElement) label.value = formatDateInput(time);
-    else if (label) label.textContent = labelText;
-    placeHandleLabel(label, ratio, true);
+    if (input) input.value = formatDateInput(time);
+    else if (tag) tag.textContent = labelText;
+    placeHandleLabel(tag, ratio, true);
     updateDateTagRows();
     updateRangePreview(edge, ratio);
   }
@@ -405,9 +414,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     const next = timeFromClientX(event.clientX);
     handleDrag.current = { kind: "event", ...next };
     event.currentTarget.style.left = `${next.ratio * 100}%`;
-    const label = event.currentTarget.querySelector<HTMLElement>(".selection-handle__label");
-    if (label) label.textContent = dragLabel(next.time, true);
-    placeHandleLabel(label, next.ratio);
+    const tag = event.currentTarget.querySelector<HTMLElement>(".selection-handle__date-control");
+    const value = tag?.querySelector<HTMLElement>(".selection-handle__date-value");
+    if (value) value.textContent = dragLabel(next.time, true);
+    placeHandleLabel(tag, next.ratio);
   }
 
   function updateRangePreview(edge: "start" | "end", ratio: number) {
@@ -513,13 +523,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const selectionColor = mode === "event" || focusedEventIndex >= 0
     ? eventColor(focusedEventIndex >= 0 ? focusedEventIndex : events.length)
     : rangePalette(focusedRangeIndex >= 0 ? focusedRangeIndex : ranges.length).stroke;
-  const hoverFocus = focusedAnnotation === null ? hoveredAnnotation : null;
-  const hoveredRange = hoverFocus?.startsWith("range:")
-    ? ranges.find((range) => hoverFocus === `range:${range.id}`) ?? null
-    : null;
-  const hoveredEvent = hoverFocus?.startsWith("event:")
-    ? events.find((event) => hoverFocus === `event:${event.id}`) ?? null
-    : null;
 
   function focusAnnotation(label: AnnotationLabel) {
     if (!label.focusId) return;
@@ -655,19 +658,28 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           onPointerUp={finishSelection}
         >
           {hoveredRange && <>
-            <output
-              className="annotation-hover-date annotation-hover-date--start"
-              style={{ left: `${ratioForTime(dateBoundary(hoveredRange.start) ?? domainStart) * 100}%` }}
-            >{displayDate(hoveredRange.start)}</output>
-            <output
-              className="annotation-hover-date annotation-hover-date--end"
-              style={{ left: `${hoveredRange.openEnded ? 100 : ratioForTime(dateBoundary(hoveredRange.end, true) ?? domainEnd) * 100}%` }}
-            >{hoveredRange.openEnded ? "Present" : displayDate(hoveredRange.end)}</output>
+            <div className="annotation-date-anchor" style={{ left: `${ratioForTime(dateBoundary(hoveredRange.start) ?? domainStart) * 100}%` }}>
+              <ChartDateTag ref={startDateTag} ariaLabel="Period start date" value={hoveredRange.start} displayValue={displayDate(hoveredRange.start)} />
+            </div>
+            <div className="annotation-date-anchor" style={{ left: `${hoveredRange.openEnded ? 100 : ratioForTime(dateBoundary(hoveredRange.end, true) ?? domainEnd) * 100}%` }}>
+              <ChartDateTag
+                ref={endDateTag}
+                ariaLabel="Period end date"
+                value={hoveredRange.openEnded ? today : hoveredRange.end}
+                displayValue={displayDate(hoveredRange.openEnded ? today : hoveredRange.end)}
+                present={{ checked: hoveredRange.openEnded }}
+              />
+            </div>
           </>}
-          {hoveredEvent && <output
-            className={`annotation-hover-date annotation-hover-date--event${ratioForTime(hoveredEvent.time) > 0.8 ? " annotation-hover-date--right" : ""}`}
-            style={{ left: `${ratioForTime(hoveredEvent.time) * 100}%` }}
-          >{dragLabel(hoveredEvent.time, true)}</output>}
+          {hoveredEvent && <div className="annotation-date-anchor" style={{ left: `${ratioForTime(hoveredEvent.time) * 100}%` }}>
+            <ChartDateTag
+              ariaLabel="Event date and time"
+              className="selection-handle__date-control--event"
+              value={formatDateInput(hoveredEvent.time)}
+              displayValue={dragLabel(hoveredEvent.time, true)}
+              alignRight={ratioForTime(hoveredEvent.time) > 0.8}
+            />
+          </div>}
           <div ref={dragPreview} className="selection-drag-preview" />
           {mode === "range" && visibleDraftRange && <div
             ref={rangePreview}
@@ -682,14 +694,13 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             onPointerMove={(event) => moveRangeHandle(event, "start")}
             onPointerUp={finishHandleDrag}
             onPointerCancel={finishHandleDrag}
-          ><span /><div ref={startDateTag} className="selection-handle__date-control" onPointerDown={(event) => event.stopPropagation()}>
-            <DateInput
-              className="selection-handle__date-input"
-              aria-label="Period start date"
-              value={draftRange.start}
-              onChange={(event) => setDraftRange((current) => ({ ...current, start: event.target.value }))}
-            />
-          </div></div>}
+          ><span /><ChartDateTag
+            ref={startDateTag}
+            active
+            ariaLabel="Period start date"
+            value={draftRange.start}
+            onChange={(value) => setDraftRange((current) => ({ ...current, start: value }))}
+          /></div>}
           {mode === "range" && draftRange.end && <div
             className="selection-handle selection-handle--range"
             data-handle="range-end"
@@ -698,30 +709,18 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             onPointerMove={(event) => moveRangeHandle(event, "end")}
             onPointerUp={finishHandleDrag}
             onPointerCancel={finishHandleDrag}
-          ><span /><div
+          ><span /><ChartDateTag
             ref={endDateTag}
-            className="selection-handle__date-control"
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <DateInput
-              className="selection-handle__date-input"
-              aria-label="Period end date"
-              disabled={draftRange.openEnded}
-              value={draftRange.openEnded ? today : draftRange.end}
-              onChange={(event) => setDraftRange((current) => ({ ...current, end: event.target.value, openEnded: false }))}
-            />
-            <button
-              className="selection-handle__present-toggle"
-              type="button"
-              role="switch"
-              aria-checked={draftRange.openEnded}
-              aria-label={`Present: ${draftRange.openEnded ? "on" : "off"}`}
-              onClick={() => setDraftRange((current) => ({ ...current, openEnded: !current.openEnded, end: !current.openEnded ? today : current.end }))}
-            >
-              <span>Present</span>
-              <span className="publication-switch-track" aria-hidden="true"><span /></span>
-            </button>
-          </div>
+            active
+            ariaLabel="Period end date"
+            disabled={draftRange.openEnded}
+            value={draftRange.openEnded ? today : draftRange.end}
+            onChange={(value) => setDraftRange((current) => ({ ...current, end: value, openEnded: false }))}
+            present={{
+              checked: draftRange.openEnded,
+              onChange: () => setDraftRange((current) => ({ ...current, openEnded: !current.openEnded, end: !current.openEnded ? today : current.end })),
+            }}
+          />
           </div>}
           {mode === "event" && draftEventTime !== null && <div
             className="selection-handle selection-handle--event"
@@ -731,7 +730,13 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             onPointerMove={moveEventHandle}
             onPointerUp={finishHandleDrag}
             onPointerCancel={finishHandleDrag}
-          ><span /><output className="selection-handle__label">{dragLabel(draftEventTime, true)}</output></div>}
+          ><span /><ChartDateTag
+            ariaLabel="Event date and time"
+            className="selection-handle__date-control--event"
+            value={formatDateInput(draftEventTime)}
+            displayValue={dragLabel(draftEventTime, true)}
+            alignRight={ratioForTime(draftEventTime) > 0.8}
+          /></div>}
         </div>
       </div>
       <div className="chart-toolbar">

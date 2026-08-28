@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, useState, type FocusEvent, type InputHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useEffect, useRef, useState, type CSSProperties, type FocusEvent, type InputHTMLAttributes, type ReactNode } from "react";
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "quiet" | "danger" | "editor" | "editorPrimary";
@@ -46,6 +46,59 @@ export const DateInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLIn
   ref,
 ) {
   return <input ref={ref} className={`ui-date-input ${className}`.trim()} type="date" {...props} />;
+});
+
+export const ChartDateTag = forwardRef<HTMLDivElement, {
+  value: string;
+  displayValue?: string;
+  ariaLabel: string;
+  active?: boolean;
+  disabled?: boolean;
+  alignRight?: boolean;
+  className?: string;
+  style?: CSSProperties;
+  onChange?: (value: string) => void;
+  present?: { checked: boolean; onChange?: () => void };
+}>(function ChartDateTag({
+  value,
+  displayValue,
+  ariaLabel,
+  active = false,
+  disabled = false,
+  alignRight = false,
+  className = "",
+  style,
+  onChange,
+  present,
+}, ref) {
+  return (
+    <div
+      ref={ref}
+      style={style}
+      className={`selection-handle__date-control${active ? " selection-handle__date-control--active" : " selection-handle__date-control--readonly"}${alignRight ? " selection-handle__date-control--right" : ""} ${className}`.trim()}
+      onPointerDown={(event) => active && event.stopPropagation()}
+    >
+      {active ? <DateInput
+        className="selection-handle__date-input"
+        aria-label={ariaLabel}
+        disabled={disabled}
+        value={value}
+        onChange={(event) => onChange?.(event.target.value)}
+      /> : <output className="selection-handle__date-value" aria-label={ariaLabel}>{displayValue ?? value}</output>}
+      {present && <button
+        className="selection-handle__present-toggle"
+        type="button"
+        role="switch"
+        aria-checked={present.checked}
+        aria-label={`Present: ${present.checked ? "on" : "off"}`}
+        disabled={!present.onChange}
+        onClick={present.onChange}
+      >
+        <span>Present</span>
+        <span className="publication-switch-track" aria-hidden="true"><span /></span>
+      </button>}
+    </div>
+  );
 });
 
 export function ChartToggle({ label, colorClass, checked, onChange }: {
