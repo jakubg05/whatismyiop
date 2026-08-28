@@ -513,12 +513,13 @@ export function MeasurementCanvas({
     const height = canvas.clientHeight;
     const plotWidth = Math.max(1, width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
     const plotHeight = Math.max(1, height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom);
-    const baseX = MEASUREMENT_PLOT.left + ((point.time - domainStart) / Math.max(1, domainEnd - domainStart)) * plotWidth;
+    const plotX = ((point.time - domainStart) / Math.max(1, domainEnd - domainStart)) * plotWidth;
+    const baseX = MEASUREMENT_PLOT.left + plotX;
     const x = baseX + pointCollisionOffset(point, baseX, width - MEASUREMENT_PLOT.right);
     const y = MEASUREMENT_PLOT.top + (1 - (point.iop - yMin) / Math.max(1, yMax - yMin)) * plotHeight;
     const tooltip = point.kind === "trend"
-      ? trendTooltipPosition(baseX, y, width)
-      : tooltipPosition(x, y, width, height);
+      ? trendTooltipPosition(plotX, y - MEASUREMENT_PLOT.top, plotWidth)
+      : tooltipPosition(x - MEASUREMENT_PLOT.left, y - MEASUREMENT_PLOT.top, plotWidth, plotHeight);
     return {
       point,
       ...tooltip,
@@ -638,7 +639,11 @@ export function MeasurementCanvas({
             iop: nearest.value,
             trend: nearest.series,
           },
-          ...trendTooltipPosition(pointerX, nearest.y, bounds.width),
+          ...trendTooltipPosition(
+            pointerX - MEASUREMENT_PLOT.left,
+            nearest.y - MEASUREMENT_PLOT.top,
+            plotWidth,
+          ),
         }
       : null;
   }
@@ -677,7 +682,12 @@ export function MeasurementCanvas({
       const distanceSquared = (x - pointerX) ** 2 + (y - pointerY) ** 2;
       if (distanceSquared <= bestDistanceSquared) {
         bestDistanceSquared = distanceSquared;
-        const tooltip = tooltipPosition(x, y, bounds.width, bounds.height);
+        const tooltip = tooltipPosition(
+          x - MEASUREMENT_PLOT.left,
+          y - MEASUREMENT_PLOT.top,
+          plotWidth,
+          plotHeight,
+        );
         const tooltipPoint = !showRawReadings && point.kind === "raw"
           ? sessionPointBySourceRow.get(point.measurement.sourceRow) ?? point
           : point;
@@ -733,14 +743,15 @@ export function MeasurementCanvas({
         }}
         aria-label={`${measurements.length.toLocaleString()} pressure measurements`}
       />
-      {focusedPoint && <div
-        className={`measurement-canvas-tooltip${focusedPoint.point.kind === "trend" ? ` measurement-canvas-tooltip--trend measurement-canvas-tooltip--notch-${focusedPoint.trendNotch?.side ?? "bottom"}` : ""}`}
-        style={{
-          left: focusedPoint.left,
-          top: focusedPoint.top,
-          "--trend-tooltip-notch-left": `${focusedPoint.trendNotch?.left ?? TREND_TOOLTIP_WIDTH / 2}px`,
-        } as CSSProperties}
-      >
+      <div className="measurement-canvas-tooltip-viewport">
+        {focusedPoint && <div
+          className={`measurement-canvas-tooltip${focusedPoint.point.kind === "trend" ? ` measurement-canvas-tooltip--trend measurement-canvas-tooltip--notch-${focusedPoint.trendNotch?.side ?? "bottom"}` : ""}`}
+          style={{
+            left: focusedPoint.left,
+            top: focusedPoint.top,
+            "--trend-tooltip-notch-left": `${focusedPoint.trendNotch?.left ?? TREND_TOOLTIP_WIDTH / 2}px`,
+          } as CSSProperties}
+        >
         {focusedPoint.point.kind === "trend"
           ? <TrendTooltipContent point={focusedPoint.point} mode={trendMode} />
           : focusedPoint.point.kind === "session" ? <>
@@ -775,7 +786,8 @@ export function MeasurementCanvas({
             <div><dt>Source</dt><dd>Row {focusedPoint.point.measurement.sourceRow}</dd></div>
           </dl>
         </>}
-      </div>}
+        </div>}
+      </div>
     </div>
   );
 }
