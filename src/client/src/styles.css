@@ -50,13 +50,13 @@ main { min-height: 100vh; }
 .measurement-view-control__sessions--active, .measurement-view-control__raw[aria-pressed="true"] { background: var(--surface); color: var(--ink); }
 .measurement-view-control__sessions:not(.measurement-view-control__sessions--active), .measurement-view-control__raw[aria-pressed="false"] { background: var(--hover); color: var(--subtle); }
 .measurement-view-control__raw { min-width: 3.25rem; padding: 0 var(--s2); border-left: 1px solid var(--line) !important; border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 !important; font-size: .75rem; font-weight: 500; }
-.eye-toggles { border: 1px solid var(--line); border-radius: var(--radius); display: flex; align-items: stretch; background: var(--canvas); }
+.eye-toggles, .annotation-toggles { border: 1px solid var(--line); border-radius: var(--radius); display: flex; align-items: stretch; background: var(--canvas); }
 .ui-chart-toggle { min-width: 3.75rem; height: auto; padding: 0 var(--s2); border: 0; border-radius: 0; display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); color: var(--muted); font: var(--small); font-weight: 500; cursor: pointer; background: transparent; }
 .ui-chart-toggle:first-child { border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px); }
 .ui-chart-toggle:last-child { border-left: 1px solid var(--line); border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0; }
 .ui-chart-toggle:hover { color: var(--ink); } .ui-chart-toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; } .ui-chart-toggle:has(input:checked) { background: var(--surface); color: var(--ink); } .ui-chart-toggle:not(:has(input:checked)) .dot { opacity: .3; }
 .ui-chart-toggle:not(:has(input:checked)) { background: var(--hover); color: var(--subtle); }
-.dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; } .dot--od { background: var(--od); } .dot--os { background: var(--os); }
+.dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; } .dot--od { background: var(--od); } .dot--os { background: var(--os); } .dot--periods { background: #5f7f9d; } .dot--events { background: #8f6aa8; }
 
 .chart-wrap { position: relative; width: 100%; height: var(--chart-height); user-select: none; }
 .chart-daylight-background { position: absolute; z-index: 0; inset: 12px 20px 40px 52px; overflow: hidden; pointer-events: none; transition: opacity 160ms var(--ease); }

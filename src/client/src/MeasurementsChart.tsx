@@ -178,6 +178,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [sessionAggregation, setSessionAggregation] = useState<SessionAggregation>("median");
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("all");
   const [qualityFilter, setQualityFilter] = useState("all");
+  const [showPeriods, setShowPeriods] = useState(true);
+  const [showEvents, setShowEvents] = useState(true);
   const [domainStart, domainEnd] = domain;
   const [fullDomainStart, fullDomainEnd] = fullDomain;
   const pressureDomain = useMemo(() => {
@@ -222,6 +224,14 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   useEffect(() => {
     if (qualityFilter !== "all" && !qualityOptions.includes(qualityFilter)) setQualityFilter("all");
   }, [qualityFilter, qualityOptions]);
+
+  useEffect(() => {
+    setHoveredAnnotation((current) => {
+      if (!showPeriods && current?.startsWith("range:")) return null;
+      if (!showEvents && current?.startsWith("event:")) return null;
+      return current;
+    });
+  }, [showEvents, showPeriods]);
 
   const hoverFocus = focusedAnnotation === null ? hoveredAnnotation : null;
   const hoveredRange = hoverFocus?.startsWith("range:")
@@ -472,6 +482,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     const labels: AnnotationLabel[] = [];
     for (const [index, range] of ranges.entries()) {
       const editing = focusedAnnotation === `range:${range.id}`;
+      if (!showPeriods && !editing) continue;
       const liveDomain = editing
         ? draggedRangeFocus ?? rangeTimeDomain(draftRange.start, draftRange.startTime, draftRange.end, draftRange.endTime, draftRange.openEnded)
         : rangeTimeDomain(range.start, range.startTime, range.end, range.endTime, range.openEnded);
@@ -490,6 +501,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       }
     }
     for (const [index, event] of events.entries()) {
+      if (!showEvents && focusedAnnotation !== `event:${event.id}`) continue;
       if (event.time >= domainStart && event.time <= domainEnd) {
         labels.push({ id: event.id, focusId: `event:${event.id}`, kind: "event", text: focusedAnnotation === `event:${event.id}` ? draftEventLabel : event.label, time: event.time, color: eventColor(index) });
       }
@@ -519,18 +531,18 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         laneEnds[lane] = left + width;
         return { ...label, left, width, lane, fullWidth };
       });
-  }, [chartWidth, domainEnd, domainStart, draftEventLabel, draftEventTime, draftRange, draftRangeLabel, draggedRangeFocus, events, focusedAnnotation, mode, presentTime, ranges, visibleDraftRange]);
+  }, [chartWidth, domainEnd, domainStart, draftEventLabel, draftEventTime, draftRange, draftRangeLabel, draggedRangeFocus, events, focusedAnnotation, mode, presentTime, ranges, showEvents, showPeriods, visibleDraftRange]);
   const annotationLaneCount = Math.max(1, ...annotationLabels.map((label) => label.lane + 1));
   const visibleRanges = focusedAnnotation?.startsWith("event:")
     ? []
     : focusedAnnotation?.startsWith("range:")
       ? ranges.filter((range) => focusedAnnotation === `range:${range.id}`)
-      : ranges;
+      : showPeriods ? ranges : [];
   const visibleEvents = focusedAnnotation?.startsWith("range:")
     ? []
     : focusedAnnotation?.startsWith("event:")
       ? events.filter((event) => focusedAnnotation === `event:${event.id}`)
-      : events;
+      : showEvents ? events : [];
   const activeAnnotation = focusedAnnotation ?? hoveredAnnotation;
   const focusedRangeIndex = activeAnnotation?.startsWith("range:")
     ? ranges.findIndex((range) => activeAnnotation === `range:${range.id}`)
@@ -826,6 +838,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             }}
           />
           <button className="measurement-view-control__raw" type="button" aria-pressed={measurementView === "raw"} onClick={() => setMeasurementView("raw")}>Raw</button>
+        </div>
+        <div className="annotation-toggles" role="group" aria-label="Annotation visibility">
+          <ChartToggle label="Periods" colorClass="dot--periods" checked={showPeriods} onChange={() => setShowPeriods((current) => !current)} />
+          <ChartToggle label="Events" colorClass="dot--events" checked={showEvents} onChange={() => setShowEvents((current) => !current)} />
         </div>
         <div className="eye-toggles">
           {(["OD", "OS"] as Eye[]).map((eye) => (
