@@ -165,6 +165,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [chartWidth, setChartWidth] = useState(0);
   const [focusedAnnotation, setFocusedAnnotation] = useState<string | null>(null);
   const [hoveredAnnotation, setHoveredAnnotation] = useState<string | null>(null);
+  const [draggedRangeFocus, setDraggedRangeFocus] = useState<TimeDomain | null>(null);
   const [measurementView, setMeasurementView] = useState<"sessions" | "raw">("sessions");
   const [sessionAggregation, setSessionAggregation] = useState<SessionAggregation>("median");
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("all");
@@ -410,6 +411,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     placeHandleLabel(tag, ratio, true);
     updateDateTagRows();
     updateRangePreview(edge, ratio);
+    const otherTime = edge === "start"
+      ? draftRange.openEnded ? presentTime : dateBoundary(draftRange.end, true) ?? domainEnd
+      : dateBoundary(draftRange.start) ?? domainStart;
+    setDraggedRangeFocus([Math.min(time, otherTime), Math.max(time, otherTime)]);
   }
 
   function moveEventHandle(event: ReactPointerEvent<HTMLDivElement>) {
@@ -436,6 +441,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
     const pending = handleDrag.current;
     handleDrag.current = null;
+    setDraggedRangeFocus(null);
     if (!pending) return;
     if (pending.kind === "event") {
       onDraftEventTime(pending.time);
@@ -447,11 +453,16 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       : { ...current, end: openEnded ? today : formatDateInput(pending.time), openEnded });
   }
 
-  function visibleRange(start: string, end: string, openEnded: boolean): TimeDomain | null {
+  function rangeTimeDomain(start: string, end: string, openEnded: boolean): TimeDomain | null {
     const startTime = dateBoundary(start);
     const endTime = openEnded ? presentTime : dateBoundary(end, true);
     if (startTime === null || endTime === null) return null;
-    return clipDomain([startTime, endTime], domain);
+    return [startTime, endTime];
+  }
+
+  function visibleRange(start: string, end: string, openEnded: boolean): TimeDomain | null {
+    const rangeDomain = rangeTimeDomain(start, end, openEnded);
+    return rangeDomain ? clipDomain(rangeDomain, domain) : null;
   }
 
   const visibleDraftRange = mode === "range"
@@ -526,6 +537,19 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const selectionColor = mode === "event" || focusedEventIndex >= 0
     ? eventColor(focusedEventIndex >= 0 ? focusedEventIndex : events.length)
     : rangePalette(focusedRangeIndex >= 0 ? focusedRangeIndex : ranges.length).stroke;
+  const activeRange = activeAnnotation?.startsWith("range:")
+    ? ranges.find((range) => activeAnnotation === `range:${range.id}`) ?? null
+    : null;
+  const emphasizedRange = draggedRangeFocus
+    ?? (mode === "range"
+      ? rangeTimeDomain(draftRange.start, draftRange.end, draftRange.openEnded)
+      : activeRange
+        ? rangeTimeDomain(activeRange.start, activeRange.end, activeRange.openEnded)
+        : null);
+  const dimMeasurements = mode === "range"
+    || mode === "event"
+    || activeAnnotation?.startsWith("event:") === true
+    || emphasizedRange !== null;
 
   function focusAnnotation(label: AnnotationLabel) {
     if (!label.focusId) return;
@@ -649,6 +673,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           onAnnotationStart={startAnnotation}
           onAnnotationMove={moveAnnotation}
           onAnnotationEnd={finishAnnotation}
+          dimMeasurements={dimMeasurements}
+          emphasizedRange={emphasizedRange}
           yMin={pressureDomain[0]}
           yMax={pressureDomain[1]}
         />

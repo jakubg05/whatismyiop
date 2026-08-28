@@ -36,6 +36,8 @@ type Props = {
   onAnnotationStart: (time: number, clientX: number) => void;
   onAnnotationMove: (time: number, clientX: number) => void;
   onAnnotationEnd: (time: number, ratio: number, clientX: number) => void;
+  dimMeasurements: boolean;
+  emphasizedRange: TimeDomain | null;
   yMin: number;
   yMax: number;
 };
@@ -98,6 +100,8 @@ export function MeasurementCanvas({
   onAnnotationStart,
   onAnnotationMove,
   onAnnotationEnd,
+  dimMeasurements,
+  emphasizedRange,
   yMin,
   yMax,
 }: Props) {
@@ -257,6 +261,10 @@ export function MeasurementCanvas({
       const sessionRadius = SESSION_RADIUS;
       const rawAlpha = 0.92;
       const sessionAlpha = 0.92 * (1 - progress);
+      const emphasisAlpha = (time: number) => (
+        !dimMeasurements
+        || (emphasizedRange !== null && time >= emphasizedRange[0] && time <= emphasizedRange[1])
+      ) ? 1 : 0.18;
       const focusedId = focusTarget?.id ?? null;
       const focusedSessionId = focusTarget?.kind === "session" ? focusTarget.session.sessionId : null;
       if (focusedSession) {
@@ -270,7 +278,7 @@ export function MeasurementCanvas({
           const yMinimum = MEASUREMENT_PLOT.top + (1 - (minimum - yMin) / pressureSpan) * plotHeight;
           const yMaximum = MEASUREMENT_PLOT.top + (1 - (maximum - yMin) / pressureSpan) * plotHeight;
 
-          context.globalAlpha = 1;
+          context.globalAlpha = emphasisAlpha(point.time);
           context.strokeStyle = COLORS[point.eye];
           context.lineWidth = 1.5;
           context.beginPath();
@@ -300,11 +308,12 @@ export function MeasurementCanvas({
 
         context.beginPath();
         context.arc(x, y, radius, 0, Math.PI * 2);
-        context.globalAlpha = selected
+        const interactionAlpha = selected
           ? 1
           : focusedId
             ? baseAlpha * 0.1
             : baseAlpha;
+        context.globalAlpha = interactionAlpha * emphasisAlpha(point.time);
         context.fillStyle = COLORS[point.eye];
         context.fill();
       }
@@ -340,7 +349,7 @@ export function MeasurementCanvas({
       observer.disconnect();
       if (viewFrame !== null) window.cancelAnimationFrame(viewFrame);
     };
-  }, [chartPoints, domainEnd, domainStart, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, yMax, yMin]);
+  }, [chartPoints, dimMeasurements, domainEnd, domainStart, emphasizedRange, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, yMax, yMin]);
 
   function chartGeometry(canvas: HTMLCanvasElement) {
     const bounds = canvas.getBoundingClientRect();
