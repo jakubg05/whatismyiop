@@ -1,18 +1,21 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { formatDateInput, inDateRange, parseMeasurementsCsv, summarize } from "./analysis";
 
-const sourcePath = "C:\\Users\\X13JG\\Desktop\\measurements.csv";
+const sourceCsv = `Date / Time;IOP (OD);IOP (OS);Quality OD;Quality OS;Position
+2023-01-18T17:02:25;20;21;Good;Good;Sitting
+2024-12-31T23:59:59;22;;Excellent;;Sitting
+2025-01-01T00:00:00;;24;;Good;Supine
+2026-08-25T22:28:38;30;25;Good;Excellent;Sitting`;
 
 describe("measurement import", () => {
-  const result = parseMeasurementsCsv(readFileSync(sourcePath, "utf8"));
+  const result = parseMeasurementsCsv(sourceCsv);
 
-  it("preserves the supplied file's rows and eye observations", () => {
-    expect(result.sourceRows).toBe(2190);
+  it("preserves source rows and eye observations", () => {
+    expect(result.sourceRows).toBe(4);
     expect(result.rejectedRows).toBe(0);
-    expect(result.measurements).toHaveLength(2190);
-    expect(result.measurements.filter((item) => item.eye === "OD")).toHaveLength(1141);
-    expect(result.measurements.filter((item) => item.eye === "OS")).toHaveLength(1049);
+    expect(result.measurements).toHaveLength(6);
+    expect(result.measurements.filter((item) => item.eye === "OD")).toHaveLength(3);
+    expect(result.measurements.filter((item) => item.eye === "OS")).toHaveLength(3);
   });
 
   it("preserves the exact chronological boundaries", () => {
@@ -20,15 +23,15 @@ describe("measurement import", () => {
     expect(result.measurements.at(-1)?.timestampText).toBe("2026-08-25T22:28:38");
   });
 
-  it("matches independently profiled pressure summaries", () => {
+  it("summarizes pressure values by eye", () => {
     const od = summarize(result.measurements.filter((item) => item.eye === "OD"));
     const os = summarize(result.measurements.filter((item) => item.eye === "OS"));
-    expect(od.min).toBe(12);
-    expect(od.max).toBe(42);
-    expect(od.mean).toBeCloseTo(22.6, 1);
-    expect(os.min).toBe(14);
-    expect(os.max).toBe(37);
-    expect(os.mean).toBeCloseTo(22.0, 1);
+    expect(od.min).toBe(20);
+    expect(od.max).toBe(30);
+    expect(od.mean).toBe(24);
+    expect(os.min).toBe(21);
+    expect(os.max).toBe(25);
+    expect(os.mean).toBeCloseTo(23.3, 1);
   });
 
   it("uses inclusive calendar ranges without overlap", () => {
