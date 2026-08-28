@@ -324,13 +324,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     return domainStart + pointerRatio(event) * (domainEnd - domainStart);
   }
 
-  function isAtPresent(ratio: number): boolean {
-    const time = domainStart + ratio * (domainEnd - domainStart);
-    const plotWidth = Math.max(1, chartWidth - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
-    const tolerance = Math.max(60_000, ((domainEnd - domainStart) / plotWidth) * 8);
-    return Math.abs(time - presentTime) <= tolerance;
-  }
-
   function ratioForTime(time: number): number {
     if (domainEnd <= domainStart) return 0;
     return Math.max(0, Math.min(1, (time - domainStart) / (domainEnd - domainStart)));
@@ -378,20 +371,19 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     dragPreview.current.style.width = `${right - left}%`;
   }
 
-  function finishAnnotation(end: number, ratio: number, clientX: number) {
+  function finishAnnotation(end: number, _ratio: number, clientX: number) {
     const drag = dragRef.current;
     if (!drag) return;
     const moved = drag.moved || Math.abs(clientX - drag.startX) >= 4;
     setFocusedAnnotation(null);
     setHoveredAnnotation(null);
     if (moved) {
-      const openEnded = isAtPresent(ratio);
       onSelectRange({
         start: formatDateInput(Math.min(drag.start, end)),
         startTime: formatTimeInput(Math.min(drag.start, end)),
-        end: openEnded ? today : formatDateInput(Math.max(drag.start, end)),
-        endTime: openEnded ? formatTimeInput(presentTime) : formatTimeInput(Math.max(drag.start, end)),
-        openEnded,
+        end: formatDateInput(Math.max(drag.start, end)),
+        endTime: formatTimeInput(Math.max(drag.start, end)),
+        openEnded: false,
       });
     } else {
       onSelectEvent(end);
@@ -415,7 +407,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     const tag = event.currentTarget.querySelector<HTMLElement>(".selection-handle__date-control");
     const input = tag?.querySelector<HTMLInputElement>(".selection-handle__date-input");
     const timeInput = tag?.querySelector<HTMLInputElement>(".selection-handle__time-input");
-    const labelText = edge === "end" && isAtPresent(ratio) ? "Present" : dragLabel(time);
+    const labelText = dragLabel(time);
     if (input) input.value = formatDateInput(time);
     else if (tag) tag.textContent = labelText;
     if (timeInput) timeInput.value = formatTimeInput(time);
@@ -460,10 +452,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       onDraftEventTime(pending.time);
       return;
     }
-    const openEnded = pending.kind === "range-end" && isAtPresent(pending.ratio);
     setDraftRange((current) => pending.kind === "range-start"
       ? { ...current, start: formatDateInput(pending.time), startTime: formatTimeInput(pending.time) }
-      : { ...current, end: openEnded ? today : formatDateInput(pending.time), endTime: openEnded ? formatTimeInput(presentTime) : formatTimeInput(pending.time), openEnded });
+      : { ...current, end: formatDateInput(pending.time), endTime: formatTimeInput(pending.time), openEnded: false });
   }
 
   function updateDraftEventDateTime(date: string, clock: string) {
