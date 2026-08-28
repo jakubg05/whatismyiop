@@ -25,6 +25,7 @@ main { min-height: 100vh; }
 .nav-data { min-width: 0; display: flex; align-items: baseline; justify-content: center; gap: var(--s2); font: var(--small); white-space: nowrap; } .nav-data strong { max-width: min(24rem, 32vw); overflow: hidden; font-weight: 500; text-overflow: ellipsis; } .nav-data span { color: var(--muted); font-variant-numeric: tabular-nums; } .file-actions { justify-self: end; }
 .ui-button { min-height: var(--control-sm); padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: var(--small); font-weight: 500; white-space: nowrap; transition: background var(--fast) var(--ease); }
 .ui-button:hover, .ui-button:focus-visible { background: var(--hover); } .ui-button--primary { border-color: var(--cta); background: var(--cta); color: #fff; } .ui-button--primary:hover, .ui-button--primary:focus-visible { border-color: var(--cta-hover); background: var(--cta-hover); } .ui-button--quiet { border-color: transparent; background: transparent; color: var(--muted); } .ui-button--danger { border-color: transparent; background: transparent; color: var(--danger); }
+.file-button { border: 0; background: var(--editor-button); color: var(--editor-ink); } .file-button:hover, .file-button:focus-visible { background: var(--editor-input); color: var(--editor-ink); }
 
 .section-heading__copy > span { display: block; margin-bottom: var(--s1); color: var(--muted); font: var(--small); }
 
