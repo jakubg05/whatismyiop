@@ -81,7 +81,7 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
     <div
       ref={ref}
       style={style}
-      className={`selection-handle__date-control${active ? " selection-handle__date-control--active" : " selection-handle__date-control--readonly"}${alignRight ? " selection-handle__date-control--right" : ""} ${className}`.trim()}
+      className={`selection-handle__date-control${active ? " selection-handle__date-control--active" : " selection-handle__date-control--readonly"}${!active && present?.checked ? " selection-handle__date-control--present" : ""}${alignRight ? " selection-handle__date-control--right" : ""} ${className}`.trim()}
       onPointerDown={(event) => active && event.stopPropagation()}
     >
       <div className="selection-handle__date-fields">
@@ -102,7 +102,7 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
             onChange={(event) => onTimeChange?.(event.target.value)}
           />
         </> : present?.checked
-          ? <output className="selection-handle__date-value" aria-label={ariaLabel}>Present</output>
+          ? <output className="selection-handle__date-value" aria-label={ariaLabel}>Now</output>
           : <>
             <output className="selection-handle__date-value" aria-label={ariaLabel}>{displayValue ?? value}</output>
             <output className="selection-handle__time-value" aria-label={`${ariaLabel} time`}>{displayTime ?? timeValue}</output>
