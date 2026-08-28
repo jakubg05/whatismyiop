@@ -180,7 +180,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [sessionAggregation, setSessionAggregation] = useState<SessionAggregation>("median");
   const [trendMode, setTrendMode] = useState<TrendMode>("adjusted");
   const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
-  const [focusedTrendEye, setFocusedTrendEye] = useState<Eye | null>(null);
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("all");
   const [qualityFilter, setQualityFilter] = useState("all");
   const [showPeriods, setShowPeriods] = useState(true);
@@ -214,7 +213,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
 
   const toggleTrendEye = useCallback((eye: Eye) => {
     setVisibleTrendEyes((current) => ({ ...current, [eye]: !current[eye] }));
-    setFocusedTrendEye((current) => current === eye ? null : current);
   }, []);
 
   domainRef.current = domain;
@@ -264,7 +262,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const hoveredEvent = hoverFocus?.startsWith("event:")
     ? events.find((event) => hoverFocus === `event:${event.id}`) ?? null
     : null;
-  const visualHoverFocus = focusedTrendEye ? `trend:${focusedTrendEye}` : hoverFocus;
 
   function updateDateTagRows() {
     const start = startDateTag.current?.getBoundingClientRect();
@@ -627,7 +624,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             <div
               key={label.id}
               ref={label.kind === "range" && label.focusId === focusedAnnotation ? focusedRangeLabel : undefined}
-              className={`chart-annotation-label chart-annotation-label--${label.kind}${label.fullWidth ? " chart-annotation-label--range-wide" : ""}${label.draft ? " chart-annotation-label--draft" : ""}${visualHoverFocus && visualHoverFocus !== label.focusId ? " chart-annotation-label--muted" : ""}`}
+              className={`chart-annotation-label chart-annotation-label--${label.kind}${label.fullWidth ? " chart-annotation-label--range-wide" : ""}${label.draft ? " chart-annotation-label--draft" : ""}${hoverFocus && hoverFocus !== label.focusId ? " chart-annotation-label--muted" : ""}`}
               role={label.focusId ? "button" : undefined}
               tabIndex={label.focusId ? 0 : undefined}
               onClick={() => label.focusId && focusAnnotation(label)}
@@ -699,7 +696,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               const visible = visibleRange(range.start, range.startTime, range.end, range.endTime, range.openEnded);
               if (!visible) return null;
               const color = rangePalette(index);
-              const muted = visualHoverFocus !== null && visualHoverFocus !== `range:${range.id}`;
+              const muted = hoverFocus !== null && hoverFocus !== `range:${range.id}`;
               return <Fragment key={range.id}>
                 <ReferenceArea x1={visible[0]} x2={visible[1]} fill={color.fill} fillOpacity={muted ? 0.035 : 0.14} stroke="none" />
                 <ReferenceLine x={visible[0]} stroke={color.stroke} strokeOpacity={muted ? 0.14 : 0.55} />
@@ -707,10 +704,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               </Fragment>;
             })}
             {focusedAnnotation === null && visibleDraftRange && (
-              <ReferenceArea x1={visibleDraftRange[0]} x2={visibleDraftRange[1]} fill={rangePalette(ranges.length).fill} fillOpacity={visualHoverFocus ? 0.035 : 0.2} stroke="none" />
+              <ReferenceArea x1={visibleDraftRange[0]} x2={visibleDraftRange[1]} fill={rangePalette(ranges.length).fill} fillOpacity={0.2} stroke="none" />
             )}
             {visibleEvents.map((event) => (
-              <ReferenceLine key={event.id} x={event.time} stroke={eventColor(events.indexOf(event))} strokeWidth={2} strokeOpacity={visualHoverFocus && visualHoverFocus !== `event:${event.id}` ? 0.2 : 1} />
+              <ReferenceLine key={event.id} x={event.time} stroke={eventColor(events.indexOf(event))} strokeWidth={2} strokeOpacity={hoverFocus && hoverFocus !== `event:${event.id}` ? 0.2 : 1} />
             ))}
             {focusedAnnotation === null && mode === "event" && draftEventTime !== null && (
               <ReferenceLine x={draftEventTime} stroke={eventColor(events.length)} strokeWidth={2} strokeDasharray="4 3" />
@@ -731,7 +728,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           onAnnotationMove={moveAnnotation}
           onAnnotationEnd={finishAnnotation}
           onPlotHoverTimeChange={handlePlotHoverTimeChange}
-          onTrendFocusChange={setFocusedTrendEye}
           dimMeasurements={dimMeasurements}
           emphasizedRange={emphasizedRange}
           yMin={pressureDomain[0]}
@@ -890,10 +886,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               { value: "observed", label: "Observed" },
               { value: "off", label: "Off" },
             ]}
-            onChange={(value) => {
-              setTrendMode(value);
-              if (value === "off") setFocusedTrendEye(null);
-            }}
+            onChange={setTrendMode}
           />
           <div className="trend-eye-toggles" role="group" aria-label="Eyes shown as trends">
             {(["OD", "OS"] as Eye[]).map((eye) => (
