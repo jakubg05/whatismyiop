@@ -2,7 +2,7 @@
   --font: "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --body: 400 .875rem/1.5 var(--font); --small: 400 .75rem/1.45 var(--font);
   --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1rem; --s5: 1.5rem; --s6: 2rem;
-  --gutter: clamp(1rem, 3vw, 4rem); --control: 2.5rem; --control-sm: 2rem; --chart-height: 28rem;
+  --gutter: clamp(1.25rem, 2.5vw, 2rem); --control: 2.5rem; --control-sm: 2rem; --chart-height: 28rem;
   --radius: .375rem; --radius-panel: .625rem;
   --ink: #202124; --muted: #6b7280; --subtle: #8b919a; --line: #e0e3e7; --line-strong: #cdd2d8;
   --canvas: #fff; --surface: #fff; --hover: #f3f4f6; --accent: #7656a0; --cta: #9b4ab8; --cta-hover: #7d3798; --danger: #a23f32;
@@ -29,7 +29,7 @@ main { min-height: 100vh; }
 .section-heading__copy > span { display: block; margin-bottom: var(--s1); color: var(--muted); font: var(--small); }
 
 .panel, .diurnal-section { border: 0; border-radius: 0; background: transparent; }
-.chart-panel { width: 100%; margin: max(3rem, calc((100dvh - 3.5rem - var(--chart-height)) / 2)) 0 0; padding: 0; }
+.chart-panel { max-width: 92rem; margin: max(3rem, calc((100dvh - 3.5rem - var(--chart-height)) / 2)) auto 0; padding: 0; }
 .section-heading { min-height: 2.75rem; padding-bottom: var(--s3); border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4); }
 .section-heading--with-actions { align-items: center; } .section-heading__copy { min-width: 0; }
 .chart-toolbar { min-width: 0; min-height: var(--control-sm); margin-top: var(--s2); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); }
