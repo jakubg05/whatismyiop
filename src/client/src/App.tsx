@@ -536,33 +536,26 @@ export default function App() {
               {mode === "range" && <form id="range-editor-form" onSubmit={(event) => { event.preventDefault(); addRange(); }} />}
               {mode === "event" && <form id="event-editor-form" onSubmit={(event) => { event.preventDefault(); addEvent(); }} />}
               {mode === "trend" && <div className="trend-settings">
-                <section className="trend-settings__section" aria-labelledby="trend-type-heading">
-                  <div className="trend-settings__heading">
-                    <h2 id="trend-type-heading">Type</h2>
-                    <p>Choose how the long-term pressure trend is calculated.</p>
+                <section className="trend-settings__section">
+                  <div className="trend-settings__options" role="group" aria-label="Trend eyes">
+                    {(["OD", "OS"] as Eye[]).map((eye) => <div key={eye} className="trend-settings__option" onClick={() => toggleTrendEye(eye)}>
+                      <span className="trend-settings__option-copy trend-settings__option-copy--eye">
+                        <span className={`dot dot--${eye.toLowerCase()}`} aria-hidden="true" />
+                        <span><strong>{eye === "OD" ? "Right eye" : "Left eye"}</strong><small>{eye}</small></span>
+                      </span>
+                      <Toggle label={`${eye === "OD" ? "Right" : "Left"} eye trend`} checked={visibleTrendEyes[eye]} />
+                    </div>)}
                   </div>
-                  <div className="trend-settings__options" role="radiogroup" aria-labelledby="trend-type-heading">
+                </section>
+                <section className="trend-settings__section">
+                  <div className="trend-settings__options" role="group" aria-label="Trend type">
                     {([
                       ["adjusted", "Adjusted", "Accounts for session timing and measurement position."],
                       ["observed", "Observed", "Shows the trend directly from recorded session values."],
-                      ["off", "Off", "Hides all trend lines without changing eye settings."],
-                    ] as const).map(([value, label, description]) => <label key={value} className="trend-settings__option">
-                      <input type="radio" name="trend-type" value={value} checked={trendMode === value} onChange={() => setTrendMode(value)} />
-                      <span><strong>{label}</strong><small>{description}</small></span>
-                    </label>)}
-                  </div>
-                </section>
-                <section className="trend-settings__section" aria-labelledby="trend-eyes-heading">
-                  <div className="trend-settings__heading">
-                    <h2 id="trend-eyes-heading">Eyes</h2>
-                    <p>Select which eye trends are visible independently of the measurements.</p>
-                  </div>
-                  <div className="trend-settings__options" role="group" aria-labelledby="trend-eyes-heading">
-                    {(["OD", "OS"] as Eye[]).map((eye) => <label key={eye} className="trend-settings__option trend-settings__option--eye">
-                      <input type="checkbox" checked={visibleTrendEyes[eye]} onChange={() => toggleTrendEye(eye)} />
-                      <span className={`dot dot--${eye.toLowerCase()}`} aria-hidden="true" />
-                      <span><strong>{eye === "OD" ? "Right eye" : "Left eye"}</strong><small>{eye}</small></span>
-                    </label>)}
+                    ] as const).map(([value, label, description]) => <div key={value} className="trend-settings__option" onClick={() => setTrendMode(value)}>
+                      <span className="trend-settings__option-copy"><strong>{label}</strong><small>{description}</small></span>
+                      <Toggle label={`${label} trend`} checked={trendMode === value} />
+                    </div>)}
                   </div>
                 </section>
               </div>}
