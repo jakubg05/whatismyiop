@@ -59,6 +59,7 @@ const HIT_RADIUS = 12;
 const RAW_RADIUS = 2;
 const SESSION_RADIUS = 4;
 const COLLIDING_SESSION_GAP = 2;
+const DIMMED_ALPHA_FACTOR = 0.18;
 const TOOLTIP_WIDTH = 224;
 const TOOLTIP_HEIGHT = 184;
 const TOOLTIP_GAP = 24;
@@ -106,12 +107,12 @@ function visibilityAlpha(
   if (focusedId !== null) {
     return focusedId === pointId || (focusedSessionId !== null && focusedSessionId === pointSessionId)
       ? 1
-      : baseAlpha * 0.1;
+      : baseAlpha * DIMMED_ALPHA_FACTOR;
   }
   return baseAlpha * (!dimMeasurements
     || (emphasizedRange !== null && time >= emphasizedRange[0] && time <= emphasizedRange[1])
     ? 1
-    : 0.18);
+    : DIMMED_ALPHA_FACTOR);
 }
 
 export function MeasurementCanvas({
