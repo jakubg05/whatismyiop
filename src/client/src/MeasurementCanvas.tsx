@@ -691,9 +691,15 @@ export function MeasurementCanvas({
       : null);
     if (insidePlot) {
       const nearestTrend = nearestTrendAt(event.currentTarget, event.clientX, event.clientY);
-      if (nearestTrend) {
+      if (nearestTrend && (!selectedTrendEye || nearestTrend.eye === selectedTrendEye)) {
         setTrendHover(nearestTrend);
         onTrendFocusChange(nearestTrend.eye);
+        setHovered(null);
+        return;
+      }
+      if (selectedTrendEye) {
+        setTrendHover(null);
+        onTrendFocusChange(selectedTrendEye);
         setHovered(null);
         return;
       }
