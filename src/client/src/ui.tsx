@@ -106,18 +106,20 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
           <output className="selection-handle__time-value" aria-label={`${ariaLabel} time`}>{displayTime ?? timeValue}</output>
         </>}
       </div>
-      {active && present && <button
-        className="selection-handle__present-toggle"
-        type="button"
-        role="switch"
-        aria-checked={present.checked}
-        aria-label={`Present: ${present.checked ? "on" : "off"}`}
-        disabled={!present.onChange}
-        onClick={present.onChange}
-      >
+      {active && present && <div className="selection-handle__present-control">
         <span>Present</span>
-        <span className="publication-switch-track" aria-hidden="true"><span /></span>
-      </button>}
+        <button
+          className="selection-handle__present-toggle"
+          type="button"
+          role="switch"
+          aria-checked={present.checked}
+          aria-label={`Present: ${present.checked ? "on" : "off"}`}
+          disabled={!present.onChange}
+          onClick={present.onChange}
+        >
+          <span className="publication-switch-track" aria-hidden="true"><span /></span>
+        </button>
+      </div>}
     </div>
   );
 });
