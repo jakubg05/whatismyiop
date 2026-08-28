@@ -224,6 +224,16 @@ export function dateBoundary(value: string, endOfDay = false): number | null {
   return Date.UTC(year, month - 1, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
 }
 
+export function dateTimeBoundary(value: string, clock: string, endOfMinute = false): number | null {
+  const date = dateBoundary(value);
+  const match = /^(\d{2}):(\d{2})$/.exec(clock);
+  if (date === null || !match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return date + hour * 3_600_000 + minute * 60_000 + (endOfMinute ? 59_999 : 0);
+}
+
 export function formatDateInput(time: number): string {
   const date = new Date(time);
   const year = date.getUTCFullYear();
@@ -232,9 +242,9 @@ export function formatDateInput(time: number): string {
   return `${year}-${month}-${day}`;
 }
 
-export function inDateRange(measurement: Measurement, start: string, end: string): boolean {
-  const startTime = dateBoundary(start);
-  const endTime = dateBoundary(end, true);
+export function inDateRange(measurement: Measurement, start: string, end: string, startClock?: string, endClock?: string): boolean {
+  const startTime = startClock ? dateTimeBoundary(start, startClock) : dateBoundary(start);
+  const endTime = endClock ? dateTimeBoundary(end, endClock, true) : dateBoundary(end, true);
   if (startTime === null || endTime === null) return false;
   return measurement.time >= startTime && measurement.time <= endTime;
 }

@@ -50,7 +50,9 @@ export const DateInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLIn
 
 export const ChartDateTag = forwardRef<HTMLDivElement, {
   value: string;
+  timeValue: string;
   displayValue?: string;
+  displayTime?: string;
   ariaLabel: string;
   active?: boolean;
   disabled?: boolean;
@@ -58,10 +60,13 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
   className?: string;
   style?: CSSProperties;
   onChange?: (value: string) => void;
+  onTimeChange?: (value: string) => void;
   present?: { checked: boolean; onChange?: () => void };
 }>(function ChartDateTag({
   value,
+  timeValue,
   displayValue,
+  displayTime,
   ariaLabel,
   active = false,
   disabled = false,
@@ -69,6 +74,7 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
   className = "",
   style,
   onChange,
+  onTimeChange,
   present,
 }, ref) {
   return (
@@ -78,13 +84,28 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
       className={`selection-handle__date-control${active ? " selection-handle__date-control--active" : " selection-handle__date-control--readonly"}${alignRight ? " selection-handle__date-control--right" : ""} ${className}`.trim()}
       onPointerDown={(event) => active && event.stopPropagation()}
     >
-      {active ? <DateInput
-        className="selection-handle__date-input"
-        aria-label={ariaLabel}
-        disabled={disabled}
-        value={value}
-        onChange={(event) => onChange?.(event.target.value)}
-      /> : <output className="selection-handle__date-value" aria-label={ariaLabel}>{displayValue ?? value}</output>}
+      <div className="selection-handle__date-fields">
+        {active ? <>
+          <DateInput
+            className="selection-handle__date-input"
+            aria-label={ariaLabel}
+            disabled={disabled}
+            value={value}
+            onChange={(event) => onChange?.(event.target.value)}
+          />
+          <input
+            className="selection-handle__time-input"
+            type="time"
+            aria-label={`${ariaLabel} time`}
+            disabled={disabled}
+            value={timeValue}
+            onChange={(event) => onTimeChange?.(event.target.value)}
+          />
+        </> : <>
+          <output className="selection-handle__date-value" aria-label={ariaLabel}>{displayValue ?? value}</output>
+          <output className="selection-handle__time-value" aria-label={`${ariaLabel} time`}>{displayTime ?? timeValue}</output>
+        </>}
+      </div>
       {active && present && <button
         className="selection-handle__present-toggle"
         type="button"

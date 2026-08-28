@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatDateInput, inDateRange, parseMeasurementsCsv, summarize } from "./analysis";
+import { dateTimeBoundary, formatDateInput, inDateRange, parseMeasurementsCsv, summarize } from "./analysis";
 
 const sourceCsv = `Date / Time;IOP (OD);IOP (OS);Quality OD;Quality OS;Position
 2023-01-18T17:02:25;20;21;Good;Good;Sitting
@@ -39,5 +39,12 @@ describe("measurement import", () => {
     const periodB = result.measurements.filter((item) => inDateRange(item, "2025-01-01", "2026-08-25"));
     expect(periodA.length + periodB.length).toBe(result.measurements.length);
     expect(formatDateInput(result.measurements[0].time)).toBe("2023-01-18");
+  });
+
+  it("uses minute-precise period boundaries", () => {
+    const sameMinute = result.measurements.filter((item) => inDateRange(item, "2023-01-18", "2023-01-18", "17:02", "17:02"));
+    expect(sameMinute).toHaveLength(2);
+    expect(dateTimeBoundary("2023-01-18", "17:02")).toBe(Date.UTC(2023, 0, 18, 17, 2));
+    expect(dateTimeBoundary("2023-01-18", "25:00")).toBeNull();
   });
 });
