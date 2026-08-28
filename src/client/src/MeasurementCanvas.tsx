@@ -3,6 +3,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
@@ -26,6 +27,7 @@ type HoveredPoint = {
   point: ChartPoint;
   left: number;
   top: number;
+  trendNotch?: { side: "top" | "bottom"; left: number };
 };
 
 type Props = {
@@ -84,17 +86,19 @@ function TrendTooltipContent({ point, mode }: { point: TrendPoint; mode: TrendMo
   const change = previous === null ? null : point.iop - previous;
   return <>
     <div className="measurement-canvas-tooltip__eyebrow">
-      <span>{mode === "adjusted" ? "Adjusted trend" : "Observed trend"}</span>
+      <span>{mode === "adjusted" ? "Adjusted" : "Observed"}</span>
       <span>{formatFullTime(point.time)}</span>
     </div>
     <div className="measurement-canvas-tooltip__trend-values">
       <div className="measurement-canvas-tooltip__trend-value">
         <span className="measurement-canvas-tooltip__eye"><span className={`dot dot--${point.eye.toLowerCase()}`} aria-hidden="true" />{eyeLabel(point.eye)}</span>
-        <strong>{point.iop.toFixed(1)} mmHg</strong>
-        <span>{change === null ? `${point.trend.sessionCount} sessions` : `${change >= 0 ? "+" : ""}${change.toFixed(1)} over 30 days`}</span>
+        <span className="measurement-canvas-tooltip__trend-reading"><span className="measurement-canvas-tooltip__value">{point.iop.toFixed(1)}</span><span className="measurement-canvas-tooltip__unit">mmHg</span></span>
+      </div>
+      <div className="measurement-canvas-tooltip__trend-value">
+        <span className="measurement-canvas-tooltip__trend-label">{change === null ? "Sessions" : "30-day change"}</span>
+        <span className="measurement-canvas-tooltip__trend-reading"><span className="measurement-canvas-tooltip__trend-change">{change === null ? point.trend.sessionCount : `${change >= 0 ? "+" : ""}${change.toFixed(1)}`}</span>{change !== null && <span className="measurement-canvas-tooltip__unit">mmHg</span>}</span>
       </div>
     </div>
-    {mode === "adjusted" && <div className="measurement-canvas-tooltip__note">Standardized to 12:00, sitting</div>}
   </>;
 }
 
@@ -116,11 +120,16 @@ function trendTooltipPosition(x: number, y: number, width: number, height: numbe
   const inset = 8;
   const left = Math.max(inset, Math.min(x - TREND_TOOLTIP_WIDTH / 2, width - TREND_TOOLTIP_WIDTH - inset));
   const above = y - TOOLTIP_GAP - TREND_TOOLTIP_HEIGHT;
+  const placeAbove = above >= inset;
   return {
     left,
-    top: above >= inset
+    top: placeAbove
       ? above
       : Math.min(y + TOOLTIP_GAP, height - TREND_TOOLTIP_HEIGHT - inset),
+    trendNotch: {
+      side: placeAbove ? "bottom" as const : "top" as const,
+      left: Math.max(14, Math.min(TREND_TOOLTIP_WIDTH - 14, x - left)),
+    },
   };
 }
 
@@ -719,7 +728,14 @@ export function MeasurementCanvas({
         }}
         aria-label={`${measurements.length.toLocaleString()} pressure measurements`}
       />
-      {focusedPoint && <div className={`measurement-canvas-tooltip${focusedPoint.point.kind === "trend" ? " measurement-canvas-tooltip--trend" : ""}`} style={{ left: focusedPoint.left, top: focusedPoint.top }}>
+      {focusedPoint && <div
+        className={`measurement-canvas-tooltip${focusedPoint.point.kind === "trend" ? ` measurement-canvas-tooltip--trend measurement-canvas-tooltip--notch-${focusedPoint.trendNotch?.side ?? "bottom"}` : ""}`}
+        style={{
+          left: focusedPoint.left,
+          top: focusedPoint.top,
+          "--trend-tooltip-notch-left": `${focusedPoint.trendNotch?.left ?? TREND_TOOLTIP_WIDTH / 2}px`,
+        } as CSSProperties}
+      >
         {focusedPoint.point.kind === "trend"
           ? <TrendTooltipContent point={focusedPoint.point} mode={trendMode} />
           : focusedPoint.point.kind === "session" ? <>
