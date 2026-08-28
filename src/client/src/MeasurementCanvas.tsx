@@ -398,6 +398,7 @@ export function MeasurementCanvas({
       for (const series of trendSeries) {
         const visible = trendEstimatesForDomain(series.estimates, domainStart, domainEnd);
         if (visible.length < 2) continue;
+        const showCertaintyBand = focusTarget?.kind === "trend" && focusTarget.eye === series.eye;
         const xFor = (time: number) => MEASUREMENT_PLOT.left + ((time - domainStart) / timeSpan) * plotWidth;
         const yFor = (iop: number) => MEASUREMENT_PLOT.top + (1 - (iop - yMin) / pressureSpan) * plotHeight;
 
@@ -411,14 +412,16 @@ export function MeasurementCanvas({
           for (const [segmentLeft, segmentRight] of splitTrendSegment(left, right, emphasizedRange ?? [])) {
             const midpoint = segmentLeft.time + (segmentRight.time - segmentLeft.time) / 2;
             const trendId = `trend:${series.eye}`;
-            context.globalAlpha = visibilityAlphaAt.current(midpoint, trendId, null, 0.1);
-            context.beginPath();
-            context.moveTo(xFor(segmentLeft.time), yFor(segmentLeft.upper));
-            context.lineTo(xFor(segmentRight.time), yFor(segmentRight.upper));
-            context.lineTo(xFor(segmentRight.time), yFor(segmentRight.lower));
-            context.lineTo(xFor(segmentLeft.time), yFor(segmentLeft.lower));
-            context.closePath();
-            context.fill();
+            if (showCertaintyBand) {
+              context.globalAlpha = visibilityAlphaAt.current(midpoint, trendId, null, 0.1);
+              context.beginPath();
+              context.moveTo(xFor(segmentLeft.time), yFor(segmentLeft.upper));
+              context.lineTo(xFor(segmentRight.time), yFor(segmentRight.upper));
+              context.lineTo(xFor(segmentRight.time), yFor(segmentRight.lower));
+              context.lineTo(xFor(segmentLeft.time), yFor(segmentLeft.lower));
+              context.closePath();
+              context.fill();
+            }
 
             context.globalAlpha = visibilityAlphaAt.current(midpoint, trendId, null, 0.95);
             context.setLineDash(segmentLeft.supported && segmentRight.supported ? [] : [14, 8]);
@@ -768,7 +771,10 @@ export function MeasurementCanvas({
           <dl className="measurement-canvas-tooltip__rows">
             {focusedSessionPoints.map((point) => <div key={point.eye}>
               <dt>{eyeLabel(point.eye)}</dt>
-              <dd>{point.measurements.map((measurement) => measurement.iop).join(", ")} mmHg</dd>
+              <dd>
+                {point.measurements.map((measurement) => measurement.iop).join(", ")}
+                <span className="measurement-canvas-tooltip__unit">mmHg</span>
+              </dd>
             </div>)}
           </dl>
         </> : <>
