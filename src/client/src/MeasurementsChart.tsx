@@ -315,15 +315,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     setDomain(next);
   }
 
-  function pointerRatio(event: ReactPointerEvent<HTMLDivElement>): number {
-    const bounds = event.currentTarget.getBoundingClientRect();
-    return Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
-  }
-
-  function pointerTime(event: ReactPointerEvent<HTMLDivElement>): number {
-    return domainStart + pointerRatio(event) * (domainEnd - domainStart);
-  }
-
   function ratioForTime(time: number): number {
     if (domainEnd <= domainStart) return 0;
     return Math.max(0, Math.min(1, (time - domainStart) / (domainEnd - domainStart)));
@@ -334,22 +325,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     if (!bounds) return { time: domainStart, ratio: 0 };
     const ratio = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
     return { time: domainStart + ratio * (domainEnd - domainStart), ratio };
-  }
-
-  function startSelection(event: ReactPointerEvent<HTMLDivElement>) {
-    if (mode || event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    startAnnotation(pointerTime(event), event.clientX);
-  }
-
-  function moveSelection(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!dragRef.current) return;
-    moveAnnotation(pointerTime(event), event.clientX);
-  }
-
-  function finishSelection(event: ReactPointerEvent<HTMLDivElement>) {
-    if (!dragRef.current) return;
-    finishAnnotation(pointerTime(event), pointerRatio(event), event.clientX);
   }
 
   function startAnnotation(time: number, clientX: number) {
@@ -689,11 +664,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         />
         <div
           ref={selectionLayer}
-          className={`chart-selection-layer ${mode ? "chart-selection-layer--active" : ""}`}
+          className="chart-selection-layer"
           style={{ "--selection-color": selectionColor } as CSSProperties}
-          onPointerDown={startSelection}
-          onPointerMove={moveSelection}
-          onPointerUp={finishSelection}
         >
           {hoveredRange && <>
             <div className="annotation-date-anchor" style={{ left: `${ratioForTime(dateTimeBoundary(hoveredRange.start, hoveredRange.startTime) ?? domainStart) * 100}%` }}>
