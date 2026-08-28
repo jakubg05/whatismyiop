@@ -158,6 +158,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
 }: Props) {
   const chart = useRef<HTMLDivElement>(null);
   const annotationLabelInput = useRef<HTMLInputElement>(null);
+  const focusedRangeLabel = useRef<HTMLDivElement>(null);
   const startDateTag = useRef<HTMLDivElement>(null);
   const endDateTag = useRef<HTMLDivElement>(null);
   const selectionLayer = useRef<HTMLDivElement>(null);
@@ -392,7 +393,22 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     const otherTime = edge === "start"
       ? draftRange.openEnded ? presentTime : dateTimeBoundary(draftRange.end, draftRange.endTime, true) ?? domainEnd
       : dateTimeBoundary(draftRange.start, draftRange.startTime) ?? domainStart;
-    setDraggedRangeFocus([Math.min(time, otherTime), Math.max(time, otherTime)]);
+    const liveRange = [Math.min(time, otherTime), Math.max(time, otherTime)] as TimeDomain;
+    updateFocusedRangeLabel(liveRange);
+    setDraggedRangeFocus(liveRange);
+  }
+
+  function updateFocusedRangeLabel([start, end]: TimeDomain) {
+    const label = focusedRangeLabel.current;
+    if (!label) return;
+    const plotWidth = Math.max(1, chartWidth - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
+    const left = ratioForTime(start) * plotWidth;
+    const spanWidth = Math.max(0, ratioForTime(end) * plotWidth - left);
+    const compactWidth = Math.min(300, Math.max(72, draftRangeLabel.length * 7 + 38));
+    const fullWidth = spanWidth >= compactWidth;
+    label.style.left = `${left}px`;
+    label.style.width = `${fullWidth ? spanWidth : compactWidth}px`;
+    label.classList.toggle("chart-annotation-label--range-wide", fullWidth);
   }
 
   function moveEventHandle(event: ReactPointerEvent<HTMLDivElement>) {
@@ -563,6 +579,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           {annotationLabels.map((label) => (
             <div
               key={label.id}
+              ref={label.kind === "range" && label.focusId === focusedAnnotation ? focusedRangeLabel : undefined}
               className={`chart-annotation-label chart-annotation-label--${label.kind}${label.fullWidth ? " chart-annotation-label--range-wide" : ""}${label.draft ? " chart-annotation-label--draft" : ""}${hoverFocus && hoverFocus !== label.focusId ? " chart-annotation-label--muted" : ""}`}
               role={label.focusId ? "button" : undefined}
               tabIndex={label.focusId ? 0 : undefined}
