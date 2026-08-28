@@ -45,6 +45,7 @@ type Props = {
 type Drag = { pointerId: number; x: number; domain: TimeDomain; moved: boolean; point: HoveredPoint | null };
 type AnnotationDrag = { pointerId: number };
 type NavigationModifier = "annotate" | "zoom" | null;
+type MeasurementEmphasis = { dimMeasurements: boolean; emphasizedRange: TimeDomain | null };
 
 const COLORS = { OD: "#a63d74", OS: "#3f7d4e" } as const;
 export const MEASUREMENT_PLOT = { left: 52, right: 20, top: 12, bottom: 40 } as const;
@@ -89,6 +90,13 @@ function lowerBound<T extends { time: number }>(measurements: T[], time: number)
   return low;
 }
 
+function emphasisAlpha({ dimMeasurements, emphasizedRange }: MeasurementEmphasis, time: number): number {
+  return !dimMeasurements
+    || (emphasizedRange !== null && time >= emphasizedRange[0] && time <= emphasizedRange[1])
+    ? 1
+    : 0.18;
+}
+
 export function MeasurementCanvas({
   measurements,
   showRawReadings,
@@ -112,7 +120,8 @@ export function MeasurementCanvas({
   const pendingDomain = useRef<TimeDomain | null>(null);
   const animationFrame = useRef<number | null>(null);
   const redraw = useRef<(() => void) | null>(null);
-  const measurementEmphasis = useRef({ dimMeasurements, emphasizedRange });
+  const emphasisFrame = useRef<number | null>(null);
+  const emphasisAlphaAt = useRef<(time: number) => number>((time) => emphasisAlpha({ dimMeasurements, emphasizedRange }, time));
   const viewProgress = useRef(0);
   const selectionPop = useRef(0);
   const animatedSelectionPulse = useRef(0);
@@ -175,7 +184,6 @@ export function MeasurementCanvas({
     [focusedSession, sessionPoints],
   );
   currentDomain.current = [domainStart, domainEnd];
-  measurementEmphasis.current = { dimMeasurements, emphasizedRange };
 
   function sessionCollisionOffset(
     point: Pick<SessionPoint, "sessionId" | "eye">,
@@ -264,12 +272,6 @@ export function MeasurementCanvas({
       const sessionRadius = SESSION_RADIUS;
       const rawAlpha = 0.92;
       const sessionAlpha = 0.92 * (1 - progress);
-      const emphasisAlpha = (time: number) => (
-        !measurementEmphasis.current.dimMeasurements
-        || (measurementEmphasis.current.emphasizedRange !== null
-          && time >= measurementEmphasis.current.emphasizedRange[0]
-          && time <= measurementEmphasis.current.emphasizedRange[1])
-      ) ? 1 : 0.18;
       const focusedId = focusTarget?.id ?? null;
       const focusedSessionId = focusTarget?.kind === "session" ? focusTarget.session.sessionId : null;
       if (focusedSession) {
@@ -283,7 +285,7 @@ export function MeasurementCanvas({
           const yMinimum = MEASUREMENT_PLOT.top + (1 - (minimum - yMin) / pressureSpan) * plotHeight;
           const yMaximum = MEASUREMENT_PLOT.top + (1 - (maximum - yMin) / pressureSpan) * plotHeight;
 
-          context.globalAlpha = emphasisAlpha(point.time);
+          context.globalAlpha = emphasisAlphaAt.current(point.time);
           context.strokeStyle = COLORS[point.eye];
           context.lineWidth = 1.5;
           context.beginPath();
@@ -318,7 +320,7 @@ export function MeasurementCanvas({
           : focusedId
             ? baseAlpha * 0.1
             : baseAlpha;
-        context.globalAlpha = interactionAlpha * emphasisAlpha(point.time);
+        context.globalAlpha = interactionAlpha * emphasisAlphaAt.current(point.time);
         context.fillStyle = COLORS[point.eye];
         context.fill();
       }
@@ -360,7 +362,32 @@ export function MeasurementCanvas({
   }, [chartPoints, domainEnd, domainStart, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, yMax, yMin]);
 
   useEffect(() => {
-    redraw.current?.();
+    if (emphasisFrame.current !== null) window.cancelAnimationFrame(emphasisFrame.current);
+    const fromAlpha = emphasisAlphaAt.current;
+    const target = { dimMeasurements, emphasizedRange };
+    const targetAlpha = (time: number) => emphasisAlpha(target, time);
+    const startedAt = performance.now();
+
+    function animate(now: number) {
+      const progress = Math.min(1, (now - startedAt) / 220);
+      const eased = 1 - (1 - progress) ** 3;
+      emphasisAlphaAt.current = (time) => {
+        const from = fromAlpha(time);
+        return from + (targetAlpha(time) - from) * eased;
+      };
+      redraw.current?.();
+      if (progress < 1) emphasisFrame.current = window.requestAnimationFrame(animate);
+      else {
+        emphasisAlphaAt.current = targetAlpha;
+        emphasisFrame.current = null;
+      }
+    }
+
+    emphasisFrame.current = window.requestAnimationFrame(animate);
+    return () => {
+      if (emphasisFrame.current !== null) window.cancelAnimationFrame(emphasisFrame.current);
+      emphasisFrame.current = null;
+    };
   }, [dimMeasurements, emphasizedRange]);
 
   function chartGeometry(canvas: HTMLCanvasElement) {
