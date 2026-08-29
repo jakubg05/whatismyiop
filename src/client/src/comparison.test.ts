@@ -1,14 +1,141 @@
 import { describe, expect, it } from "vitest";
 import { coalesceMeasurementSessions, type Measurement } from "./analysis";
-import { binDiurnalSessions, eventRelativePeriod, fullRelativePeriod, parseComparisonQuery, rangeRelativePeriod } from "./comparison";
+import {
+  MAX_COMPARISON_DAYS,
+  binDiurnalSessions,
+  canonicalizeComparisonExpression,
+  comparisonCompletionContext,
+  comparisonLabelError,
+  parseComparisonExpression,
+  resolveComparisonSegments,
+  type ComparisonCatalog,
+} from "./comparison";
 
-describe("comparison query", () => {
-  it("parses event-relative phrases with a default duration", () => {
-    expect(parseComparisonQuery("before Xalatan")).toEqual({ days: 14, explicitDays: false, direction: "before", subject: "Xalatan" });
-    expect(parseComparisonQuery("after Xalatan")).toEqual({ days: 14, explicitDays: false, direction: "after", subject: "Xalatan" });
+const catalog: ComparisonCatalog = {
+  periods: [
+    { id: "baseline", label: "Baseline", start: "2026-05-01", startTime: "08:30", end: "2026-05-10", endTime: "17:00", openEnded: false },
+    { id: "treatment", label: "Treatment", start: "2026-05-10", startTime: "08:00", end: "2026-05-20", endTime: "18:00", openEnded: false },
+    { id: "current", label: "Current", start: "2026-05-21", startTime: "00:00", end: "", endTime: "", openEnded: true },
+  ],
+  events: [{ id: "xalatan", label: "Xalatan", time: Date.UTC(2026, 4, 15, 8, 30) }],
+};
+
+describe("comparison expression grammar", () => {
+  it.each([
+    "period:Baseline",
+    "before:event:Xalatan",
+    "after:event:Xalatan",
+    "before:period:Treatment",
+    "after:period:Treatment",
+    "range:14d before:event:Xalatan",
+    "range:30d after:period:Treatment",
+  ])("parses %s", (expression) => {
+    const parsed = parseComparisonExpression(expression, catalog);
+    expect(parsed.segments).toHaveLength(1);
+    expect(parsed.inactiveFrom).toBeNull();
+    expect(parsed.segments[0].label).toBe(expression);
   });
 
-  it("weights each session once in a diurnal bin", () => {
+  it("parses six duplicate segments and makes all later text inactive", () => {
+    const expression = Array.from({ length: 7 }, () => "period:Baseline").join(" AND ");
+    const parsed = parseComparisonExpression(expression, catalog);
+    expect(parsed.segments).toHaveLength(6);
+    expect(parsed.maximumReached).toBe(true);
+    expect(expression.slice(parsed.inactiveFrom ?? expression.length)).toBe("AND period:Baseline");
+  });
+
+  it("uses the longest valid prefix and recovers the suffix after repair", () => {
+    const broken = parseComparisonExpression("period:Baseline AND range:14 before:event:Xalatan AND period:Treatment", catalog);
+    expect(broken.segments.map((segment) => segment.label)).toEqual(["period:Baseline"]);
+    expect(broken.expected).toBe("duration");
+    expect(broken.canonicalText).toBe("period:Baseline AND range:14 before:event:Xalatan AND period:Treatment");
+
+    const repaired = parseComparisonExpression("period:Baseline AND range:14d before:event:Xalatan AND period:Treatment", catalog);
+    expect(repaired.segments.map((segment) => segment.label)).toEqual([
+      "period:Baseline",
+      "range:14d before:event:Xalatan",
+      "period:Treatment",
+    ]);
+  });
+
+  it.each(["0d", "014d", "1.5d", "12h", `${MAX_COMPARISON_DAYS + 1}d`])("rejects invalid duration %s", (duration) => {
+    const parsed = parseComparisonExpression(`range:${duration} before:event:Xalatan`, catalog);
+    expect(parsed.segments).toEqual([]);
+    expect(parsed.expected).toBe("duration");
+    expect(parsed.canonicalPrefix).toBe("range:");
+  });
+
+  it("accepts the duration boundaries", () => {
+    expect(parseComparisonExpression("range:1d before:event:Xalatan", catalog).segments).toHaveLength(1);
+    expect(parseComparisonExpression(`range:${MAX_COMPARISON_DAYS}d before:event:Xalatan`, catalog).segments).toHaveLength(1);
+  });
+
+  it("only permits event: after a direction", () => {
+    expect(parseComparisonExpression("event:Xalatan", catalog)).toMatchObject({ segments: [], expected: "segment-start", inactiveFrom: 0 });
+    expect(parseComparisonExpression("before:event:Xalatan", catalog).segments).toHaveLength(1);
+  });
+
+  it("rejects after for an open-ended period", () => {
+    const parsed = parseComparisonExpression("after:period:Current", catalog);
+    expect(parsed.segments).toEqual([]);
+    expect(parsed.expected).toBe("period-value");
+    expect(comparisonCompletionContext("after:period:", 13, catalog).options.map((option) => option.label)).not.toContain("Current");
+  });
+
+  it("canonicalizes whitespace and case only through the recognized prefix", () => {
+    expect(canonicalizeComparisonExpression("  PERIOD : baseline   and RANGE : 14d   BEFORE : EVENT : xalatan  ", catalog))
+      .toBe("period:Baseline AND range:14d before:event:Xalatan");
+    expect(canonicalizeComparisonExpression(" RANGE :  014d before:event:Xalatan", catalog))
+      .toBe("range:014d before:event:Xalatan");
+  });
+
+  it("offers only the legal option type for every state", () => {
+    expect(comparisonCompletionContext("", 0, catalog).options.map((option) => option.label)).toEqual(["period:", "range:", "before:", "after:"]);
+    expect(comparisonCompletionContext("range:", 6, catalog).options.map((option) => option.label)).toEqual(["7d", "14d", "30d", "90d"]);
+    expect(comparisonCompletionContext("range:14d ", 10, catalog).options.map((option) => option.label)).toEqual(["before:", "after:"]);
+    expect(comparisonCompletionContext("before:", 7, catalog).options.map((option) => option.label)).toEqual(["period:", "event:"]);
+    expect(comparisonCompletionContext("before:event:", 13, catalog).options.map((option) => option.label)).toEqual(["Xalatan"]);
+    expect(comparisonCompletionContext("period:Baseline", 14, catalog).options.map((option) => option.type)).toEqual(["period", "period", "period"]);
+    expect(comparisonCompletionContext("period:Baseline ", 16, catalog).options.map((option) => option.label)).toEqual(["AND"]);
+  });
+});
+
+describe("comparison labels", () => {
+  it("enforces grammar and uniqueness within type only", () => {
+    expect(comparisonLabelError("With space", "period", catalog)).not.toBeNull();
+    expect(comparisonLabelError("_startsWrong", "period", catalog)).not.toBeNull();
+    expect(comparisonLabelError("baseline", "period", catalog)).not.toBeNull();
+    expect(comparisonLabelError("Xalatan", "period", catalog)).toBeNull();
+  });
+});
+
+describe("comparison segment boundaries", () => {
+  const start = Date.UTC(2026, 3, 1, 0, 0);
+  const end = Date.UTC(2026, 5, 30, 23, 59);
+  const segment = (expression: string) => resolveComparisonSegments(parseComparisonExpression(expression, catalog).segments, catalog, start, end)[0];
+
+  it("creates adjacent minute-precise event windows", () => {
+    expect(segment("range:14d before:event:Xalatan")).toMatchObject({ start: "2026-05-01", startTime: "08:30", end: "2026-05-15", endTime: "08:29" });
+    expect(segment("range:14d after:event:Xalatan")).toMatchObject({ start: "2026-05-15", startTime: "08:30", end: "2026-05-29", endTime: "08:29" });
+  });
+
+  it("anchors before to a period start and after to the minute following its end", () => {
+    expect(segment("range:10d before:period:Treatment")).toMatchObject({ start: "2026-04-30", startTime: "08:00", end: "2026-05-10", endTime: "07:59" });
+    expect(segment("range:10d after:period:Treatment")).toMatchObject({ start: "2026-05-20", startTime: "18:01", end: "2026-05-30", endTime: "18:00" });
+  });
+
+  it("uses the full data domain for open relative segments", () => {
+    expect(segment("before:event:Xalatan")).toMatchObject({ start: "2026-04-01", startTime: "00:00", end: "2026-05-15", endTime: "08:29" });
+    expect(segment("after:event:Xalatan")).toMatchObject({ start: "2026-05-15", startTime: "08:30", end: "2026-06-30", endTime: "23:59" });
+  });
+
+  it("copies direct-period boundaries without mutating the period", () => {
+    expect(segment("period:Baseline")).toMatchObject({ start: "2026-05-01", startTime: "08:30", end: "2026-05-10", endTime: "17:00", label: "period:Baseline" });
+  });
+});
+
+describe("diurnal aggregation", () => {
+  it("weights each session once and excludes sessions straddling a boundary", () => {
     const reading = (minute: number, iop: number): Measurement => ({
       sourceRow: minute + iop,
       timestampText: "2026-05-01T08:00:00",
@@ -24,14 +151,10 @@ describe("comparison query", () => {
       reading(0, 30), reading(1, 30), reading(2, 30), reading(3, 30), reading(4, 30), reading(5, 30),
       reading(30, 10),
     ]);
-    const points = binDiurnalSessions(sessions, "OD", { label: "Period", start: "2026-05-01", startTime: "00:00" }, "2026-05-01", "23:59");
+    expect(binDiurnalSessions(sessions, "OD", { label: "Period", start: "2026-05-01", startTime: "00:00" }, "2026-05-01", "23:59")[0])
+      .toMatchObject({ mean: 20, count: 2 });
 
-    expect(points).toHaveLength(1);
-    expect(points[0]).toMatchObject({ mean: 20, count: 2 });
-  });
-
-  it("excludes sessions that straddle a comparison boundary", () => {
-    const sessions = [{
+    const straddling = [{
       sessionId: 0,
       sessionStart: Date.UTC(2026, 4, 15, 8, 25),
       sessionEnd: Date.UTC(2026, 4, 15, 8, 34),
@@ -40,54 +163,7 @@ describe("comparison query", () => {
       iop: 20,
       measurements: [],
     }];
-    const before = binDiurnalSessions(sessions, "OD", { label: "Before", start: "2026-05-01", startTime: "08:30" }, "2026-05-15", "08:29");
-    const after = binDiurnalSessions(sessions, "OD", { label: "After", start: "2026-05-15", startTime: "08:30" }, "2026-05-29", "08:29");
-
-    expect(before).toEqual([]);
-    expect(after).toEqual([]);
-  });
-
-  it("parses compact and expanded day durations", () => {
-    expect(parseComparisonQuery("7d before SLT")).toEqual({ days: 7, explicitDays: true, direction: "before", subject: "SLT" });
-    expect(parseComparisonQuery("21 days after surgery")).toEqual({ days: 21, explicitDays: true, direction: "after", subject: "surgery" });
-    expect(parseComparisonQuery("999999999999999999999d before surgery").days).toBe(3650);
-  });
-
-  it("parses the same colon grammar displayed by the composer", () => {
-    expect(parseComparisonQuery("before:Xalatan")).toEqual({ days: 14, explicitDays: false, direction: "before", subject: "Xalatan" });
-    expect(parseComparisonQuery("range:10d after:Treatment")).toEqual({ days: 10, explicitDays: true, direction: "after", subject: "Treatment" });
-  });
-
-  it("creates adjacent, non-overlapping minute-precise periods", () => {
-    const event = { label: "Xalatan", time: Date.UTC(2026, 4, 15, 8, 30) };
-    const before = eventRelativePeriod(event, "before", 14);
-    const after = eventRelativePeriod(event, "after", 14);
-
-    expect(before).toMatchObject({ label: "14d before Xalatan", start: "2026-05-01", startTime: "08:30", end: "2026-05-15", endTime: "08:29" });
-    expect(after).toMatchObject({ label: "14d after Xalatan", start: "2026-05-15", startTime: "08:30", end: "2026-05-29", endTime: "08:29" });
-  });
-
-  it("anchors before to a period start and after to the minute following its end", () => {
-    const period = { label: "Treatment", start: "2026-05-10", startTime: "08:00", end: "2026-05-20", endTime: "18:00" };
-
-    expect(rangeRelativePeriod(period, "before", 10)).toMatchObject({
-      start: "2026-04-30", startTime: "08:00", end: "2026-05-10", endTime: "07:59",
-    });
-    expect(rangeRelativePeriod(period, "after", 10)).toMatchObject({
-      start: "2026-05-20", startTime: "18:01", end: "2026-05-30", endTime: "18:00",
-    });
-  });
-
-  it("uses the full available domain when no range duration is supplied", () => {
-    const domainStart = Date.UTC(2026, 3, 1, 0, 0);
-    const domainEnd = Date.UTC(2026, 5, 30, 23, 59);
-    const event = { label: "Xalatan", time: Date.UTC(2026, 4, 15, 8, 30) };
-
-    expect(fullRelativePeriod(event, "before", domainStart, domainEnd)).toMatchObject({
-      label: "before Xalatan", start: "2026-04-01", startTime: "00:00", end: "2026-05-15", endTime: "08:29",
-    });
-    expect(fullRelativePeriod(event, "after", domainStart, domainEnd)).toMatchObject({
-      label: "after Xalatan", start: "2026-05-15", startTime: "08:30", end: "2026-06-30", endTime: "23:59",
-    });
+    expect(binDiurnalSessions(straddling, "OD", { label: "Before", start: "2026-05-01", startTime: "08:30" }, "2026-05-15", "08:29")).toEqual([]);
+    expect(binDiurnalSessions(straddling, "OD", { label: "After", start: "2026-05-15", startTime: "08:30" }, "2026-05-29", "08:29")).toEqual([]);
   });
 });
