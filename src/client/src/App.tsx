@@ -106,6 +106,8 @@ export default function App() {
   const [ranges, setRanges] = useState<SavedRange[]>([]);
   const [events, setEvents] = useState<SavedEvent[]>([]);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
+  const toastIds = useRef(new Set<string>());
+  const [toastDismissalCount, setToastDismissalCount] = useState(0);
   const [draftRange, setDraftRange] = useState<DraftRange>(emptyDraftRange);
   const [draftEvent, setDraftEvent] = useState({ label: "", date: "", clock: "" });
   const [editingRangeId, setEditingRangeId] = useState<string | null>(null);
@@ -143,9 +145,9 @@ export default function App() {
       id: range.id,
       name: range.label,
       color: periodPalette(comparisonIndex).stroke,
-      data: binDiurnalSessions(measurementSessions, diurnalEye, range, effectiveEnd, effectiveEndTime),
+      data: binDiurnalSessions(measurementSessions, diurnalEye, range, effectiveEnd, effectiveEndTime, range.openEnded ? now : undefined),
     };
-  }), [comparisonRanges, currentTime, diurnalEye, measurementSessions, today]);
+  }), [comparisonRanges, currentTime, diurnalEye, measurementSessions, now, today]);
   const diurnalPoints = useMemo(() => diurnalSeries.flatMap((series) => series.data), [diurnalSeries]);
 
   useEffect(() => {
@@ -218,7 +220,6 @@ export default function App() {
       setMode(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not read this CSV file.");
-      setData(null);
     }
   }
 
@@ -247,7 +248,7 @@ export default function App() {
       setError("Range start must be before its end.");
       return;
     }
-    const label = orderedRange.label.trim();
+    const label = orderedRange.label;
     const labelError = comparisonLabelError(label, "period", comparisonCatalog, editingRangeId ?? undefined);
     if (labelError) {
       setError(labelError);
@@ -278,7 +279,7 @@ export default function App() {
   function addEvent() {
     const time = eventTimestamp();
     if (!draftEvent.label.trim() || time === null) return;
-    const label = draftEvent.label.trim();
+    const label = draftEvent.label;
     const labelError = comparisonLabelError(label, "event", comparisonCatalog, editingEventId ?? undefined);
     if (labelError) {
       setError(labelError);
@@ -383,11 +384,18 @@ export default function App() {
   }, []);
   const chartFullDomain = useMemo(() => [fullDomainStart, fullDomainEnd] as [number, number], [fullDomainEnd, fullDomainStart]);
   const chartYDomain = useMemo(() => [minimumIop, maximumIop] as [number, number], [maximumIop, minimumIop]);
+  const dismissToast = useCallback((id: string) => {
+    if (!toastIds.current.delete(id)) return;
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+    setToastDismissalCount((count) => count + 1);
+  }, []);
   const showComparisonBlockedToast = useCallback(() => {
     const id = crypto.randomUUID();
-    setToasts((current) => [...current, { id, message: "Clear the search expressions before creating or editing periods and events." }]);
-    window.setTimeout(() => setToasts((current) => current.filter((toast) => toast.id !== id)), 5_000);
-  }, []);
+    const message = "Clear the search expressions before creating or editing periods and events.";
+    toastIds.current.add(id);
+    setToasts((current) => [...current, { id, message }]);
+    window.setTimeout(() => dismissToast(id), 5_000);
+  }, [dismissToast]);
 
   return (
     <main>
@@ -399,12 +407,13 @@ export default function App() {
       }} />
 
       {error && <div className="error-banner">{error}</div>}
-      <div className="toast-stack" aria-live="polite" aria-label="Notifications">
+      <div className="toast-stack" aria-label="Notifications">
         {toasts.map((toast) => <div key={toast.id} className="warning-toast" role="status">
           <span>{toast.message}</span>
-          <button type="button" aria-label="Dismiss notification" onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}>×</button>
+          <button type="button" aria-label="Dismiss notification" onClick={() => dismissToast(toast.id)}>×</button>
         </div>)}
       </div>
+      <span className="visually-hidden" aria-live="polite">{toastDismissalCount > 0 && <span key={toastDismissalCount}>Notification dismissed.</span>}</span>
 
       {!data ? (
         <section className="empty-state" onClick={() => fileInput.current?.click()}>
@@ -488,6 +497,13 @@ export default function App() {
                 <small>{comparisonMode ? `No ${diurnalEye === "OD" ? "right" : "left"}-eye sessions fall inside the active comparison segments.` : "Use the comparison expression to select a saved period or a window around an annotation or period boundary."}</small>
               </div>}
               </div>
+              {comparisonMode && <div className="diurnal-series-status" aria-label="Comparison segments">
+                {diurnalSeries.map((series) => <div key={series.id} className="diurnal-series-status__item">
+                  <span className="diurnal-series-status__swatch" style={{ backgroundColor: series.color }} aria-hidden="true" />
+                  <span className="diurnal-series-status__label" title={series.name}>{series.name}</span>
+                  {series.data.length === 0 && <em>No readings</em>}
+                </div>)}
+              </div>}
               <footer className="diurnal-controls">
                 <SegmentedControl label="Eye shown in diurnal chart" value={diurnalEye} options={["OD", "OS"] as const} optionLabel={(eye) => eye === "OD" ? "Right" : "Left"} onChange={setDiurnalEye} />
               </footer>

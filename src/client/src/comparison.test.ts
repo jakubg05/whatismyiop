@@ -41,8 +41,16 @@ describe("comparison expression grammar", () => {
     const parsed = parseComparisonExpression(expression, catalog);
     expect(parsed.segments).toHaveLength(6);
     expect(parsed.maximumReached).toBe(true);
-    expect(expression.slice(parsed.inactiveFrom ?? expression.length)).toBe("AND period:Baseline");
+    expect(expression.slice(parsed.inactiveFrom ?? expression.length)).toBe(" AND period:Baseline");
     expect(canonicalizeComparisonExpression(expression, catalog)).toBe(expression);
+  });
+
+  it("preserves ordinary suffix text verbatim after the sixth segment", () => {
+    const six = Array.from({ length: 6 }, () => "period:Baseline").join(" AND ");
+    const expression = `${six}       EXTRA  `;
+    const parsed = parseComparisonExpression(expression, catalog);
+    expect(parsed.inactiveFrom).toBe(six.length);
+    expect(parsed.canonicalText).toBe(expression);
   });
 
   it("uses the longest valid prefix and recovers the suffix after repair", () => {
@@ -57,6 +65,17 @@ describe("comparison expression grammar", () => {
       "range:14d before:event:Xalatan",
       "period:Treatment",
     ]);
+  });
+
+  it("does not offer a destructive completion past the first invalid token", () => {
+    const text = "range:014d before:event:Xalatan";
+    const context = comparisonCompletionContext(text, text.length, catalog);
+    expect(text.slice(context.from, context.to)).toBe("before:event:Xalatan");
+    expect(context.expected).toBe("duration");
+    expect(context.options).toEqual([]);
+    const repair = comparisonCompletionContext(text, 10, catalog);
+    expect(text.slice(repair.from, repair.to)).toBe("014d");
+    expect(repair.options.map((option) => option.label)).toEqual(["7d", "14d", "30d", "90d"]);
   });
 
   it.each(["0d", "014d", "1.5d", "12h", `${MAX_COMPARISON_DAYS + 1}d`])("rejects invalid duration %s", (duration) => {
@@ -98,6 +117,7 @@ describe("comparison expression grammar", () => {
     expect(comparisonCompletionContext("before:event:", 13, catalog).options.map((option) => option.label)).toEqual(["Xalatan"]);
     expect(comparisonCompletionContext("period:Baseline", 14, catalog).options.map((option) => option.type)).toEqual(["period", "period", "period"]);
     expect(comparisonCompletionContext("period:Baseline ", 16, catalog).options.map((option) => option.label)).toEqual(["AND"]);
+    expect(comparisonCompletionContext("after:event:Xalatan AND period:", 31, catalog).options.map((option) => option.label)).toContain("Current");
   });
 });
 
@@ -137,7 +157,7 @@ describe("comparison segment boundaries", () => {
   it("uses the current time for a direct open-ended period without changing the measurement domain", () => {
     const present = Date.UTC(2026, 6, 1, 12, 34);
     const definition = parseComparisonExpression("period:Current", catalog).segments;
-    expect(resolveComparisonSegments(definition, catalog, start, end, present)[0]).toMatchObject({ end: "2026-07-01", endTime: "12:34" });
+    expect(resolveComparisonSegments(definition, catalog, start, end, present)[0]).toMatchObject({ end: "", endTime: "", openEnded: true });
   });
 });
 
@@ -172,5 +192,18 @@ describe("diurnal aggregation", () => {
     }];
     expect(binDiurnalSessions(straddling, "OD", { label: "Before", start: "2026-05-01", startTime: "08:30" }, "2026-05-15", "08:29")).toEqual([]);
     expect(binDiurnalSessions(straddling, "OD", { label: "After", start: "2026-05-15", startTime: "08:30" }, "2026-05-29", "08:29")).toEqual([]);
+  });
+
+  it("uses an exact present-time boundary for open-ended comparisons", () => {
+    const sessions = [{
+      sessionId: 0,
+      sessionStart: Date.UTC(2026, 4, 1, 12, 34, 1),
+      sessionEnd: Date.UTC(2026, 4, 1, 12, 34, 30),
+      time: Date.UTC(2026, 4, 1, 12, 34, 15),
+      eye: "OD" as const,
+      iop: 20,
+      measurements: [],
+    }];
+    expect(binDiurnalSessions(sessions, "OD", { label: "Current", start: "2026-05-01", startTime: "00:00" }, "2026-05-01", "12:34", Date.UTC(2026, 4, 1, 12, 34))).toEqual([]);
   });
 });

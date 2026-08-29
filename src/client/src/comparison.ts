@@ -36,7 +36,7 @@ export type ComparisonSegment = {
   startTime: string;
   end: string;
   endTime: string;
-  openEnded: false;
+  openEnded: boolean;
 };
 
 export type ComparisonExpectedState =
@@ -272,7 +272,7 @@ export function parseComparisonExpression(text: string, catalog: ComparisonCatal
     if (segments.length === MAX_COMPARISON_SEGMENTS) {
       expected = "maximum";
       maximumReached = true;
-      inactiveFrom = firstNonWhitespace(text, position);
+      inactiveFrom = position < text.length ? position : null;
       break;
     }
 
@@ -291,10 +291,19 @@ export function parseComparisonExpression(text: string, catalog: ComparisonCatal
   const suffixFrom = inactiveFrom ?? text.length;
   let canonicalText = canonicalPrefix;
   if (inactiveFrom !== null) {
-    const separator = expected === "direction" || expected === "and" || expected === "maximum" ? " " : "";
-    canonicalText += separator + text.slice(suffixFrom).replace(/[\r\n]+/g, " ");
+    const separator = expected === "direction" || expected === "and" ? " " : "";
+    canonicalText += separator + text.slice(suffixFrom).replace(/\r\n|[\r\n]/g, " ");
   }
-  return { text, segments, tokens, expected, inactiveFrom, canonicalPrefix, canonicalText: canonicalText.trim(), maximumReached };
+  return {
+    text,
+    segments,
+    tokens,
+    expected,
+    inactiveFrom,
+    canonicalPrefix,
+    canonicalText: maximumReached && inactiveFrom !== null ? canonicalText.trimStart() : canonicalText.trim(),
+    maximumReached,
+  };
 }
 
 function optionMessage(expected: ComparisonExpectedState, count: number): string {
@@ -334,8 +343,13 @@ function tokenExpected(token: ComparisonToken): ComparisonExpectedState {
 
 function directionBefore(text: string, position: number, catalog: ComparisonCatalog): ComparisonDirection | null {
   const prefix = parseComparisonExpression(text.slice(0, position), catalog);
-  const last = [...prefix.tokens].reverse().find((token) => token.role === "direction");
-  return last?.canonical.startsWith("after") ? "after" : last?.canonical.startsWith("before") ? "before" : null;
+  for (let index = prefix.tokens.length - 1; index >= 0; index -= 1) {
+    const token = prefix.tokens[index];
+    if (token.role === "and") return null;
+    if (token.role === "segment-keyword" && token.canonical === "period:") return null;
+    if (token.role === "direction") return token.canonical.startsWith("after") ? "after" : "before";
+  }
+  return null;
 }
 
 export function comparisonCompletionContext(text: string, position: number, catalog: ComparisonCatalog): ComparisonCompletionContext {
@@ -345,15 +359,28 @@ export function comparisonCompletionContext(text: string, position: number, cata
   let expected = semantic ? tokenExpected(semantic) : prefix.expected;
   let from = semantic?.from ?? position;
   let to = semantic?.to ?? position;
+  let firstInvalidTo: number | null = null;
   if (!semantic) {
     if (prefix.inactiveFrom !== null) {
-      from = prefix.inactiveFrom;
+      while (from > 0 && !/\s/.test(text[from - 1])) from -= 1;
       while (to < text.length && !/\s/.test(text[to])) to += 1;
+    }
+    if (parsed.inactiveFrom !== null) {
+      firstInvalidTo = parsed.inactiveFrom;
+      while (firstInvalidTo < text.length && !/\s/.test(text[firstInvalidTo])) firstInvalidTo += 1;
+      if (position >= parsed.inactiveFrom && position <= firstInvalidTo) {
+        from = parsed.inactiveFrom;
+        to = firstInvalidTo;
+        expected = parsed.expected;
+      }
     }
     if (parsed.maximumReached && position >= (parsed.inactiveFrom ?? text.length)) expected = "maximum";
   }
   const direction = directionBefore(text, from, catalog);
-  const options = completionsForState(expected, catalog, direction);
+  let options = completionsForState(expected, catalog, direction);
+  if (!semantic && parsed.inactiveFrom !== null && expected !== "maximum") {
+    if (position > (firstInvalidTo ?? parsed.inactiveFrom)) options = [];
+  }
   return { expected, from, to, options, message: optionMessage(expected, options.length) };
 }
 
@@ -371,11 +398,13 @@ export function resolveComparisonSegments(
   return definitions.flatMap((definition, index) => {
     let start: number | null = null;
     let end: number | null = null;
+    let openEnded = false;
     if (definition.kind === "period") {
       const period = catalog.periods.find((item) => item.id === definition.periodId);
       if (!period) return [];
       start = dateTimeBoundary(period.start, period.startTime);
-      end = period.openEnded ? presentTime : dateTimeBoundary(period.end, period.endTime, true);
+      openEnded = period.openEnded;
+      end = openEnded ? presentTime : dateTimeBoundary(period.end, period.endTime, true);
     } else if (definition.targetType === "event") {
       const event = catalog.events.find((item) => item.id === definition.targetId);
       if (!event) return [];
@@ -409,9 +438,9 @@ export function resolveComparisonSegments(
       label: definition.label,
       start: formatDateInput(start),
       startTime: formatTimeInput(start),
-      end: formatDateInput(end),
-      endTime: formatTimeInput(end),
-      openEnded: false as const,
+      end: openEnded ? "" : formatDateInput(end),
+      endTime: openEnded ? "" : formatTimeInput(end),
+      openEnded,
     }];
   });
 }
@@ -422,9 +451,10 @@ export function binDiurnalSessions(
   range: { label: string; start: string; startTime: string },
   end: string,
   endTime: string,
+  exactEnd?: number,
 ): DiurnalPoint[] {
   const rangeStart = dateTimeBoundary(range.start, range.startTime);
-  const rangeEnd = dateTimeBoundary(end, endTime, true);
+  const rangeEnd = exactEnd ?? dateTimeBoundary(end, endTime, true);
   if (rangeStart === null || rangeEnd === null) return [];
   const buckets = Array.from({ length: 8 }, () => [] as number[]);
   sessions

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   acceptCompletion,
   autocompletion,
@@ -11,7 +11,7 @@ import {
   type CompletionResult,
 } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { EditorState, StateEffect, Transaction } from "@codemirror/state";
+import { EditorSelection, EditorState, StateEffect, Transaction } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, keymap, placeholder, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import {
   canonicalizeComparisonExpression,
@@ -48,6 +48,65 @@ function fuzzyMatch(candidate: string, query: string): boolean {
   return true;
 }
 
+function noMatchMessage(expected: ReturnType<typeof comparisonCompletionContext>["expected"]): string {
+  if (expected === "duration") return "Expected a whole-day duration such as 14d";
+  if (expected === "target-type") return "Expected period: or event:";
+  if (expected === "period-value") return "No matching period";
+  if (expected === "event-value") return "No matching annotation";
+  if (expected === "and") return "Expected AND";
+  if (expected === "direction") return "Expected before: or after:";
+  if (expected === "maximum") return "Six comparison segments are already shown";
+  return "Expected a comparison keyword";
+}
+
+function expectedStateLabel(expected: ReturnType<typeof comparisonCompletionContext>["expected"]): string {
+  if (expected === "segment-start") return "comparison keyword";
+  if (expected === "duration") return "whole-day duration";
+  if (expected === "direction") return "before or after";
+  if (expected === "target-type") return "period or event";
+  if (expected === "period-value") return "period name";
+  if (expected === "event-value") return "annotation name";
+  if (expected === "and") return "AND";
+  return "six-segment limit";
+}
+
+function editorCanonicalText(text: string, catalog: ComparisonCatalog, preserveTrailingSeparator: boolean): string {
+  const formatted = canonicalizeComparisonExpression(text, catalog);
+  if (!preserveTrailingSeparator || !/\s$/.test(text)) return formatted;
+  const parsed = parseComparisonExpression(text, catalog);
+  const lastToken = parsed.tokens.at(-1);
+  return lastToken?.role === "duration"
+    || lastToken?.role === "period-value"
+    || lastToken?.role === "event-value"
+    || lastToken?.role === "and"
+    ? `${formatted} `
+    : formatted;
+}
+
+function mapFormattingPosition(before: string, after: string, position: number, catalog: ComparisonCatalog): number {
+  const beforeParsed = parseComparisonExpression(before, catalog);
+  const afterParsed = parseComparisonExpression(after, catalog);
+  const tokenIndex = beforeParsed.tokens.findIndex((token) => position >= token.from && position <= token.to);
+  if (tokenIndex >= 0 && afterParsed.tokens[tokenIndex]) {
+    const beforeToken = beforeParsed.tokens[tokenIndex];
+    const afterToken = afterParsed.tokens[tokenIndex];
+    const offset = Math.max(0, position - beforeToken.from);
+    return afterToken.from + Math.min(offset, afterToken.to - afterToken.from);
+  }
+  if (beforeParsed.inactiveFrom !== null && position >= beforeParsed.inactiveFrom && afterParsed.inactiveFrom !== null) {
+    return Math.min(after.length, afterParsed.inactiveFrom + position - beforeParsed.inactiveFrom);
+  }
+  let previousIndex = -1;
+  for (let index = 0; index < beforeParsed.tokens.length; index += 1) {
+    if (beforeParsed.tokens[index].to <= position) previousIndex = index;
+  }
+  if (previousIndex >= 0 && afterParsed.tokens[previousIndex]) {
+    const gapOffset = position - beforeParsed.tokens[previousIndex].to;
+    return Math.min(after.length, afterParsed.tokens[previousIndex].to + Math.max(0, gapOffset));
+  }
+  return Math.min(position, after.length);
+}
+
 function insertionFor(option: ComparisonCompletion, view: EditorView, from: number, catalog: ComparisonCatalog): string {
   if (option.label === "AND") return `${from > 0 && !/\s/.test(view.state.doc.sliceString(from - 1, from)) ? " " : ""}AND `;
   if (option.type === "duration") return `${option.label} `;
@@ -67,17 +126,17 @@ export function ComparisonExpressionEditor({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const composer = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const catalogRef = useRef(catalog);
   const onChangeRef = useRef(onChange);
   const [focused, setFocused] = useState(false);
   const [explanation, setExplanation] = useState<Explanation>({ visible: false, left: 0, message: "" });
+  const [liveStatus, setLiveStatus] = useState("");
   catalogRef.current = catalog;
   onChangeRef.current = onChange;
   const expanded = focused || value.length > 0;
-  const parsed = useMemo(() => parseComparisonExpression(value, catalog), [catalog, value]);
-  const liveStatus = `${parsed.segments.length} comparison segment${parsed.segments.length === 1 ? "" : "s"}. ${parsed.maximumReached ? "Six-segment limit reached. " : ""}${parsed.inactiveFrom === null ? "" : "Inactive text follows the valid expression. "}Expected ${parsed.expected}.`;
 
   useEffect(() => {
     if (!host.current) return;
@@ -86,15 +145,20 @@ export function ComparisonExpressionEditor({
       const position = view.state.selection.main.head;
       const context = comparisonCompletionContext(view.state.doc.toString(), position, catalogRef.current);
       const query = view.state.doc.sliceString(context.from, position).replace(/\s/g, "");
-      const hasMatch = context.options.some((option) => fuzzyMatch(option.label, query));
+      const matchingOptions = context.options.filter((option) => fuzzyMatch(option.label, query));
+      const hasMatch = matchingOptions.length > 0;
       const shouldExplain = view.hasFocus && (context.options.length === 0 || (!hasMatch && query.length > 0));
-      const root = host.current?.getBoundingClientRect();
+      const root = composer.current?.getBoundingClientRect();
       const token = view.coordsAtPos(context.from);
+      const popupWidth = Math.min(416, Math.max(0, window.innerWidth - 32));
+      const desiredLeft = Math.max(0, (token?.left ?? root?.left ?? 0) - (root?.left ?? 0));
+      const documentState = parseComparisonExpression(view.state.doc.toString(), catalogRef.current);
       setExplanation({
         visible: shouldExplain,
-        left: Math.max(0, (token?.left ?? root?.left ?? 0) - (root?.left ?? 0)),
-        message: context.message,
+        left: Math.min(desiredLeft, Math.max(0, (root?.width ?? popupWidth) - popupWidth)),
+        message: !hasMatch && query.length > 0 ? noMatchMessage(context.expected) : context.message,
       });
+      setLiveStatus(`${documentState.segments.length} comparison segment${documentState.segments.length === 1 ? "" : "s"}. ${matchingOptions.length} suggestion${matchingOptions.length === 1 ? "" : "s"} available. Expected ${expectedStateLabel(context.expected)}. ${documentState.maximumReached ? "Six-segment limit reached. " : ""}${documentState.inactiveFrom === null ? "" : "Inactive text follows the valid expression."}`);
     };
 
     const applyOption = (view: EditorView, option: ComparisonCompletion, completion: Completion, from: number, to: number) => {
@@ -155,6 +219,15 @@ export function ComparisonExpressionEditor({
         return true;
       }
       const previous = [...parseComparisonExpression(text, catalogRef.current).tokens].reverse().find((token) => token.to === from);
+      if (previous && (previous.role === "period-value" || previous.role === "event-value")) {
+        view.dispatch({
+          changes: { from: previous.from, to: previous.to, insert: `${previous.canonical} ` },
+          annotations: Transaction.userEvent.of("input.complete"),
+          scrollIntoView: true,
+        });
+        window.setTimeout(() => startCompletion(view), 0);
+        return true;
+      }
       if (previous && (previous.role === "duration" || previous.role === "and") && !/\s/.test(text[from] ?? "")) {
         view.dispatch({ changes: { from, to, insert: " " }, annotations: Transaction.userEvent.of("input.complete"), scrollIntoView: true });
         window.setTimeout(() => startCompletion(view), 0);
@@ -170,12 +243,19 @@ export function ComparisonExpressionEditor({
       const oldParsed = parseComparisonExpression(oldText, catalogRef.current);
       const nextParsed = parseComparisonExpression(nextText, catalogRef.current);
       const repaired = oldParsed.inactiveFrom !== null
-        && (nextParsed.tokens.length > oldParsed.tokens.length || nextParsed.segments.length > oldParsed.segments.length);
-      const shouldFormat = transaction.isUserEvent("input.complete") || transaction.isUserEvent("input.paste") || repaired;
+        && (nextParsed.inactiveFrom === null
+          || nextParsed.tokens.length > oldParsed.tokens.length
+          || nextParsed.segments.length > oldParsed.segments.length);
+      const completed = transaction.isUserEvent("input.complete");
+      const shouldFormat = completed || transaction.isUserEvent("input.paste") || repaired || /[\r\n]/.test(nextText);
       if (!shouldFormat) return transaction;
-      const formatted = canonicalizeComparisonExpression(nextText, catalogRef.current);
+      const formatted = editorCanonicalText(nextText, catalogRef.current, completed);
       if (formatted === nextText) return transaction;
-      return [transaction, { changes: minimalChange(nextText, formatted), sequential: true }];
+      const selection = EditorSelection.create(transaction.newSelection.ranges.map((range) => EditorSelection.range(
+        mapFormattingPosition(nextText, formatted, range.anchor, catalogRef.current),
+        mapFormattingPosition(nextText, formatted, range.head, catalogRef.current),
+      )), transaction.newSelection.mainIndex);
+      return [transaction, { changes: minimalChange(nextText, formatted), selection, sequential: true }];
     });
 
     const state = EditorState.create({
@@ -185,6 +265,7 @@ export function ComparisonExpressionEditor({
         keymap.of([
           { key: "Tab", run: acceptCompletion },
           { key: "Enter", run: (view) => completionStatus(view.state) === "active" ? acceptCompletion(view) : true },
+          { key: "Shift-Enter", run: () => true },
           ...defaultKeymap,
           ...historyKeymap,
         ]),
@@ -225,6 +306,7 @@ export function ComparisonExpressionEditor({
     });
     const view = new EditorView({ state, parent: host.current });
     viewRef.current = view;
+    updateExplanation(view);
     return () => {
       viewRef.current = null;
       view.destroy();
@@ -244,7 +326,7 @@ export function ComparisonExpressionEditor({
   }, [value]);
 
   return (
-    <div className={`comparison-composer${expanded ? " comparison-composer--open" : ""}`}>
+    <div ref={composer} className={`comparison-composer${expanded ? " comparison-composer--open" : ""}`}>
       <div className="comparison-expression">
         <svg className="comparison-expression__search-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></svg>
         <div ref={host} className="comparison-expression__editor" />
