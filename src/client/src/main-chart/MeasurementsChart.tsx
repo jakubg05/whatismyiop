@@ -20,14 +20,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { dateTimeBoundary, formatChartTime, formatDateInput, formatTimeInput, type Eye, type Measurement, type SessionAggregation } from "./analysis";
+import { dateTimeBoundary, formatDateInput, formatTimeInput, type Eye, type Measurement, type SessionAggregation } from "../analysis";
 import { clipDomain, daylightBackground, intersectDomains, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
 import { moveRangeEdge, rangeTimeDomain, type EditableRange } from "./range";
 import { type TrendMode } from "./trend";
-import { ChartDateTag, ChartSelect, ChartToggle } from "./ui";
+import { ChartDateTag, ChartSelect, ChartToggle } from "./controls";
+import { formatChartTime } from "./format";
 
-export type ChartMode = "range" | "event" | "trend" | null;
+export type ChartMode = "range" | "event" | "trend" | "sessions" | null;
 type PositionFilter = "all" | "sitting" | "laying";
 
 export type DraftRange = EditableRange;
@@ -75,6 +76,7 @@ type Props = {
   trendMode: TrendMode;
   visibleTrendEyes: Record<Eye, boolean>;
   onOpenTrendSettings: () => void;
+  onOpenSessionInfo: () => void;
   ranges: ChartRange[];
   events: ChartEvent[];
   mode: ChartMode;
@@ -124,6 +126,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   trendMode,
   visibleTrendEyes,
   onOpenTrendSettings,
+  onOpenSessionInfo,
   ranges,
   events,
   mode,
@@ -847,6 +850,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               { value: "median", label: "Median" },
               { value: "average", label: "Average" },
             ]}
+            action={{ label: "How sessions work?", onSelect: onOpenSessionInfo }}
             pressed={measurementView === "sessions"}
             onTrigger={() => setMeasurementView("sessions")}
             onChange={(aggregation) => {

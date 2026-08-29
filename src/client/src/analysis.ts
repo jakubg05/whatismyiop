@@ -254,15 +254,6 @@ export function inDateRange(measurement: Measurement, start: string, end: string
   return measurement.time >= startTime && measurement.time <= endTime;
 }
 
-export function formatChartTime(time: number): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone: "UTC",
-    day: "2-digit",
-    month: "short",
-    year: "2-digit",
-  }).format(new Date(time));
-}
-
 export function formatFullTime(time: number): string {
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: "UTC",

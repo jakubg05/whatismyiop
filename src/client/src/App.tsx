@@ -23,11 +23,9 @@ import {
   type ParseResult,
   type Summary,
 } from "./analysis";
-import { MeasurementsChart, type ChartMode, type DraftRange } from "./MeasurementsChart";
-import { normalizeRangeEdges } from "./range";
+import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartMode, type DraftRange, type TrendMode } from "./main-chart";
 import { TopNavigation } from "./TopNavigation";
-import { type TrendMode } from "./trend";
-import { Button, DateInput, SectionHeading, SegmentedControl, Toggle } from "./ui";
+import { Button, SectionHeading, SegmentedControl } from "./shared";
 
 type SavedRange = DraftRange & { id: string };
 
@@ -162,7 +160,7 @@ function DiurnalTooltip({ active, payload }: { active?: boolean; payload?: Array
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
   return (
-    <div className="chart-tooltip">
+    <div className="diurnal-tooltip">
       <strong>{point.periodLabel} · {eyeLabel(point.eye)}</strong>
       <span>{diurnalBinLabel(point.bin)}</span>
       <span>Mean: {point.mean.toFixed(1)} mmHg</span>
@@ -405,6 +403,14 @@ export default function App() {
     setEditingEventId(null);
     setError("");
   }, []);
+  const openSessionInfo = useCallback(() => {
+    setMode("sessions");
+    setDraftRange(emptyDraftRange());
+    setDraftEvent({ label: "", date: "", clock: "" });
+    setEditingRangeId(null);
+    setEditingEventId(null);
+    setError("");
+  }, []);
   const chartFullDomain = useMemo(() => [fullDomainStart, fullDomainEnd] as [number, number], [fullDomainEnd, fullDomainStart]);
   const chartYDomain = useMemo(() => [minimumIop, maximumIop] as [number, number], [maximumIop, minimumIop]);
 
@@ -442,6 +448,7 @@ export default function App() {
             trendMode={trendMode}
             visibleTrendEyes={visibleTrendEyes}
             onOpenTrendSettings={toggleTrendSettings}
+            onOpenSessionInfo={openSessionInfo}
             ranges={ranges}
             events={events}
             mode={mode}
@@ -519,48 +526,21 @@ export default function App() {
           </section>}
           </div>
 
-          <aside className={`editor-drawer editor-drawer--${mode ?? "closed"}`} aria-hidden={!mode}>
-            <div className="editor-drawer__inner">
-              {mode && <>
-              <div className="editor-drawer__toolbar">
-                <span>{mode === "trend" ? "Trend" : (mode === "range" ? draftRange.label : draftEvent.label).trim() || "Untitled"}</span>
-                <div className="editor-drawer__actions">
-                  {(editingRangeId || editingEventId) && <button type="button" className="editor-drawer__delete" onClick={deleteDraft}>Delete</button>}
-                  {mode !== "trend" && <Button type="submit" form={`${mode}-editor-form`} variant="editorPrimary" className="draft-action">Save</Button>}
-                  <button type="button" className="editor-drawer__close" aria-label="Close editor" onClick={cancelDraft}>
-                    <svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-424 284-228q-11 11-28 11t-28-11q-11-11-11-28t11-28l196-196-196-196q-11-11-11-28t11-28q11-11 28-11t28 11l196 196 196-196q11-11 28-11t28 11q11 11 11 28t-11 28L536-480l196 196q11 11 11 28t-11 28q-11 11-28 11t-28-11L480-424Z" /></svg>
-                  </button>
-                </div>
-              </div>
-              </>}
-              {mode === "range" && <form id="range-editor-form" onSubmit={(event) => { event.preventDefault(); addRange(); }} />}
-              {mode === "event" && <form id="event-editor-form" onSubmit={(event) => { event.preventDefault(); addEvent(); }} />}
-              {mode === "trend" && <div className="trend-settings">
-                <section className="trend-settings__section">
-                  <div className="trend-settings__options" role="group" aria-label="Trend eyes">
-                    {(["OD", "OS"] as Eye[]).map((eye) => <div key={eye} className="trend-settings__option" onClick={() => toggleTrendEye(eye)}>
-                      <span className="trend-settings__option-copy trend-settings__option-copy--eye">
-                        <span className={`dot dot--${eye.toLowerCase()}`} aria-hidden="true" />
-                        <span><strong>{eye === "OD" ? "Right eye" : "Left eye"}</strong><small>{eye}</small></span>
-                      </span>
-                      <Toggle label={`${eye === "OD" ? "Right" : "Left"} eye trend`} checked={visibleTrendEyes[eye]} />
-                    </div>)}
-                  </div>
-                </section>
-                <section className="trend-settings__section">
-                  <div className="trend-settings__options" role="group" aria-label="Trend type">
-                    {([
-                      ["adjusted", "Adjusted", "Accounts for session timing and measurement position."],
-                      ["observed", "Observed", "Shows the trend directly from recorded session values."],
-                    ] as const).map(([value, label, description]) => <div key={value} className="trend-settings__option" onClick={() => setTrendMode(value)}>
-                      <span className="trend-settings__option-copy"><strong>{label}</strong><small>{description}</small></span>
-                      <Toggle label={`${label} trend`} checked={trendMode === value} />
-                    </div>)}
-                  </div>
-                </section>
-              </div>}
-            </div>
-          </aside>
+          <ChartEditor
+            mode={mode}
+            draftRangeLabel={draftRange.label}
+            draftEventLabel={draftEvent.label}
+            isEditing={Boolean(editingRangeId || editingEventId)}
+            trendMode={trendMode}
+            visibleTrendEyes={visibleTrendEyes}
+            onSaveRange={addRange}
+            onSaveEvent={addEvent}
+            onDelete={deleteDraft}
+            onCancel={cancelDraft}
+            onToggleTrendEye={toggleTrendEye}
+            onTrendModeChange={setTrendMode}
+            onOpenSessionInfo={openSessionInfo}
+          />
           </div>
         </>
       )}

@@ -13,9 +13,9 @@ import {
   type Measurement,
   type SessionAggregation,
   type SessionPoint,
-} from "./analysis";
+} from "../analysis";
 import { panDomain, type TimeDomain } from "./chartNavigation";
-import { buildTrendSeries, interpolateTrend, splitTrendSegment, trendEstimatesForDomain, type EyeTrend, type TrendMode } from "./trend";
+import { buildTrendSeries, interpolateTrend, interpolateTrendEstimate, splitTrendSegment, trendEstimatesForDomain, type EyeTrend, type TrendEstimate, type TrendMode } from "./trend";
 import { tetherHorizontalOverlay } from "./tooltipPosition";
 
 type MeasurementPoint =
@@ -84,6 +84,7 @@ function formatIop(value: number): string {
 function TrendTooltipContent({ point, mode }: { point: TrendPoint; mode: TrendMode }) {
   const previous = interpolateTrend(point.trend.estimates, point.time - 30 * 86_400_000);
   const change = previous === null ? null : point.iop - previous;
+  const estimate = interpolateTrendEstimate(point.trend.estimates, point.time);
   return <>
     <div className="measurement-canvas-tooltip__eyebrow">
       <span>{mode === "adjusted" ? "Adjusted" : "Observed"}</span>
@@ -94,9 +95,16 @@ function TrendTooltipContent({ point, mode }: { point: TrendPoint; mode: TrendMo
       <span className="measurement-canvas-tooltip__trend-reading"><span className="measurement-canvas-tooltip__value">{point.iop.toFixed(1)}</span><span className="measurement-canvas-tooltip__unit">mmHg</span></span>
     </div>
     <dl className="measurement-canvas-tooltip__rows measurement-canvas-tooltip__trend-row">
+      {estimate && <div>
+        <dt>Uncertainty range</dt>
+        <dd>{estimate.lower.toFixed(1)}–{estimate.upper.toFixed(1)}<span className="measurement-canvas-tooltip__unit">mmHg</span></dd>
+      </div>}
       <div>
         <dt>{change === null ? "Sessions" : "30d change"}</dt>
-        <dd>{change === null ? point.trend.sessionCount : `${change >= 0 ? "+" : ""}${change.toFixed(1)} mmHg`}</dd>
+        <dd>{change === null
+          ? point.trend.sessionCount
+          : <>{change >= 0 ? "+" : ""}{change.toFixed(1)}<span className="measurement-canvas-tooltip__unit">mmHg</span></>}
+        </dd>
       </div>
     </dl>
   </>;
@@ -406,6 +414,13 @@ export function MeasurementCanvas({
         context.strokeStyle = COLORS[series.eye];
         context.lineWidth = 1.65;
         context.lineCap = "round";
+        context.lineJoin = "round";
+        const strokeSegments: Array<{
+          left: TrendEstimate;
+          right: TrendEstimate;
+          alpha: number;
+          dashed: boolean;
+        }> = [];
         for (let index = 1; index < visible.length; index += 1) {
           const left = visible[index - 1];
           const right = visible[index];
@@ -423,14 +438,41 @@ export function MeasurementCanvas({
               context.fill();
             }
 
-            context.globalAlpha = visibilityAlphaAt.current(midpoint, trendId, null, 0.95);
-            context.setLineDash(segmentLeft.supported && segmentRight.supported ? [] : [14, 8]);
-            context.beginPath();
-            context.moveTo(xFor(segmentLeft.time), yFor(segmentLeft.iop));
-            context.lineTo(xFor(segmentRight.time), yFor(segmentRight.iop));
-            context.stroke();
+            strokeSegments.push({
+              left: segmentLeft,
+              right: segmentRight,
+              alpha: visibilityAlphaAt.current(midpoint, trendId, null, 1),
+              dashed: !(segmentLeft.supported && segmentRight.supported),
+            });
           }
         }
+
+        let run: typeof strokeSegments = [];
+        const strokeRun = () => {
+          if (run.length === 0) return;
+          // Repaint the same path a few times while preserving its intended
+          // opacity. This firms up antialiased edge pixels so annotation rules
+          // behind the canvas cannot show through as tiny breaks in the trend.
+          const strokePasses = 3;
+          context.globalAlpha = 1 - Math.pow(1 - run[0].alpha, 1 / strokePasses);
+          context.setLineDash(run[0].dashed ? [14, 8] : []);
+          context.beginPath();
+          context.moveTo(xFor(run[0].left.time), yFor(run[0].left.iop));
+          for (const segment of run) context.lineTo(xFor(segment.right.time), yFor(segment.right.iop));
+          for (let pass = 0; pass < strokePasses; pass += 1) context.stroke();
+          run = [];
+        };
+
+        for (const segment of strokeSegments) {
+          const previous = run.at(-1);
+          const continuesRun = previous
+            && previous.right.time === segment.left.time
+            && previous.dashed === segment.dashed
+            && Math.abs(previous.alpha - segment.alpha) < 1e-6;
+          if (!continuesRun) strokeRun();
+          run.push(segment);
+        }
+        strokeRun();
         context.setLineDash([]);
       }
       context.restore();

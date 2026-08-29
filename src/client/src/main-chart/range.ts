@@ -1,4 +1,4 @@
-import { dateTimeBoundary, formatDateInput, formatTimeInput } from "./analysis";
+import { dateTimeBoundary, formatDateInput, formatTimeInput } from "../analysis";
 
 export type EditableRange = {
   label: string;

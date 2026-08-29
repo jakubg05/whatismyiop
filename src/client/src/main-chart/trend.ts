@@ -3,8 +3,8 @@ import {
   type Eye,
   type Measurement,
   type SessionAggregation,
-  type SessionPoint,
-} from "./analysis";
+} from "../analysis";
+import lowess from "@stdlib/stats-lowess";
 
 export type TrendMode = "off" | "adjusted" | "observed";
 
@@ -23,6 +23,10 @@ export type EyeTrend = {
 };
 
 const MIN_SESSIONS = 8;
+const MIN_NEIGHBORS = 6;
+const SMOOTHER_FRACTION = 0.35;
+const ROBUST_STEPS = 3;
+const ADJUSTMENT_PASSES = 5;
 const DAY_MS = 86_400_000;
 const SAMPLE_COUNT = 128;
 
@@ -30,10 +34,7 @@ type TrendObservation = {
   time: number;
   iop: number;
   minuteOfDay: number;
-  position: "sitting" | "lying" | "other";
 };
-
-type LocalEstimate = { value: number; standardError: number; effectiveCount: number };
 
 function median(values: number[]): number {
   const ordered = [...values].sort((a, b) => a - b);
@@ -43,97 +44,64 @@ function median(values: number[]): number {
     : ordered[middle];
 }
 
-function positionCategory(session: SessionPoint): TrendObservation["position"] {
-  const counts = { sitting: 0, lying: 0, other: 0 };
-  for (const measurement of session.measurements) {
-    const value = measurement.position.trim().toLowerCase();
-    if (value.includes("sitt") || value.includes("seat")) counts.sitting += 1;
-    else if (value.includes("supine") || value.includes("lying") || value.includes("laying") || value.includes("recumbent")) counts.lying += 1;
-    else counts.other += 1;
-  }
-  return (Object.entries(counts) as Array<[TrendObservation["position"], number]>)
-    .sort((a, b) => b[1] - a[1])[0][0];
-}
-
-function observation(session: SessionPoint): TrendObservation {
+function observation(session: { time: number; iop: number }): TrendObservation {
   const date = new Date(session.time);
   return {
     time: session.time,
     iop: session.iop,
     minuteOfDay: date.getUTCHours() * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60,
-    position: positionCategory(session),
   };
 }
 
-function tricube(value: number): number {
-  if (value >= 1) return 0;
-  const remaining = 1 - value ** 3;
-  return remaining ** 3;
+function smootherOptions(length: number, timeSpanDays: number) {
+  const neighborCount = Math.min(length, Math.max(MIN_NEIGHBORS, Math.ceil(length * SMOOTHER_FRACTION)));
+  return {
+    neighborCount,
+    options: {
+      f: Math.min(1, (neighborCount + 0.5) / length),
+      nsteps: ROBUST_STEPS,
+      delta: timeSpanDays * 0.01,
+      sorted: true,
+    },
+  };
 }
 
-function localLinear(
-  observations: TrendObservation[],
-  values: number[],
-  targetTime: number,
-  robustWeights: number[],
-): LocalEstimate {
-  const neighborCount = Math.min(observations.length, Math.max(6, Math.ceil(observations.length * 0.35)));
-  const distances = observations.map((item) => Math.abs(item.time - targetTime)).sort((a, b) => a - b);
-  const bandwidth = Math.max(1, distances[neighborCount - 1]);
-  const scale = Math.max(DAY_MS, observations.at(-1)!.time - observations[0].time);
-  const xs = observations.map((item) => (item.time - targetTime) / scale);
-  const weights = observations.map((item, index) => tricube(Math.abs(item.time - targetTime) / bandwidth) * robustWeights[index]);
-  const sumWeight = weights.reduce((sum, weight) => sum + weight, 0);
-  if (sumWeight <= 0) return { value: values[0], standardError: 0, effectiveCount: 1 };
-
-  let s1 = 0;
-  let s2 = 0;
-  let sy = 0;
-  let sxy = 0;
-  for (let index = 0; index < observations.length; index += 1) {
-    s1 += weights[index] * xs[index];
-    s2 += weights[index] * xs[index] ** 2;
-    sy += weights[index] * values[index];
-    sxy += weights[index] * xs[index] * values[index];
+function interpolateSorted(xs: number[], ys: number[], target: number): number {
+  let low = 0;
+  let high = xs.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (xs[middle] < target) low = middle + 1;
+    else high = middle;
   }
-  const determinant = sumWeight * s2 - s1 ** 2;
-  const intercept = Math.abs(determinant) < 1e-12
-    ? sy / sumWeight
-    : (sy * s2 - sxy * s1) / determinant;
-  let weightedError = 0;
-  let squaredWeight = 0;
-  for (let index = 0; index < observations.length; index += 1) {
-    const slope = Math.abs(determinant) < 1e-12 ? 0 : (sumWeight * sxy - s1 * sy) / determinant;
-    const residual = values[index] - intercept - slope * xs[index];
-    weightedError += weights[index] * residual ** 2;
-    squaredWeight += weights[index] ** 2;
+  if (low <= 0) return ys[0];
+  if (low >= xs.length) return ys.at(-1)!;
+  const left = low - 1;
+  const ratio = (target - xs[left]) / Math.max(Number.EPSILON, xs[low] - xs[left]);
+  return ys[left] + (ys[low] - ys[left]) * ratio;
+}
+
+function nearestDistance(times: number[], target: number): number {
+  let low = 0;
+  let high = times.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (times[middle] < target) low = middle + 1;
+    else high = middle;
   }
-  const effectiveCount = squaredWeight > 0 ? sumWeight ** 2 / squaredWeight : 1;
-  const variance = weightedError / Math.max(1, sumWeight) / Math.max(1, effectiveCount);
-  return { value: intercept, standardError: Math.sqrt(Math.max(0, variance)), effectiveCount };
+  return Math.min(
+    low < times.length ? Math.abs(times[low] - target) : Number.POSITIVE_INFINITY,
+    low > 0 ? Math.abs(times[low - 1] - target) : Number.POSITIVE_INFINITY,
+  );
 }
 
-function robustWeights(observations: TrendObservation[], values: number[]): number[] {
-  const initial = observations.map((item) => localLinear(observations, values, item.time, observations.map(() => 1)).value);
-  const residuals = values.map((value, index) => value - initial[index]);
-  const center = median(residuals);
-  const mad = median(residuals.map((value) => Math.abs(value - center)));
-  if (mad < 1e-9) return observations.map(() => 1);
-  return residuals.map((residual) => {
-    const distance = Math.abs(residual - center) / (6 * mad);
-    return distance >= 1 ? 0 : (1 - distance ** 2) ** 2;
-  });
-}
-
-function rawFeatures(item: Pick<TrendObservation, "minuteOfDay" | "position">): number[] {
+function rawFeatures(item: Pick<TrendObservation, "minuteOfDay">): number[] {
   const angle = item.minuteOfDay / 1440 * Math.PI * 2;
   return [
     Math.sin(angle),
     Math.cos(angle),
     Math.sin(angle * 2),
     Math.cos(angle * 2),
-    item.position === "sitting" ? 1 : 0,
-    item.position === "lying" ? 1 : 0,
   ];
 }
 
@@ -158,7 +126,7 @@ function solve(matrix: number[][], vector: number[]): number[] {
   return augmented.map((row, index) => Number.isFinite(row[size]) ? row[size] : vector[index] * 0);
 }
 
-function fitNuisance(observations: TrendObservation[], residuals: number[], weights: number[]) {
+function fitTimeOfDay(observations: TrendObservation[], residuals: number[]) {
   const featureRows = observations.map(rawFeatures);
   const means = featureRows[0].map((_, column) => featureRows.reduce((sum, row) => sum + row[column], 0) / featureRows.length);
   const centered = featureRows.map((row) => row.map((value, column) => value - means[column]));
@@ -167,9 +135,9 @@ function fitNuisance(observations: TrendObservation[], residuals: number[], weig
   const vector = Array(size).fill(0) as number[];
   for (let row = 0; row < centered.length; row += 1) {
     for (let left = 0; left < size; left += 1) {
-      vector[left] += weights[row] * centered[row][left] * residuals[row];
+      vector[left] += centered[row][left] * residuals[row];
       for (let right = 0; right < size; right += 1) {
-        matrix[left][right] += weights[row] * centered[row][left] * centered[row][right];
+        matrix[left][right] += centered[row][left] * centered[row][right];
       }
     }
   }
@@ -179,7 +147,7 @@ function fitNuisance(observations: TrendObservation[], residuals: number[], weig
     (sum, value, index) => sum + (value - means[index]) * coefficients[index],
     0,
   );
-  return { atObservation: featureRows.map(predict), atReference: predict(rawFeatures({ minuteOfDay: 12 * 60, position: "sitting" })) };
+  return { atObservation: featureRows.map(predict), atReference: predict(rawFeatures({ minuteOfDay: 12 * 60 })) };
 }
 
 function medianGap(observations: TrendObservation[]): number {
@@ -189,34 +157,40 @@ function medianGap(observations: TrendObservation[]): number {
 
 function estimateEye(observations: TrendObservation[], mode: Exclude<TrendMode, "off">): TrendEstimate[] {
   const rawValues = observations.map((item) => item.iop);
-  const weights = robustWeights(observations, rawValues);
+  const times = observations.map((item) => item.time);
+  const firstTime = times[0];
+  const lastTime = times.at(-1)!;
+  const timeSpanDays = Math.max(Number.EPSILON, (lastTime - firstTime) / DAY_MS);
+  const normalizedTimes = times.map((time) => (time - firstTime) / DAY_MS);
+  const { neighborCount, options } = smootherOptions(observations.length, timeSpanDays);
   let nuisance = observations.map(() => 0);
   let referenceOffset = 0;
   if (mode === "adjusted") {
-    for (let iteration = 0; iteration < 5; iteration += 1) {
+    for (let iteration = 0; iteration < ADJUSTMENT_PASSES; iteration += 1) {
       const adjusted = rawValues.map((value, index) => value - nuisance[index]);
-      const fittedCalendar = observations.map((item) => localLinear(observations, adjusted, item.time, weights).value);
-      const fitted = fitNuisance(observations, rawValues.map((value, index) => value - fittedCalendar[index]), weights);
+      const fittedCalendar = lowess(normalizedTimes, adjusted, options).y;
+      const fitted = fitTimeOfDay(observations, rawValues.map((value, index) => value - fittedCalendar[index]));
       nuisance = fitted.atObservation;
       referenceOffset = fitted.atReference;
     }
   }
   const values = rawValues.map((value, index) => value - nuisance[index]);
-  const firstTime = observations[0].time;
-  const lastTime = observations.at(-1)!.time;
+  const fitted = lowess(normalizedTimes, values, options).y;
+  const squaredResiduals = values.map((value, index) => (value - fitted[index]) ** 2);
+  const localVariances = lowess(normalizedTimes, squaredResiduals, { ...options, nsteps: 0 }).y;
   const gapLimit = Math.max(45 * DAY_MS, medianGap(observations) * 3);
   return Array.from({ length: SAMPLE_COUNT }, (_, index) => {
     const time = firstTime + (lastTime - firstTime) * index / (SAMPLE_COUNT - 1);
-    const estimate = localLinear(observations, values, time, weights);
-    const nearestDistance = Math.min(...observations.map((item) => Math.abs(item.time - time)));
-    const iop = estimate.value + referenceOffset;
-    const margin = 1.96 * estimate.standardError;
+    const normalizedTime = (time - firstTime) / DAY_MS;
+    const iop = interpolateSorted(normalizedTimes, fitted, normalizedTime) + referenceOffset;
+    const variance = Math.max(0, interpolateSorted(normalizedTimes, localVariances, normalizedTime));
+    const margin = 1.96 * Math.sqrt(variance / neighborCount);
     return {
       time,
       iop,
       lower: iop - margin,
       upper: iop + margin,
-      supported: estimate.effectiveCount >= 4 && nearestDistance <= gapLimit,
+      supported: nearestDistance(times, time) <= gapLimit,
     };
   });
 }
@@ -235,14 +209,17 @@ export function buildTrendSeries(
   });
 }
 
-export function interpolateTrend(estimates: TrendEstimate[], time: number): number | null {
+export function interpolateTrendEstimate(estimates: TrendEstimate[], time: number): TrendEstimate | null {
   if (estimates.length === 0 || time < estimates[0].time || time > estimates.at(-1)!.time) return null;
   const index = estimates.findIndex((estimate) => estimate.time >= time);
-  if (index <= 0) return estimates[0].iop;
+  if (index <= 0) return estimates[0];
   const left = estimates[index - 1];
   const right = estimates[index];
-  const ratio = (time - left.time) / Math.max(1, right.time - left.time);
-  return left.iop + (right.iop - left.iop) * ratio;
+  return interpolateEstimate(left, right, time);
+}
+
+export function interpolateTrend(estimates: TrendEstimate[], time: number): number | null {
+  return interpolateTrendEstimate(estimates, time)?.iop ?? null;
 }
 
 function interpolateEstimate(left: TrendEstimate, right: TrendEstimate, time: number): TrendEstimate {
