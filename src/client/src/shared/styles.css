@@ -1,0 +1,29 @@
+:root {
+  --font: "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --body: 400 .875rem/1.5 var(--font); --small: 400 .75rem/1.45 var(--font);
+  --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1rem; --s5: 1.5rem; --s6: 2rem;
+  --gutter: clamp(1.25rem, 2.5vw, 2rem); --control: 2.5rem; --control-sm: 2rem;
+  --radius: .375rem; --radius-panel: .625rem;
+  --ink: #202124; --muted: #6b7280; --subtle: #8b919a; --line: #e0e3e7; --line-strong: #cdd2d8;
+  --canvas: #fff; --surface: #fff; --hover: #f3f4f6; --accent: #7656a0; --cta: #9b4ab8; --cta-hover: #7d3798; --danger: #a23f32;
+  --od: #a63d74; --os: #3f7d4e; --fast: .12s; --medium: .16s; --ease: cubic-bezier(.45, 0, .2, 1);
+  --editor-width: min(30rem, 100vw); --editor-canvas: hsl(0 0% 12%); --editor-surface: hsl(0 0% 19%); --editor-input: hsl(0 0% 27%);
+  --editor-divider: hsl(0 0% 22%); --editor-line: hsl(0 0% 44%); --editor-button: hsl(0 0% 24%); --editor-ink: hsl(0 0% 96%); --editor-muted: hsl(0 0% 74%);
+  font-family: var(--font); color: var(--ink); background: var(--canvas); font-synthesis: none;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--canvas); }
+body { margin: 0; min-width: 320px; min-height: 100vh; color: var(--ink); font: var(--body); }
+button, input { font: inherit; } button { cursor: pointer; } h1, h2, h3, p { margin: 0; }
+h1 { font-size: 1rem; line-height: 1.4; font-weight: 500; } h2, h3 { font-size: .875rem; line-height: 1.4; font-weight: 500; }
+main { min-height: 100vh; }
+.ui-button { min-height: var(--control-sm); padding: 0 var(--s3); border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); color: var(--ink); font: var(--small); font-weight: 500; white-space: nowrap; transition: background var(--fast) var(--ease); }
+.ui-button:hover, .ui-button:focus-visible { background: var(--hover); } .ui-button--primary { border-color: var(--cta); background: var(--cta); color: #fff; } .ui-button--primary:hover, .ui-button--primary:focus-visible { border-color: var(--cta-hover); background: var(--cta-hover); } .ui-button--quiet { border-color: transparent; background: transparent; color: var(--muted); } .ui-button--danger { border-color: transparent; background: transparent; color: var(--danger); }
+.section-heading { min-height: 2.75rem; padding-bottom: var(--s3); border-bottom: 1px solid var(--line); display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s4); }
+.section-heading--with-actions { align-items: center; } .section-heading__copy { min-width: 0; }
+.section-heading__copy > span { display: block; margin-bottom: var(--s1); color: var(--muted); font: var(--small); }
+.ui-segmented { padding: .125rem; border: 1px solid var(--line); border-radius: var(--radius); display: inline-flex; background: var(--canvas); } .ui-segmented button { min-width: 2.5rem; height: 1.75rem; padding: 0 var(--s2); border: 0; border-radius: .25rem; background: transparent; color: var(--muted); font: var(--small); font-weight: 500; } .ui-segmented button:hover { color: var(--ink); } .ui-segmented button[aria-pressed="true"] { background: var(--surface); color: var(--ink); }
+.ui-toggle { width: 1.75rem; height: 1rem; padding: 0; border: 0; border-radius: 999px; display: block; background: transparent; cursor: pointer; } .ui-toggle:disabled { cursor: default; } .ui-toggle:focus-visible { outline: 1px solid hsl(207 100% 60%); outline-offset: 2px; } .publication-switch-track { position: relative; width: 1.75rem; height: 1rem; border-radius: 999px; display: block; background: hsl(0 0% 42%); transition: background-color var(--fast) var(--ease); } .publication-switch-track > span { position: absolute; top: 2px; left: 2px; width: .75rem; height: .75rem; border-radius: 50%; background: var(--editor-ink); transition: left var(--fast) var(--ease); } .ui-toggle[aria-checked="true"] .publication-switch-track { background: hsl(207 100% 60%); } .ui-toggle[aria-checked="true"] .publication-switch-track > span { left: calc(100% - .75rem - 2px); }
+.dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; } .dot--od { background: var(--od); } .dot--os { background: var(--os); }
+label { color: var(--muted); font: var(--small); }
+@media (max-width: 40rem) { :root { --editor-width: 100vw; --gutter: .75rem; } }

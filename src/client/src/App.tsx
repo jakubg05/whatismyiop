@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type Ref } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   ErrorBar,
@@ -13,8 +13,9 @@ import {
 } from "recharts";
 import {
   formatDateInput,
+  formatTimeInput,
   inDateRange,
-  dateBoundary,
+  dateTimeBoundary,
   parseMeasurementsCsv,
   summarize,
   type Eye,
@@ -22,41 +23,11 @@ import {
   type ParseResult,
   type Summary,
 } from "./analysis";
-import { MeasurementsChart, type ChartMode, type DraftRange } from "./MeasurementsChart";
+import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartMode, type DraftRange, type TrendMode } from "./main-chart";
 import { TopNavigation } from "./TopNavigation";
-import { Button, DateInput, SectionHeading, SegmentedControl } from "./ui";
+import { Button, SectionHeading, SegmentedControl } from "./shared";
 
 type SavedRange = DraftRange & { id: string };
-
-function EditorInput({ label, fieldName, value, onChange, inputRef, inputMode, placeholder, maxLength }: {
-  label: string;
-  fieldName: string;
-  value: string;
-  onChange: (value: string) => void;
-  inputRef?: Ref<HTMLInputElement>;
-  inputMode?: "text" | "numeric";
-  placeholder?: string;
-  maxLength?: number;
-}) {
-  return (
-    <label className="builder-field">
-      <span className="builder-field-copy"><span>{label}</span></span>
-      <input
-        ref={inputRef}
-        type="text"
-        name={fieldName}
-        autoComplete="off"
-        data-1p-ignore
-        data-lpignore="true"
-        inputMode={inputMode}
-        placeholder={placeholder}
-        maxLength={maxLength}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
-  );
-}
 
 type SavedEvent = {
   id: string;
@@ -72,7 +43,7 @@ type PersistedState = {
   events: SavedEvent[];
 };
 
-type DateRange = { start: string; end: string };
+type DateRange = { start: string; startTime: string; end: string; endTime: string };
 
 type DiurnalPoint = {
   bin: number;
@@ -86,6 +57,10 @@ type DiurnalPoint = {
 
 const PERIOD_COLORS = ["#346f9c", "#b47722", "#6b5595", "#43815d", "#a55252", "#477d88"];
 const STORAGE_KEY = "icare-analytics:v1";
+
+function emptyDraftRange(): DraftRange {
+  return { label: "", start: "", startTime: "00:00", end: "", endTime: "23:59", openEnded: false };
+}
 
 function eyeLabel(eye: Eye): string {
   return eye === "OD" ? "Right eye" : "Left eye";
@@ -106,10 +81,10 @@ function diurnalBinLabel(bin: number): string {
   return `${String(startHour).padStart(2, "0")}:00–${String(endHour).padStart(2, "0")}:59`;
 }
 
-function binDiurnalMeasurements(measurements: Measurement[], eye: Eye, range: SavedRange, effectiveEnd: string): DiurnalPoint[] {
+function binDiurnalMeasurements(measurements: Measurement[], eye: Eye, range: SavedRange, effectiveEnd: string, effectiveEndTime: string): DiurnalPoint[] {
   const buckets = Array.from({ length: 8 }, () => [] as number[]);
   measurements
-    .filter((measurement) => measurement.eye === eye && inDateRange(measurement, range.start, effectiveEnd))
+    .filter((measurement) => measurement.eye === eye && inDateRange(measurement, range.start, effectiveEnd, range.startTime, effectiveEndTime))
     .forEach((measurement) => {
       const hour = Number(measurement.timestampText.slice(11, 13));
       const minute = Number(measurement.timestampText.slice(14, 16));
@@ -143,7 +118,7 @@ function SummaryCard({ title, range, measurements, endLabel }: {
   endLabel?: string;
 }) {
   const selected = useMemo(
-    () => measurements.filter((measurement) => inDateRange(measurement, range.start, range.end)),
+    () => measurements.filter((measurement) => inDateRange(measurement, range.start, range.end, range.startTime, range.endTime)),
     [measurements, range],
   );
   const summaries = useMemo(() => ({
@@ -185,7 +160,7 @@ function DiurnalTooltip({ active, payload }: { active?: boolean; payload?: Array
   if (!active || !payload?.length) return null;
   const point = payload[0].payload;
   return (
-    <div className="chart-tooltip">
+    <div className="diurnal-tooltip">
       <strong>{point.periodLabel} · {eyeLabel(point.eye)}</strong>
       <span>{diurnalBinLabel(point.bin)}</span>
       <span>Mean: {point.mean.toFixed(1)} mmHg</span>
@@ -202,17 +177,18 @@ export default function App() {
   const [rawCsv, setRawCsv] = useState("");
   const [error, setError] = useState("");
   const [visibleEyes, setVisibleEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
+  const [trendMode, setTrendMode] = useState<TrendMode>("adjusted");
+  const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [diurnalEye, setDiurnalEye] = useState<Eye>("OD");
   const [mode, setMode] = useState<ChartMode>(null);
   const [now, setNow] = useState(Date.now());
   const [ranges, setRanges] = useState<SavedRange[]>([]);
   const [events, setEvents] = useState<SavedEvent[]>([]);
-  const [draftRange, setDraftRange] = useState<DraftRange>({ label: "", start: "", end: "", openEnded: false });
+  const [draftRange, setDraftRange] = useState<DraftRange>(emptyDraftRange);
   const [draftEvent, setDraftEvent] = useState({ label: "", date: "", clock: "" });
   const [editingRangeId, setEditingRangeId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
-  const draftNameInput = useRef<HTMLInputElement>(null);
-  const chartDraftRange = useDeferredValue(draftRange);
+  const chartDraftRange = draftRange;
   const chartDraftEvent = useDeferredValue(draftEvent);
 
   const measurements = data?.measurements ?? [];
@@ -228,15 +204,17 @@ export default function App() {
     return Number.isFinite(minimum) ? [Math.floor(minimum - 2), Math.ceil(maximum + 2)] : [0, 1];
   }, [measurements]);
   const today = formatDateInput(now);
+  const currentTime = formatTimeInput(now);
   const diurnalSeries = useMemo(() => ranges.map((range, rangeIndex) => {
     const effectiveEnd = range.openEnded ? today : range.end;
+    const effectiveEndTime = range.openEnded ? currentTime : range.endTime;
     return {
       id: range.id,
       name: range.label,
       color: PERIOD_COLORS[rangeIndex % PERIOD_COLORS.length],
-      data: binDiurnalMeasurements(measurements, diurnalEye, range, effectiveEnd),
+      data: binDiurnalMeasurements(measurements, diurnalEye, range, effectiveEnd, effectiveEndTime),
     };
-  }), [diurnalEye, measurements, ranges, today]);
+  }), [currentTime, diurnalEye, measurements, ranges, today]);
   const diurnalPoints = useMemo(() => diurnalSeries.flatMap((series) => series.data), [diurnalSeries]);
 
   useEffect(() => {
@@ -255,7 +233,12 @@ export default function App() {
       setRawCsv(state.csvText);
       setFileName(state.fileName);
       setData(result);
-      setRanges(state.ranges);
+      setRanges(state.ranges.map((range) => ({
+        ...range,
+        startTime: typeof range.startTime === "string" ? range.startTime : "00:00",
+        end: range.openEnded ? "" : range.end,
+        endTime: range.openEnded ? "" : typeof range.endTime === "string" ? range.endTime : "23:59",
+      })));
       setEvents(state.events);
     } catch {
       setError("Saved browser data could not be restored.");
@@ -306,30 +289,33 @@ export default function App() {
   }
 
   function addRange() {
-    const effectiveEnd = draftRange.openEnded ? today : draftRange.end;
-    if (!draftRange.label.trim() || !draftRange.start || !effectiveEnd) return;
-    if (draftRange.start > effectiveEnd) {
-      setError("Range start must be on or before its end date.");
+    const orderedRange = normalizeRangeEdges(draftRange, now);
+    const effectiveEnd = orderedRange.openEnded ? today : orderedRange.end;
+    const effectiveEndTime = orderedRange.openEnded ? currentTime : orderedRange.endTime;
+    if (!orderedRange.label.trim() || !orderedRange.start || !effectiveEnd) return;
+    const startBoundary = dateTimeBoundary(orderedRange.start, orderedRange.startTime);
+    const endBoundary = dateTimeBoundary(effectiveEnd, effectiveEndTime, true);
+    if (startBoundary === null || endBoundary === null || startBoundary > endBoundary) {
+      setError("Range start must be before its end.");
       return;
     }
-    const saved = { ...draftRange, end: effectiveEnd, label: draftRange.label.trim() };
+    const saved = {
+      ...orderedRange,
+      end: orderedRange.openEnded ? "" : effectiveEnd,
+      endTime: orderedRange.openEnded ? "" : effectiveEndTime,
+      label: orderedRange.label.trim(),
+    };
     setRanges((current) => editingRangeId
       ? current.map((range) => range.id === editingRangeId ? { ...saved, id: range.id } : range)
       : [...current, { ...saved, id: crypto.randomUUID() }]);
     setEditingRangeId(null);
-    setDraftRange({ label: "", start: "", end: "", openEnded: false });
+    setDraftRange(emptyDraftRange());
     setMode(null);
     setError("");
   }
 
   function eventTimestamp(source = draftEvent): number | null {
-    const date = dateBoundary(source.date);
-    const clock = /^(\d{2}):(\d{2})$/.exec(source.clock);
-    if (date === null || !clock) return null;
-    const hour = Number(clock[1]);
-    const minute = Number(clock[2]);
-    if (hour > 23 || minute > 59) return null;
-    return date + hour * 3_600_000 + minute * 60_000;
+    return dateTimeBoundary(source.date, source.clock);
   }
 
   function addEvent() {
@@ -345,7 +331,7 @@ export default function App() {
 
   const cancelDraft = useCallback(() => {
     setMode(null);
-    setDraftRange({ label: "", start: "", end: "", openEnded: false });
+    setDraftRange(emptyDraftRange());
     setDraftEvent({ label: "", date: "", clock: "" });
     setEditingRangeId(null);
     setEditingEventId(null);
@@ -359,11 +345,10 @@ export default function App() {
   }
 
   const setDraftEventTime = useCallback((time: number) => {
-    const date = new Date(time);
     setDraftEvent((current) => ({
       ...current,
       date: formatDateInput(time),
-      clock: `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`,
+      clock: formatTimeInput(time),
     }));
   }, []);
 
@@ -377,7 +362,7 @@ export default function App() {
 
   const selectEvent = useCallback((time: number) => {
     setDraftEvent({ label: "", date: "", clock: "" });
-    setDraftRange({ label: "", start: "", end: "", openEnded: false });
+    setDraftRange(emptyDraftRange());
     setDraftEventTime(time);
     setMode("event");
     setEditingRangeId(null);
@@ -385,7 +370,7 @@ export default function App() {
   }, [setDraftEventTime]);
 
   const editRange = useCallback((range: SavedRange) => {
-    setDraftRange({ label: range.label, start: range.start, end: range.end, openEnded: range.openEnded });
+    setDraftRange({ label: range.label, start: range.start, startTime: range.startTime, end: range.end, endTime: range.endTime, openEnded: range.openEnded });
     setDraftEvent({ label: "", date: "", clock: "" });
     setEditingRangeId(range.id);
     setEditingEventId(null);
@@ -393,13 +378,12 @@ export default function App() {
   }, []);
 
   const editEvent = useCallback((event: SavedEvent) => {
-    const date = new Date(event.time);
     setDraftEvent({
       label: event.label,
       date: formatDateInput(event.time),
-      clock: `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`,
+      clock: formatTimeInput(event.time),
     });
-    setDraftRange({ label: "", start: "", end: "", openEnded: false });
+    setDraftRange(emptyDraftRange());
     setEditingEventId(event.id);
     setEditingRangeId(null);
     setMode("event");
@@ -408,13 +392,27 @@ export default function App() {
   const toggleEye = useCallback((eye: Eye) => {
     setVisibleEyes((current) => ({ ...current, [eye]: !current[eye] }));
   }, []);
+  const toggleTrendEye = useCallback((eye: Eye) => {
+    setVisibleTrendEyes((current) => ({ ...current, [eye]: !current[eye] }));
+  }, []);
+  const toggleTrendSettings = useCallback(() => {
+    setMode((current) => current === "trend" ? null : "trend");
+    setDraftRange(emptyDraftRange());
+    setDraftEvent({ label: "", date: "", clock: "" });
+    setEditingRangeId(null);
+    setEditingEventId(null);
+    setError("");
+  }, []);
+  const openSessionInfo = useCallback(() => {
+    setMode("sessions");
+    setDraftRange(emptyDraftRange());
+    setDraftEvent({ label: "", date: "", clock: "" });
+    setEditingRangeId(null);
+    setEditingEventId(null);
+    setError("");
+  }, []);
   const chartFullDomain = useMemo(() => [fullDomainStart, fullDomainEnd] as [number, number], [fullDomainEnd, fullDomainStart]);
   const chartYDomain = useMemo(() => [minimumIop, maximumIop] as [number, number], [maximumIop, minimumIop]);
-
-  useEffect(() => {
-    if (!mode) return;
-    draftNameInput.current?.focus();
-  }, [mode]);
 
   return (
     <main>
@@ -447,6 +445,10 @@ export default function App() {
             measurements={measurements}
             visibleEyes={visibleEyes}
             onToggleEye={toggleEye}
+            trendMode={trendMode}
+            visibleTrendEyes={visibleTrendEyes}
+            onOpenTrendSettings={toggleTrendSettings}
+            onOpenSessionInfo={openSessionInfo}
             ranges={ranges}
             events={events}
             mode={mode}
@@ -463,6 +465,7 @@ export default function App() {
             draftEventTime={eventTimestamp(chartDraftEvent)}
             onDraftEventTime={setDraftEventTime}
             today={today}
+            presentTime={now}
             fullDomain={chartFullDomain}
             yDomain={chartYDomain}
           />
@@ -471,7 +474,12 @@ export default function App() {
             <div className="panel controls-panel">
               <SectionHeading eyebrow="Periods" title="Comparison" />
               <div className="comparisons">
-                {ranges.map((range) => <SummaryCard key={range.id} title={range.label} range={{ start: range.start, end: range.openEnded ? today : range.end }} endLabel={range.openEnded ? "Present" : undefined} measurements={measurements} />)}
+                {ranges.map((range) => <SummaryCard key={range.id} title={range.label} range={{
+                  start: range.start,
+                  startTime: range.startTime,
+                  end: range.openEnded ? today : range.end,
+                  endTime: range.openEnded ? currentTime : range.endTime,
+                }} endLabel={range.openEnded ? "Present" : undefined} measurements={measurements} />)}
               </div>
             </div>
           </section>}
@@ -518,33 +526,21 @@ export default function App() {
           </section>}
           </div>
 
-          <aside className={`editor-drawer editor-drawer--${mode ?? "closed"}`} aria-hidden={!mode}>
-            <div className="editor-drawer__inner">
-              {mode && <>
-              <div className="editor-drawer__toolbar">
-                <span>{mode === "range" ? "Period" : "Event"}</span>
-                <div className="editor-drawer__actions">
-                  {(editingRangeId || editingEventId) && <button type="button" className="editor-drawer__delete" onClick={deleteDraft}>Delete</button>}
-                  <Button type="submit" form={`${mode}-editor-form`} variant="editorPrimary" className="draft-action">Save</Button>
-                  <button type="button" className="editor-drawer__close" aria-label="Close editor" onClick={cancelDraft}>
-                    <svg viewBox="0 -960 960 960" aria-hidden="true"><path d="M480-424 284-228q-11 11-28 11t-28-11q-11-11-11-28t11-28l196-196-196-196q-11-11-11-28t11-28q11-11 28-11t28 11l196 196 196-196q11-11 28-11t28 11q11 11 11 28t-11 28L536-480l196 196q11 11 11 28t-11 28q-11 11-28 11t-28-11L480-424Z" /></svg>
-                  </button>
-                </div>
-              </div>
-              </>}
-              {mode === "range" && <form id="range-editor-form" className="editor-form" autoComplete="off" onSubmit={(event) => { event.preventDefault(); addRange(); }}>
-                <section className="editor-fields" aria-label="Period fields">
-                  <EditorInput label="Label" fieldName="period-label" inputRef={draftNameInput} value={draftRange.label} onChange={(label) => setDraftRange((value) => ({ ...value, label }))} />
-                </section>
-              </form>}
-              {mode === "event" && <form id="event-editor-form" className="editor-form" autoComplete="off" onSubmit={(event) => { event.preventDefault(); addEvent(); }}>
-                <section className="editor-fields" aria-label="Event fields">
-                  <EditorInput label="Label" fieldName="event-label" inputRef={draftNameInput} value={draftEvent.label} onChange={(label) => setDraftEvent((value) => ({ ...value, label }))} />
-                  <EditorInput label="Time" fieldName="event-time" inputMode="numeric" placeholder="HH:MM" maxLength={5} value={draftEvent.clock} onChange={(clock) => setDraftEvent((value) => ({ ...value, clock: clock.replace(/[^\d:]/g, "") }))} />
-                </section>
-              </form>}
-            </div>
-          </aside>
+          <ChartEditor
+            mode={mode}
+            draftRangeLabel={draftRange.label}
+            draftEventLabel={draftEvent.label}
+            isEditing={Boolean(editingRangeId || editingEventId)}
+            trendMode={trendMode}
+            visibleTrendEyes={visibleTrendEyes}
+            onSaveRange={addRange}
+            onSaveEvent={addEvent}
+            onDelete={deleteDraft}
+            onCancel={cancelDraft}
+            onToggleTrendEye={toggleTrendEye}
+            onTrendModeChange={setTrendMode}
+            onOpenSessionInfo={openSessionInfo}
+          />
           </div>
         </>
       )}

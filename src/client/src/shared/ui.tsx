@@ -48,17 +48,24 @@ export const DateInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLIn
   return <input ref={ref} className={`ui-date-input ${className}`.trim()} type="date" {...props} />;
 });
 
-export function ChartToggle({ label, colorClass, checked, onChange }: {
+export function Toggle({ label, checked, disabled = false, className = "", onChange }: {
   label: string;
-  colorClass: string;
   checked: boolean;
-  onChange: () => void;
+  disabled?: boolean;
+  className?: string;
+  onChange?: () => void;
 }) {
   return (
-    <label className="ui-chart-toggle">
-      <input type="checkbox" checked={checked} onChange={onChange} />
-      <span className={`dot ${colorClass}`} aria-hidden="true" />
-      <span>{label}</span>
-    </label>
+    <button
+      className={`ui-toggle ${className}`.trim()}
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onChange}
+    >
+      <span className="publication-switch-track" aria-hidden="true"><span /></span>
+    </button>
   );
 }
