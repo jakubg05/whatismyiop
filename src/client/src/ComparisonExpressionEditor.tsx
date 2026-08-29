@@ -270,7 +270,7 @@ export function ComparisonExpressionEditor({
           ...historyKeymap,
         ]),
         autocompletion({ override: [source], activateOnTyping: true, icons: false, maxRenderedOptions: 10, interactionDelay: 0 }),
-        placeholder("Add a comparison segment…"),
+        placeholder("Start with period:, range:, before:, or after:"),
         syntax,
         exactInput,
         canonicalTransactions,
