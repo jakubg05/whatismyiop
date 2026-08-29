@@ -21,6 +21,7 @@ import {
   YAxis,
 } from "recharts";
 import { dateTimeBoundary, formatDateInput, formatTimeInput, type Eye, type Measurement, type SessionAggregation } from "../analysis";
+import { periodPalette as rangePalette } from "../periodPalette";
 import { clipDomain, daylightBackground, intersectDomains, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
 import { moveRangeEdge, rangeTimeDomain, type EditableRange } from "./range";
@@ -50,20 +51,7 @@ type AnnotationDrag = { start: number; startX: number; moved: boolean };
 type RangeEdge = "start" | "end";
 type HandleDrag = { kind: RangeEdge | "event"; time: number };
 
-const RANGE_PALETTE = [
-  { stroke: "#5f7f9d", fill: "#a9c2d6" },
-  { stroke: "#9a7632", fill: "#e5c982" },
-  { stroke: "#66856f", fill: "#b8d0bd" },
-  { stroke: "#7d6b9b", fill: "#c9bddd" },
-  { stroke: "#9a6674", fill: "#ddb8c1" },
-  { stroke: "#4f8585", fill: "#a9cecc" },
-] as const;
-
 const EVENT_COLORS = ["#8f6aa8", "#b56f8a", "#b47b5c", "#5d9290", "#7384b5", "#8b9253"] as const;
-
-function rangePalette(index: number) {
-  return RANGE_PALETTE[index % RANGE_PALETTE.length];
-}
 
 function eventColor(index: number) {
   return EVENT_COLORS[index % EVENT_COLORS.length];
