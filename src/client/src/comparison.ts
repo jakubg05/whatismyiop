@@ -291,7 +291,7 @@ export function parseComparisonExpression(text: string, catalog: ComparisonCatal
   const suffixFrom = inactiveFrom ?? text.length;
   let canonicalText = canonicalPrefix;
   if (inactiveFrom !== null) {
-    const separator = expected === "direction" || expected === "and" ? " " : "";
+    const separator = expected === "direction" || expected === "and" || expected === "maximum" ? " " : "";
     canonicalText += separator + text.slice(suffixFrom).replace(/[\r\n]+/g, " ");
   }
   return { text, segments, tokens, expected, inactiveFrom, canonicalPrefix, canonicalText: canonicalText.trim(), maximumReached };
@@ -366,6 +366,7 @@ export function resolveComparisonSegments(
   catalog: ComparisonCatalog,
   domainStart: number,
   domainEnd: number,
+  presentTime = domainEnd,
 ): ComparisonSegment[] {
   return definitions.flatMap((definition, index) => {
     let start: number | null = null;
@@ -374,7 +375,7 @@ export function resolveComparisonSegments(
       const period = catalog.periods.find((item) => item.id === definition.periodId);
       if (!period) return [];
       start = dateTimeBoundary(period.start, period.startTime);
-      end = period.openEnded ? domainEnd : dateTimeBoundary(period.end, period.endTime, true);
+      end = period.openEnded ? presentTime : dateTimeBoundary(period.end, period.endTime, true);
     } else if (definition.targetType === "event") {
       const event = catalog.events.find((item) => item.id === definition.targetId);
       if (!event) return [];

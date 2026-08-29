@@ -68,6 +68,9 @@ type Props = {
   onOpenSessionInfo: () => void;
   ranges: ChartRange[];
   events: ChartEvent[];
+  comparisonRanges: ChartRange[];
+  comparisonMode: boolean;
+  onComparisonBlocked: () => void;
   mode: ChartMode;
   onSelectRange: (range: Omit<DraftRange, "label">) => void;
   onSelectEvent: (time: number) => void;
@@ -119,6 +122,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   onOpenSessionInfo,
   ranges,
   events,
+  comparisonRanges,
+  comparisonMode,
+  onComparisonBlocked,
   mode,
   onSelectRange,
   onSelectEvent,
@@ -165,6 +171,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [showEvents, setShowEvents] = useState(true);
   const [periodHandleEdges, setPeriodHandleEdges] = useState<readonly [RangeEdge, RangeEdge]>(["start", "end"]);
   const annotationEditorOpen = mode === "range" || mode === "event";
+  const displayRanges = comparisonMode ? comparisonRanges : ranges;
+  const displayEvents = comparisonMode ? [] : events;
   const [domainStart, domainEnd] = domain;
   const [fullDomainStart, fullDomainEnd] = fullDomain;
   const pressureDomain = useMemo(() => {
@@ -221,7 +229,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }, [showEvents, showPeriods]);
 
   const handlePlotHoverTimeChange = useCallback((time: number | null) => {
-    const nextIds = time === null || !showPeriods || focusedAnnotation !== null || annotationEditorOpen
+    const nextIds = time === null || comparisonMode || !showPeriods || focusedAnnotation !== null || annotationEditorOpen
       ? []
       : ranges.flatMap((range) => {
         const start = dateTimeBoundary(range.start, range.startTime);
@@ -232,7 +240,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       current.length === nextIds.length && current.every((id, index) => id === nextIds[index])
         ? current
         : nextIds);
-  }, [annotationEditorOpen, focusedAnnotation, presentTime, ranges, showPeriods]);
+  }, [annotationEditorOpen, comparisonMode, focusedAnnotation, presentTime, ranges, showPeriods]);
 
   const hoverFocus = !annotationEditorOpen && focusedAnnotation === null ? hoveredAnnotation : null;
   const hoveredRange = hoverFocus?.startsWith("range:")
@@ -341,6 +349,11 @@ export const MeasurementsChart = memo(function MeasurementsChart({
 
   function startAnnotation(time: number, clientX: number) {
     if (mode) return;
+    if (comparisonMode) {
+      onComparisonBlocked();
+      dragRef.current = null;
+      return;
+    }
     dragRef.current = { start: time, startX: clientX, moved: false };
     if (dragPreview.current) dragPreview.current.style.display = "none";
   }
@@ -358,6 +371,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   function finishAnnotation(end: number, _ratio: number, clientX: number) {
+    if (comparisonMode) return;
     const drag = dragRef.current;
     if (!drag) return;
     const moved = drag.moved || Math.abs(clientX - drag.startX) >= 4;
@@ -472,9 +486,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     : null;
   const annotationLabels = useMemo(() => {
     const labels: AnnotationLabel[] = [];
-    for (const [index, range] of ranges.entries()) {
-      const editing = focusedAnnotation === `range:${range.id}`;
-      if (!showPeriods && !editing) continue;
+    for (const [index, range] of displayRanges.entries()) {
+      const editing = !comparisonMode && focusedAnnotation === `range:${range.id}`;
+      if (!comparisonMode && !showPeriods && !editing) continue;
       const liveDomain = editing
         ? draggedRangeFocus ?? rangeTimeDomain(draftRange, presentTime)
         : rangeTimeDomain(range, presentTime);
@@ -483,7 +497,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       if (start !== null && end !== null && start <= domainEnd && end >= domainStart) {
         labels.push({
           id: range.id,
-          focusId: `range:${range.id}`,
+          focusId: comparisonMode ? undefined : `range:${range.id}`,
           kind: "range",
           text: editing ? draftRangeLabel : range.label,
           time: Math.max(start, domainStart),
@@ -492,16 +506,16 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         });
       }
     }
-    for (const [index, event] of events.entries()) {
+    for (const [index, event] of displayEvents.entries()) {
       if (!showEvents && focusedAnnotation !== `event:${event.id}`) continue;
       if (event.time >= domainStart && event.time <= domainEnd) {
         labels.push({ id: event.id, focusId: `event:${event.id}`, kind: "event", text: focusedAnnotation === `event:${event.id}` ? draftEventLabel : event.label, time: event.time, color: eventColor(index) });
       }
     }
-    if (mode === "range" && visibleDraftRange) {
+    if (!comparisonMode && mode === "range" && visibleDraftRange) {
       labels.push({ id: "draft-range", kind: "range", text: draftRangeLabel.trim() || "Period", time: visibleDraftRange[0], endTime: visibleDraftRange[1], color: rangePalette(ranges.length).stroke, draft: true });
     }
-    if (mode === "event" && draftEventTime !== null && draftEventTime >= domainStart && draftEventTime <= domainEnd) {
+    if (!comparisonMode && mode === "event" && draftEventTime !== null && draftEventTime >= domainStart && draftEventTime <= domainEnd) {
       labels.push({ id: "draft-event", kind: "event", text: draftEventLabel.trim() || "Event", time: draftEventTime, color: eventColor(events.length), draft: true });
     }
 
@@ -523,7 +537,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         laneEnds[lane] = left + width;
         return { ...label, left, width, lane, fullWidth };
       });
-  }, [chartWidth, domainEnd, domainStart, draftEventLabel, draftEventTime, draftRange, draftRangeLabel, draggedRangeFocus, events, focusedAnnotation, mode, presentTime, ranges, showEvents, showPeriods, visibleDraftRange]);
+  }, [chartWidth, comparisonMode, displayEvents, displayRanges, domainEnd, domainStart, draftEventLabel, draftEventTime, draftRange, draftRangeLabel, draggedRangeFocus, events.length, focusedAnnotation, mode, presentTime, ranges.length, showEvents, showPeriods, visibleDraftRange]);
   const annotationLaneCount = Math.max(1, ...annotationLabels.map((label) => label.lane + 1));
 
   useLayoutEffect(() => {
@@ -537,12 +551,12 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     if (panelTop === undefined || labelsTop === undefined) return;
     onAnnotationTopOffsetChange(Math.max(0, Math.round(panelTop - labelsTop)));
   }, [annotationLabels.length, annotationLaneCount, chartWidth, onAnnotationTopOffsetChange]);
-  const visibleRanges = focusedAnnotation?.startsWith("event:")
+  const visibleRanges = comparisonMode ? comparisonRanges : focusedAnnotation?.startsWith("event:")
     ? []
     : focusedAnnotation?.startsWith("range:")
       ? ranges.filter((range) => focusedAnnotation === `range:${range.id}`)
       : showPeriods ? ranges : [];
-  const visibleEvents = focusedAnnotation?.startsWith("range:")
+  const visibleEvents = comparisonMode ? [] : focusedAnnotation?.startsWith("range:")
     ? []
     : focusedAnnotation?.startsWith("event:")
       ? events.filter((event) => focusedAnnotation === `event:${event.id}`)
@@ -717,7 +731,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             <XAxis type="number" dataKey="time" domain={domain} allowDataOverflow tickFormatter={formatChartTime} tick={{ fill: "var(--muted)", fontSize: 12 }} minTickGap={48} />
             <YAxis width={52} type="number" dataKey="iop" domain={pressureDomain} ticks={pressureTicks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
             {visibleRanges.map((range) => {
-              const index = ranges.indexOf(range);
+              const index = displayRanges.indexOf(range);
               const visible = visibleRangeDomain(range);
               if (!visible) return null;
               const color = rangePalette(index);
@@ -729,13 +743,13 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                 <ReferenceLine x={visible[1]} stroke={color.stroke} strokeWidth={2} strokeDasharray={editing ? "4 3" : undefined} strokeOpacity={muted ? 0.14 : 0.55} />
               </Fragment>;
             })}
-            {focusedAnnotation === null && visibleDraftRange && (
+            {!comparisonMode && focusedAnnotation === null && visibleDraftRange && (
               <ReferenceArea x1={visibleDraftRange[0]} x2={visibleDraftRange[1]} fill={rangePalette(ranges.length).fill} fillOpacity={0.2} stroke="none" />
             )}
             {visibleEvents.map((event) => (
-              <ReferenceLine key={event.id} x={event.time} stroke={eventColor(events.indexOf(event))} strokeWidth={2} strokeOpacity={annotationIsMuted(`event:${event.id}`) ? 0.2 : 1} />
+              <ReferenceLine key={event.id} x={event.time} stroke={eventColor(displayEvents.indexOf(event))} strokeWidth={2} strokeOpacity={annotationIsMuted(`event:${event.id}`) ? 0.2 : 1} />
             ))}
-            {focusedAnnotation === null && mode === "event" && draftEventTime !== null && (
+            {!comparisonMode && focusedAnnotation === null && mode === "event" && draftEventTime !== null && (
               <ReferenceLine x={draftEventTime} stroke={eventColor(events.length)} strokeWidth={2} strokeDasharray="4 3" />
             )}
           </ScatterChart>
@@ -870,8 +884,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
         </button>
         <div className="annotation-toggles" role="group" aria-label="Annotation visibility">
-          <ChartToggle label="Periods" checked={showPeriods} onChange={() => setShowPeriods((current) => !current)} />
-          <ChartToggle label="Events" checked={showEvents} onChange={() => setShowEvents((current) => !current)} />
+          <ChartToggle label="Periods" checked={showPeriods} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowPeriods((current) => !current)} />
+          <ChartToggle label="Events" checked={showEvents} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowEvents((current) => !current)} />
         </div>
         <div className="eye-toggles">
           {(["OD", "OS"] as Eye[]).map((eye) => (

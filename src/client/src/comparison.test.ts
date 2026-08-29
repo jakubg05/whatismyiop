@@ -42,6 +42,7 @@ describe("comparison expression grammar", () => {
     expect(parsed.segments).toHaveLength(6);
     expect(parsed.maximumReached).toBe(true);
     expect(expression.slice(parsed.inactiveFrom ?? expression.length)).toBe("AND period:Baseline");
+    expect(canonicalizeComparisonExpression(expression, catalog)).toBe(expression);
   });
 
   it("uses the longest valid prefix and recovers the suffix after repair", () => {
@@ -131,6 +132,12 @@ describe("comparison segment boundaries", () => {
 
   it("copies direct-period boundaries without mutating the period", () => {
     expect(segment("period:Baseline")).toMatchObject({ start: "2026-05-01", startTime: "08:30", end: "2026-05-10", endTime: "17:00", label: "period:Baseline" });
+  });
+
+  it("uses the current time for a direct open-ended period without changing the measurement domain", () => {
+    const present = Date.UTC(2026, 6, 1, 12, 34);
+    const definition = parseComparisonExpression("period:Current", catalog).segments;
+    expect(resolveComparisonSegments(definition, catalog, start, end, present)[0]).toMatchObject({ end: "2026-07-01", endTime: "12:34" });
   });
 });
 

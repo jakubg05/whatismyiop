@@ -84,15 +84,19 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
   );
 });
 
-export function ChartToggle({ label, colorClass, checked, onChange }: {
+export function ChartToggle({ label, colorClass, checked, ariaDisabled = false, onChange }: {
   label: string;
   colorClass?: string;
   checked: boolean;
+  ariaDisabled?: boolean;
   onChange: () => void;
 }) {
   return (
-    <label className="ui-chart-toggle">
-      <input type="checkbox" checked={checked} onChange={onChange} />
+    <label className={`ui-chart-toggle${ariaDisabled ? " ui-chart-toggle--disabled" : ""}`}>
+      <input type="checkbox" checked={checked} aria-disabled={ariaDisabled} onChange={(event) => {
+        if (ariaDisabled) event.preventDefault();
+        onChange();
+      }} />
       {colorClass && <span className={`dot ${colorClass}`} aria-hidden="true" />}
       <span>{label}</span>
     </label>

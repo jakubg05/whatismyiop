@@ -1,4 +1,5 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
+import { ComparisonExpressionProvider } from "../ComparisonExpressionState";
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -6,8 +7,10 @@ export const Route = createRootRoute({
 
 function RootLayout() {
   return (
-    <div className="app-layout">
-      <Outlet />
-    </div>
+    <ComparisonExpressionProvider>
+      <div className="app-layout">
+        <Outlet />
+      </div>
+    </ComparisonExpressionProvider>
   );
 }

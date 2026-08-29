@@ -19,40 +19,27 @@ import {
   type Eye,
   type ParseResult,
 } from "./analysis";
-import { ComparisonManager } from "./ComparisonManager";
-import { binDiurnalSessions, eventRelativePeriod, fullRelativePeriod, rangeRelativePeriod, type ComparisonDirection, type DiurnalPoint } from "./comparison";
+import { ComparisonExpressionEditor } from "./ComparisonExpressionEditor";
+import { useComparisonExpression } from "./ComparisonExpressionState";
+import {
+  binDiurnalSessions,
+  comparisonLabelError,
+  parseComparisonExpression,
+  resolveComparisonSegments,
+  type ComparisonCatalog,
+  type DiurnalPoint,
+} from "./comparison";
 import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartMode, type DraftRange, type TrendMode } from "./main-chart";
-import { PERIOD_PALETTE, periodPalette } from "./periodPalette";
+import { periodPalette } from "./periodPalette";
 import { TopNavigation } from "./TopNavigation";
 import { Button, SegmentedControl } from "./shared";
 
-type SavedRange = DraftRange & {
-  id: string;
-  sourceEventId?: string;
-  relativeDirection?: ComparisonDirection;
-  relativeDays?: number;
-};
+type SavedRange = DraftRange & { id: string };
 
 type SavedEvent = {
   id: string;
   label: string;
   time: number;
-};
-
-type ComparisonSelection =
-  | { kind: "range"; id: string }
-  | { kind: "derived"; id: string; targetKind: "event" | "range"; targetId: string; direction: ComparisonDirection; days: number | null };
-
-type ComparisonManagerSelection =
-  | { kind: "period"; id: string; period: SavedRange }
-  | { kind: "derived"; id: string; target: { kind: "event"; event: SavedEvent } | { kind: "period"; period: SavedRange }; direction: ComparisonDirection; days: number | null };
-
-type LegacyDerivedComparison = {
-  kind?: "derived";
-  id: string;
-  sourceEventId: string;
-  direction: ComparisonDirection;
-  days: number;
 };
 
 type PersistedState = {
@@ -61,9 +48,6 @@ type PersistedState = {
   csvText: string;
   ranges: SavedRange[];
   events: SavedEvent[];
-  comparisonRangeIds?: string[];
-  comparisonDerived?: LegacyDerivedComparison[];
-  comparisons?: Array<ComparisonSelection | LegacyDerivedComparison>;
 };
 
 const STORAGE_KEY = "icare-analytics:v1";
@@ -107,6 +91,7 @@ function DiurnalTooltip({ active, payload }: { active?: boolean; payload?: Array
 
 export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
+  const { expression, setExpression, clearExpression } = useComparisonExpression();
   const [data, setData] = useState<ParseResult | null>(null);
   const [fileName, setFileName] = useState("");
   const [rawCsv, setRawCsv] = useState("");
@@ -119,8 +104,8 @@ export default function App() {
   const [mode, setMode] = useState<ChartMode>(null);
   const [now, setNow] = useState(() => wallClockTimestamp());
   const [ranges, setRanges] = useState<SavedRange[]>([]);
-  const [comparisons, setComparisons] = useState<ComparisonSelection[]>([]);
   const [events, setEvents] = useState<SavedEvent[]>([]);
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
   const [draftRange, setDraftRange] = useState<DraftRange>(emptyDraftRange);
   const [draftEvent, setDraftEvent] = useState({ label: "", date: "", clock: "" });
   const [editingRangeId, setEditingRangeId] = useState<string | null>(null);
@@ -143,39 +128,13 @@ export default function App() {
   }, [measurements]);
   const today = formatDateInput(now);
   const currentTime = formatTimeInput(now);
-  const comparisonRanges = useMemo(() => comparisons.flatMap((comparison) => {
-    if (comparison.kind === "range") {
-      const range = ranges.find((item) => item.id === comparison.id);
-      return range ? [range] : [];
-    }
-    if (comparison.targetKind === "event") {
-      const event = events.find((item) => item.id === comparison.targetId);
-      if (!event) return [];
-      const relative = comparison.days === null
-        ? fullRelativePeriod(event, comparison.direction, fullDomainStart, fullDomainEnd)
-        : eventRelativePeriod(event, comparison.direction, comparison.days);
-      return [{ ...relative, id: comparison.id }];
-    }
-    const target = ranges.find((item) => item.id === comparison.targetId);
-    if (!target) return [];
-    const effectiveTarget = target.openEnded ? { ...target, end: today, endTime: currentTime } : target;
-    let relative;
-    if (comparison.days === null) {
-      const boundary = comparison.direction === "before"
-        ? dateTimeBoundary(effectiveTarget.start, effectiveTarget.startTime)
-        : dateTimeBoundary(effectiveTarget.end, effectiveTarget.endTime, true);
-      if (boundary === null) return [];
-      relative = fullRelativePeriod(
-        { label: effectiveTarget.label, time: comparison.direction === "after" ? boundary + 1 : boundary },
-        comparison.direction,
-        fullDomainStart,
-        fullDomainEnd,
-      );
-    } else {
-      relative = rangeRelativePeriod(effectiveTarget, comparison.direction, comparison.days);
-    }
-    return relative ? [{ ...relative, id: comparison.id }] : [];
-  }), [comparisons, currentTime, events, fullDomainEnd, fullDomainStart, ranges, today]);
+  const comparisonCatalog = useMemo<ComparisonCatalog>(() => ({ periods: ranges, events }), [events, ranges]);
+  const comparisonExpression = useMemo(() => parseComparisonExpression(expression, comparisonCatalog), [comparisonCatalog, expression]);
+  const comparisonRanges = useMemo(
+    () => resolveComparisonSegments(comparisonExpression.segments, comparisonCatalog, fullDomainStart, fullDomainEnd, now),
+    [comparisonCatalog, comparisonExpression.segments, fullDomainEnd, fullDomainStart, now],
+  );
+  const comparisonMode = comparisonExpression.segments.length > 0;
   const diurnalSeries = useMemo(() => comparisonRanges.map((range) => {
     const effectiveEnd = range.openEnded ? today : range.end;
     const effectiveEndTime = range.openEnded ? currentTime : range.endTime;
@@ -195,6 +154,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!comparisonMode || (mode !== "range" && mode !== "event")) return;
+    setMode(null);
+    setEditingRangeId(null);
+    setEditingEventId(null);
+    setDraftRange(emptyDraftRange());
+    setDraftEvent({ label: "", date: "", clock: "" });
+  }, [comparisonMode, mode]);
+
+  useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
     if (!saved) return;
     try {
@@ -205,100 +173,19 @@ export default function App() {
       setRawCsv(state.csvText);
       setFileName(state.fileName);
       setData(result);
-      const restoredEvents = state.events.filter((event, index, all) => event
+      setEvents(state.events.filter((event, index, all) => event
         && typeof event.id === "string"
         && typeof event.label === "string"
         && event.label.trim().length > 0
         && typeof event.time === "number"
         && Number.isFinite(event.time)
-        && all.findIndex((candidate) => candidate?.id === event.id) === index);
-      const normalizedRanges = state.ranges.map((range) => ({
+        && all.findIndex((candidate) => candidate?.id === event.id) === index));
+      setRanges(state.ranges.map((range) => ({
         ...range,
         startTime: typeof range.startTime === "string" ? range.startTime : "00:00",
         end: range.openEnded ? "" : range.end,
         endTime: range.openEnded ? "" : typeof range.endTime === "string" ? range.endTime : "23:59",
-      }));
-      const legacyDefinition = (range: SavedRange): Extract<ComparisonSelection, { kind: "derived" }> | null => {
-        if (range.sourceEventId
-          && (range.relativeDirection === "before" || range.relativeDirection === "after")
-          && typeof range.relativeDays === "number"
-          && Number.isFinite(range.relativeDays)) {
-          const sourceEvent = restoredEvents.find((event) => event.id === range.sourceEventId);
-          if (sourceEvent) return { kind: "derived", id: range.id, targetKind: "event", targetId: sourceEvent.id, direction: range.relativeDirection, days: range.relativeDays };
-        }
-        const label = /^(\d+)d (before|after) (.+)$/i.exec(range.label);
-        if (!label) return null;
-        const days = Number(label[1]);
-        const direction = label[2].toLowerCase() as ComparisonDirection;
-        const event = restoredEvents.find((candidate) => candidate.label.toLowerCase() === label[3].toLowerCase());
-        if (!event) return null;
-        const expected = eventRelativePeriod(event, direction, days);
-        return expected.label.toLowerCase() === range.label.toLowerCase()
-          && expected.start === range.start
-          && expected.startTime === range.startTime
-          && expected.end === range.end
-          && expected.endTime === range.endTime
-          ? { kind: "derived", id: range.id, targetKind: "event", targetId: event.id, direction, days }
-          : null;
-      };
-      const legacyDefinitions = new Map(normalizedRanges.flatMap((range) => {
-        const definition = legacyDefinition(range);
-        return definition ? [[range.id, definition] as const] : [];
-      }));
-      const savedRanges = normalizedRanges.filter((range) => !legacyDefinitions.has(range.id));
-      const savedRangeIds = new Set(savedRanges.map((range) => range.id));
-      const eventIds = new Set(restoredEvents.map((event) => event.id));
-      const legacySelectedIds = Array.isArray(state.comparisonRangeIds)
-        ? state.comparisonRangeIds
-        : normalizedRanges.map((range) => range.id);
-      const legacySelections = legacySelectedIds.flatMap<ComparisonSelection>((id) => {
-        if (typeof id !== "string") return [];
-        const derived = legacyDefinitions.get(id);
-        if (derived) return [derived];
-        return savedRangeIds.has(id) ? [{ kind: "range" as const, id }] : [];
-      });
-      if (Array.isArray(state.comparisonDerived)) {
-        legacySelections.push(...state.comparisonDerived.map((comparison) => ({
-          kind: "derived" as const,
-          id: comparison.id,
-          targetKind: "event" as const,
-          targetId: comparison.sourceEventId,
-          direction: comparison.direction,
-          days: comparison.days,
-        })));
-      }
-      const sourceSelections = Array.isArray(state.comparisons) ? state.comparisons : legacySelections;
-      const restoredSelections: ComparisonSelection[] = [];
-      const seenIds = new Set<string>();
-      const seenDefinitions = new Set<string>();
-      for (const comparison of sourceSelections) {
-        if (!comparison || typeof comparison.id !== "string" || seenIds.has(comparison.id)) continue;
-        if (comparison.kind === "range") {
-          if (!savedRangeIds.has(comparison.id)) continue;
-          restoredSelections.push({ kind: "range", id: comparison.id });
-          seenIds.add(comparison.id);
-        } else if (comparison.kind === "derived"
-          && (comparison.direction === "before" || comparison.direction === "after")
-          && (comparison.days === null || Number.isFinite(comparison.days))) {
-          const targetKind = "targetKind" in comparison ? comparison.targetKind : "event";
-          const targetId = "targetId" in comparison ? comparison.targetId : comparison.sourceEventId;
-          const targetRange = targetKind === "range" ? savedRanges.find((range) => range.id === targetId) : undefined;
-          if ((targetKind !== "event" && targetKind !== "range")
-            || typeof targetId !== "string"
-            || (targetKind === "event" ? !eventIds.has(targetId) : !targetRange)
-            || (targetKind === "range" && comparison.direction === "after" && targetRange?.openEnded)) continue;
-          const days = comparison.days === null ? null : Math.min(3650, Math.max(1, Math.round(comparison.days)));
-          const definition = `${targetKind}:${targetId}:${comparison.direction}:${days}`;
-          if (seenDefinitions.has(definition)) continue;
-          restoredSelections.push({ kind: "derived", id: comparison.id, targetKind, targetId, direction: comparison.direction, days });
-          seenIds.add(comparison.id);
-          seenDefinitions.add(definition);
-        }
-        if (restoredSelections.length >= PERIOD_PALETTE.length) break;
-      }
-      setRanges(savedRanges);
-      setEvents(restoredEvents);
-      setComparisons(restoredSelections);
+      })));
     } catch {
       setError("Saved browser data could not be restored.");
     }
@@ -306,13 +193,13 @@ export default function App() {
 
   useEffect(() => {
     if (!rawCsv || !data) return;
-    const state: PersistedState = { version: 1, fileName, csvText: rawCsv, ranges, events, comparisons };
+    const state: PersistedState = { version: 1, fileName, csvText: rawCsv, ranges, events };
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
       setError("The browser could not save this data locally.");
     }
-  }, [comparisons, data, events, fileName, ranges, rawCsv]);
+  }, [data, events, fileName, ranges, rawCsv]);
 
   async function loadFile(file: File) {
     setError("");
@@ -324,8 +211,8 @@ export default function App() {
       setData(result);
       setFileName(file.name);
       setRanges([]);
-      setComparisons([]);
       setEvents([]);
+      clearExpression();
       setEditingRangeId(null);
       setEditingEventId(null);
       setMode(null);
@@ -341,8 +228,8 @@ export default function App() {
     setData(null);
     setFileName("");
     setRanges([]);
-    setComparisons([]);
     setEvents([]);
+    clearExpression();
     setEditingRangeId(null);
     setEditingEventId(null);
     setMode(null);
@@ -360,24 +247,23 @@ export default function App() {
       setError("Range start must be before its end.");
       return;
     }
+    const label = orderedRange.label.trim();
+    const labelError = comparisonLabelError(label, "period", comparisonCatalog, editingRangeId ?? undefined);
+    if (labelError) {
+      setError(labelError);
+      return;
+    }
     const saved = {
       ...orderedRange,
       end: orderedRange.openEnded ? "" : effectiveEnd,
       endTime: orderedRange.openEnded ? "" : effectiveEndTime,
-      label: orderedRange.label.trim(),
+      label,
     };
     if (editingRangeId) {
       setRanges((current) => current.map((range) => range.id === editingRangeId ? { ...saved, id: range.id } : range));
-      if (saved.openEnded) {
-        setComparisons((current) => current.filter((comparison) => comparison.kind !== "derived"
-          || comparison.targetKind !== "range"
-          || comparison.targetId !== editingRangeId
-          || comparison.direction !== "after"));
-      }
     } else {
       const id = crypto.randomUUID();
       setRanges((current) => [...current, { ...saved, id }]);
-      setComparisons((current) => current.length < PERIOD_PALETTE.length ? [...current, { kind: "range", id }] : current);
     }
     setEditingRangeId(null);
     setDraftRange(emptyDraftRange());
@@ -393,6 +279,11 @@ export default function App() {
     const time = eventTimestamp();
     if (!draftEvent.label.trim() || time === null) return;
     const label = draftEvent.label.trim();
+    const labelError = comparisonLabelError(label, "event", comparisonCatalog, editingEventId ?? undefined);
+    if (labelError) {
+      setError(labelError);
+      return;
+    }
     if (editingEventId) {
       const nextEvent = { id: editingEventId, label, time };
       setEvents((current) => current.map((event) => event.id === editingEventId ? nextEvent : event));
@@ -416,47 +307,11 @@ export default function App() {
   function deleteDraft() {
     if (editingRangeId) {
       setRanges((current) => current.filter((range) => range.id !== editingRangeId));
-      setComparisons((current) => current.filter((comparison) => comparison.id !== editingRangeId
-        && (comparison.kind !== "derived" || comparison.targetKind !== "range" || comparison.targetId !== editingRangeId)));
     }
     if (editingEventId) {
       setEvents((current) => current.filter((event) => event.id !== editingEventId));
-      setComparisons((current) => current.filter((comparison) => comparison.kind !== "derived" || comparison.targetKind !== "event" || comparison.targetId !== editingEventId));
     }
     cancelDraft();
-  }
-
-  function activateComparisonRange(id: string) {
-    setComparisons((current) => current.some((comparison) => comparison.kind === "range" && comparison.id === id) || current.length >= PERIOD_PALETTE.length
-      ? current
-      : [...current, { kind: "range", id }]);
-  }
-
-  function createRelativeComparison(target: { kind: "event"; event: SavedEvent } | { kind: "period"; period: SavedRange }, direction: ComparisonDirection, days: number | null, replacement?: { id: string; index: number }) {
-    const safeDays = days === null ? null : Math.min(3650, Math.max(1, Math.round(days)));
-    const id = replacement?.id ?? crypto.randomUUID();
-    const targetKind = target.kind === "event" ? "event" : "range";
-    const targetId = target.kind === "event" ? target.event.id : target.period.id;
-    setComparisons((current) => {
-      const existingIndex = replacement ? current.findIndex((comparison) => comparison.id === replacement.id) : -1;
-      const isReplacing = existingIndex >= 0;
-      const targetExists = targetKind === "event"
-        ? events.some((item) => item.id === targetId)
-        : ranges.some((item) => item.id === targetId && (direction === "before" || !item.openEnded));
-      const duplicatesExisting = current.some((comparison) => comparison.kind === "derived"
-          && comparison.id !== replacement?.id
-          && comparison.targetKind === targetKind
-          && comparison.targetId === targetId
-          && comparison.direction === direction
-          && comparison.days === safeDays);
-      if (!targetExists || (!isReplacing && current.length >= PERIOD_PALETTE.length)) return current;
-      if (duplicatesExisting) return isReplacing ? current.filter((comparison) => comparison.id !== replacement?.id) : current;
-      const next = [...current];
-      if (isReplacing) next.splice(existingIndex, 1);
-      const insertionIndex = isReplacing ? existingIndex : Math.min(replacement?.index ?? next.length, next.length);
-      next.splice(insertionIndex, 0, { kind: "derived", id, targetKind, targetId, direction, days: safeDays });
-      return next;
-    });
   }
 
   const setDraftEventTime = useCallback((time: number) => {
@@ -528,18 +383,11 @@ export default function App() {
   }, []);
   const chartFullDomain = useMemo(() => [fullDomainStart, fullDomainEnd] as [number, number], [fullDomainEnd, fullDomainStart]);
   const chartYDomain = useMemo(() => [minimumIop, maximumIop] as [number, number], [maximumIop, minimumIop]);
-  const comparisonManagerSelections = useMemo(() => comparisons.flatMap<ComparisonManagerSelection>((comparison) => {
-    if (comparison.kind === "range") {
-      const period = ranges.find((item) => item.id === comparison.id);
-      return period ? [{ kind: "period", id: comparison.id, period }] : [];
-    }
-    if (comparison.targetKind === "event") {
-      const event = events.find((item) => item.id === comparison.targetId);
-      return event ? [{ kind: "derived", id: comparison.id, direction: comparison.direction, days: comparison.days, target: { kind: "event", event } }] : [];
-    }
-    const period = ranges.find((item) => item.id === comparison.targetId);
-    return period ? [{ kind: "derived", id: comparison.id, direction: comparison.direction, days: comparison.days, target: { kind: "period", period } }] : [];
-  }), [comparisons, events, ranges]);
+  const showComparisonBlockedToast = useCallback(() => {
+    const id = crypto.randomUUID();
+    setToasts((current) => [...current, { id, message: "Clear the search expressions before creating or editing periods and events." }]);
+    window.setTimeout(() => setToasts((current) => current.filter((toast) => toast.id !== id)), 5_000);
+  }, []);
 
   return (
     <main>
@@ -551,6 +399,12 @@ export default function App() {
       }} />
 
       {error && <div className="error-banner">{error}</div>}
+      <div className="toast-stack" aria-live="polite" aria-label="Notifications">
+        {toasts.map((toast) => <div key={toast.id} className="warning-toast" role="status">
+          <span>{toast.message}</span>
+          <button type="button" aria-label="Dismiss notification" onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}>×</button>
+        </div>)}
+      </div>
 
       {!data ? (
         <section className="empty-state" onClick={() => fileInput.current?.click()}>
@@ -568,15 +422,7 @@ export default function App() {
             onChooseFile={() => fileInput.current?.click()}
           />
 
-          <ComparisonManager
-            periods={ranges}
-            events={events}
-            selections={comparisonManagerSelections}
-            colors={PERIOD_PALETTE.map((color) => color.stroke)}
-            onSelectPeriod={activateComparisonRange}
-            onRemoveSelection={(id) => setComparisons((current) => current.filter((comparison) => comparison.id !== id))}
-            onCreateRelativeComparison={createRelativeComparison}
-          />
+          <ComparisonExpressionEditor catalog={comparisonCatalog} value={expression} onChange={setExpression} />
 
           <MeasurementsChart
             measurements={measurements}
@@ -588,6 +434,9 @@ export default function App() {
             onOpenSessionInfo={openSessionInfo}
             ranges={ranges}
             events={events}
+            comparisonRanges={comparisonRanges}
+            comparisonMode={comparisonMode}
+            onComparisonBlocked={showComparisonBlockedToast}
             mode={mode}
             onSelectRange={selectRange}
             onSelectEvent={selectEvent}
@@ -635,8 +484,8 @@ export default function App() {
                   ))}
                 </ScatterChart>
               </ResponsiveContainer> : <div className="diurnal-chart__empty">
-                <span>{comparisonRanges.length ? `No ${diurnalEye === "OD" ? "right" : "left"}-eye readings in the selected periods` : "Add a period to view its daily pattern"}</span>
-                <small>{comparisonRanges.length ? "Choose another eye or add a period containing measurements." : "Use the comparison search to select a saved period or a window around an annotation or period boundary."}</small>
+                <span>{comparisonMode ? "No readings" : "Add a comparison segment to view its daily pattern"}</span>
+                <small>{comparisonMode ? `No ${diurnalEye === "OD" ? "right" : "left"}-eye sessions fall inside the active comparison segments.` : "Use the comparison expression to select a saved period or a window around an annotation or period boundary."}</small>
               </div>}
               </div>
               <footer className="diurnal-controls">
