@@ -49,7 +49,7 @@
 /* CodeMirror owns editing; this block only gives its one line a stable box. */
 .comparison-expression__editor {
   min-width: 0;
-  height: 100%;
+  height: var(--comparison-line-height);
   overflow: hidden;
 }
 
@@ -70,31 +70,22 @@
   outline: 0;
 }
 
-.comparison-expression__editor .cm-scroller {
-  align-items: center !important;
-  scrollbar-width: none;
-}
+.comparison-expression__editor .cm-scroller { scrollbar-width: none; }
 
 .comparison-expression__editor .cm-scroller::-webkit-scrollbar {
   display: none;
 }
 
 .comparison-expression__editor .cm-content {
-  min-height: var(--comparison-line-height);
+  min-height: 100%;
   padding: 0;
   caret-color: var(--ink);
 }
 
-.comparison-expression__editor .cm-line,
-.comparison-expression__editor .cm-placeholder {
+.comparison-expression__editor .cm-line {
   min-height: var(--comparison-line-height);
   padding: 0;
   line-height: var(--comparison-line-height);
-}
-
-.comparison-expression__editor .cm-placeholder {
-  color: #b4bcc2;
-  font-style: normal;
 }
 
 .comparison-expression__keyword {

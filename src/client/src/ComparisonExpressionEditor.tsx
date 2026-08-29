@@ -12,7 +12,7 @@ import {
 } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { EditorSelection, EditorState, StateEffect, Transaction } from "@codemirror/state";
-import { Decoration, EditorView, ViewPlugin, keymap, placeholder, type DecorationSet, type ViewUpdate } from "@codemirror/view";
+import { Decoration, EditorView, ViewPlugin, keymap, type DecorationSet, type ViewUpdate } from "@codemirror/view";
 import {
   canonicalizeComparisonExpression,
   comparisonCompletionContext,
@@ -270,7 +270,6 @@ export function ComparisonExpressionEditor({
           ...historyKeymap,
         ]),
         autocompletion({ override: [source], activateOnTyping: true, icons: false, maxRenderedOptions: 10, interactionDelay: 0 }),
-        placeholder("Start with period:, range:, before:, or after:"),
         syntax,
         exactInput,
         canonicalTransactions,
