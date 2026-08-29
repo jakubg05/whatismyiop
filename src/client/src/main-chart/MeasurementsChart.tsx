@@ -860,7 +860,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           />
           <button className="measurement-view-control__raw" type="button" aria-pressed={measurementView === "raw"} onClick={() => setMeasurementView("raw")}>Raw</button>
         </div>
-        <button className="chart-settings-trigger" type="button" aria-pressed={mode === "trend"} onClick={onOpenTrendSettings}>Trend</button>
+        <button className="chart-settings-trigger" type="button" aria-pressed={mode === "trend"} onClick={onOpenTrendSettings}>
+          <span>Trend</span>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+        </button>
         <div className="annotation-toggles" role="group" aria-label="Annotation visibility">
           <ChartToggle label="Periods" checked={showPeriods} onChange={() => setShowPeriods((current) => !current)} />
           <ChartToggle label="Events" checked={showEvents} onChange={() => setShowEvents((current) => !current)} />
