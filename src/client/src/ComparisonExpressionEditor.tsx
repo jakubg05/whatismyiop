@@ -280,7 +280,7 @@ export function ComparisonExpressionEditor({
           ".cm-content": { whiteSpace: "pre", minWidth: "max-content" },
         }),
         EditorView.domEventHandlers({
-          focus: (event, view) => {
+          focus: (_event, view) => {
             setFocused(true);
             updateExplanation(view);
             window.setTimeout(() => startCompletion(view), 0);
@@ -329,6 +329,7 @@ export function ComparisonExpressionEditor({
       <div className="comparison-expression">
         <svg className="comparison-expression__search-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></svg>
         <div ref={host} className="comparison-expression__editor" />
+        {!expanded && <span className="comparison-expression__placeholder" aria-hidden="true">Compare segments</span>}
         {value && <button
           className="comparison-expression__clear"
           type="button"
@@ -338,8 +339,8 @@ export function ComparisonExpressionEditor({
             const view = viewRef.current;
             if (!view) return;
             view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "" }, selection: { anchor: 0 }, annotations: Transaction.userEvent.of("delete") });
-            view.focus();
-            startCompletion(view);
+            closeCompletion(view);
+            view.contentDOM.blur();
           }}
         >×</button>}
       </div>

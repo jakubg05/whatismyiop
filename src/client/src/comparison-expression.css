@@ -21,8 +21,10 @@
 
 .comparison-expression {
   height: var(--comparison-field-height);
-  padding-inline: var(--s2);
+  padding-inline: var(--s3);
   border: 1px solid var(--line-strong);
+  outline: 1px solid transparent;
+  outline-offset: 0;
   border-radius: .5rem;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -31,23 +33,33 @@
   overflow: hidden;
   background: var(--surface);
   color: var(--ink);
+  transition:
+    border-color var(--fast) var(--ease),
+    outline-color var(--fast) var(--ease);
+}
+
+.comparison-expression:hover {
+  border-color: #b8bec6;
 }
 
 .comparison-expression:focus-within {
-  border-color: var(--line-strong);
+  border-color: #3478c4;
+  outline-color: #3478c4;
 }
 
 .comparison-expression__search-icon {
   width: 1rem;
   height: 1rem;
   fill: none;
-  stroke: #4f5b63;
+  stroke: var(--muted);
   stroke-linecap: round;
   stroke-width: 1.5;
 }
 
 /* CodeMirror owns editing; this block only gives its one line a stable box. */
 .comparison-expression__editor {
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
   height: var(--comparison-line-height);
   overflow: hidden;
@@ -56,8 +68,9 @@
 .comparison-expression__editor .cm-editor,
 .comparison-expression__editor .cm-scroller {
   height: 100%;
-  font-family: inherit;
-  font-size: .75rem;
+  font-family: var(--font);
+  font-size: .875rem;
+  font-weight: 400;
   line-height: var(--comparison-line-height);
 }
 
@@ -88,6 +101,19 @@
   line-height: var(--comparison-line-height);
 }
 
+.comparison-expression__placeholder {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--subtle);
+  font: 400 .875rem/var(--comparison-line-height) var(--font);
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .comparison-expression__keyword {
   color: var(--ink);
   font-weight: 400;
@@ -111,16 +137,23 @@
   display: grid;
   place-items: center;
   background: transparent;
-  color: #647078;
+  color: var(--ink);
   font: inherit;
   font-size: 1rem;
   line-height: 1;
+  opacity: .45;
+  transition: opacity var(--fast) var(--ease);
 }
 
 .comparison-expression__clear:hover,
 .comparison-expression__clear:focus-visible {
-  background: #eef1f2;
-  color: var(--ink);
+  outline: 0;
+  background: transparent;
+  opacity: .72;
+}
+
+.comparison-expression__clear:active {
+  opacity: 1;
 }
 
 .comparison-expression__editor .cm-tooltip-autocomplete,
