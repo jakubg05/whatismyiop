@@ -1,3 +1,30 @@
+.app-layout { min-height: 100vh; }
+.welcome-page { --welcome-hero-height: clamp(25rem, 46svh, 31rem); min-height: 100svh; background: var(--surface); }
+.welcome-hero { min-height: var(--welcome-hero-height); display: grid; background: var(--surface); }
+.welcome-card { width: min(64rem, calc(100% - clamp(3rem, 10vw, 10rem))); margin-inline: auto; padding-block: clamp(2rem, 4vw, 3rem); align-self: center; display: grid; justify-items: center; gap: var(--s5); text-align: center; }
+.welcome-card > img { width: 2.5rem; height: 2.5rem; object-fit: contain; }
+.welcome-card h1 { max-width: 21ch; margin: var(--s2) auto var(--s3); font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.75rem, 5vw, 4.5rem); font-weight: 400; letter-spacing: -.045em; line-height: .98; text-wrap: balance; }
+.welcome-eyebrow { color: var(--muted); font: var(--small); letter-spacing: .01em; }
+.welcome-copy { max-width: 38rem; margin-inline: auto; color: #56616f; font-size: clamp(.9375rem, 1.5vw, 1.0625rem); line-height: 1.55; text-wrap: balance; }
+.welcome-action { min-height: 2.75rem; padding: 0 1.125rem; border-radius: 999px; display: inline-flex; align-items: center; background: var(--ink); color: var(--surface); font: var(--small); font-weight: 600; text-decoration: none; box-shadow: 0 .375rem 1rem rgb(24 29 36 / 16%); }
+.welcome-action:hover, .welcome-action:focus-visible { opacity: .84; }
+.product-preview { position: relative; isolation: isolate; min-height: calc(100svh - var(--welcome-hero-height)); padding: clamp(1.5rem, 3vw, 2.5rem) var(--gutter); display: grid; align-content: center; justify-items: center; gap: var(--s5); }
+.product-preview::before { content: ""; position: absolute; z-index: -1; inset: 0 0 auto; height: min(30rem, calc(100svh - var(--welcome-hero-height))); background: url("/f18e3bc8-50d6-4fc0-9412-2b9f893dc3bc.png") center / cover no-repeat; }
+.product-preview__heading { display: grid; justify-items: center; gap: var(--s2); text-align: center; }
+.product-preview__heading h2 { font-size: clamp(1.5rem, 2.5vw, 2.25rem); font-weight: 500; letter-spacing: -.04em; line-height: 1.05; }
+.product-video-placeholder { width: min(42rem, 72vw); aspect-ratio: 16 / 9; border: 1px solid rgb(32 33 36 / 14%); border-radius: clamp(.75rem, 1.5vw, 1.25rem); display: grid; place-content: center; justify-items: center; gap: var(--s3); overflow: hidden; background: rgb(250 250 249 / 92%); color: #56616f; box-shadow: 0 1.5rem 4rem rgb(29 38 48 / 22%); backdrop-filter: blur(.75rem); font: var(--small); }
+.product-video-placeholder__play { width: 3.5rem; height: 3.5rem; border-radius: 50%; display: grid; place-items: center; background: rgb(255 255 255 / 82%); box-shadow: 0 .5rem 1.5rem rgb(29 38 48 / 14%); }
+.product-video-placeholder__play svg { width: 1.5rem; height: 1.5rem; fill: var(--ink); }
+
+@media (max-width: 40rem) {
+  .welcome-page { --welcome-hero-height: 32rem; }
+  .welcome-card { width: min(100% - 2rem, 40rem); }
+  .welcome-card h1 { font-size: clamp(2.5rem, 13vw, 3.75rem); }
+  .product-preview { min-height: auto; padding: 3rem 1rem; }
+  .product-preview::before { height: 24rem; }
+  .product-video-placeholder { width: 100%; }
+}
+
 .analysis-main { min-width: 0; padding: 0 var(--gutter) 3rem; transition: margin-inline-end var(--medium) var(--ease); }
 .analysis-shell--editor-open .analysis-main { margin-inline-end: var(--editor-width); }
 .app-topbar { min-height: 3.5rem; margin-inline: calc(var(--gutter) * -1); padding-inline: var(--gutter); display: grid; grid-template-columns: minmax(2rem, 1fr) auto minmax(0, 1fr); align-items: center; gap: var(--s4); background: var(--surface); }
