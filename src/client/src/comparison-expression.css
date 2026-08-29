@@ -1,0 +1,203 @@
+.comparison-composer {
+  --comparison-field-height: 2.5rem;
+  --comparison-line-height: 1.25rem;
+  --comparison-menu-gap: .375rem;
+
+  position: relative;
+  z-index: 20;
+  width: 100%;
+  max-width: 38rem;
+  min-width: 0;
+  margin:
+    calc((var(--s5) + var(--s4) + var(--chart-leading-space) - var(--chart-annotation-offset, 0px)) / 2)
+    auto
+    calc((var(--s5) + var(--s4) + var(--chart-leading-space) + var(--chart-annotation-offset, 0px)) / 2);
+  transition: max-width var(--medium) var(--ease);
+}
+
+.comparison-composer--open {
+  max-width: 92rem;
+}
+
+.comparison-expression {
+  height: var(--comparison-field-height);
+  padding-inline: var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: .5rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.comparison-expression:focus-within {
+  border-color: var(--line-strong);
+}
+
+.comparison-expression__search-icon {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: #4f5b63;
+  stroke-linecap: round;
+  stroke-width: 1.5;
+}
+
+/* CodeMirror owns editing; this block only gives its one line a stable box. */
+.comparison-expression__editor {
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.comparison-expression__editor .cm-editor,
+.comparison-expression__editor .cm-scroller {
+  height: 100%;
+  font-family: inherit;
+  font-size: .75rem;
+  line-height: var(--comparison-line-height);
+}
+
+.comparison-expression__editor .cm-editor {
+  background: transparent;
+  color: var(--ink);
+}
+
+.comparison-expression__editor .cm-editor.cm-focused {
+  outline: 0;
+}
+
+.comparison-expression__editor .cm-scroller {
+  align-items: center !important;
+  scrollbar-width: none;
+}
+
+.comparison-expression__editor .cm-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.comparison-expression__editor .cm-content {
+  min-height: var(--comparison-line-height);
+  padding: 0;
+  caret-color: var(--ink);
+}
+
+.comparison-expression__editor .cm-line,
+.comparison-expression__editor .cm-placeholder {
+  min-height: var(--comparison-line-height);
+  padding: 0;
+  line-height: var(--comparison-line-height);
+}
+
+.comparison-expression__editor .cm-placeholder {
+  color: #b4bcc2;
+  font-style: normal;
+}
+
+.comparison-expression__keyword {
+  color: var(--ink);
+  font-weight: 400;
+}
+
+.comparison-expression__value {
+  color: #286a9b;
+}
+
+.comparison-expression__and {
+  color: #72469b;
+  font-weight: 400;
+}
+
+.comparison-expression__clear {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: #647078;
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.comparison-expression__clear:hover,
+.comparison-expression__clear:focus-visible {
+  background: #eef1f2;
+  color: var(--ink);
+}
+
+.comparison-expression__editor .cm-tooltip-autocomplete,
+.comparison-expression__explanation {
+  width: min(26rem, calc(100vw - 2 * var(--gutter)));
+  max-height: 20rem;
+  padding: var(--s1);
+  border: 1px solid var(--line-strong);
+  border-radius: .625rem;
+  overflow-y: auto;
+  background: var(--surface);
+  box-shadow: 0 .75rem 2rem rgb(0 0 0 / 16%);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: .75rem;
+}
+
+/* CodeMirror anchors menus to the line; convert that to the field edge. */
+.comparison-expression__editor .cm-tooltip-autocomplete {
+  transform: translateY(calc(
+    (var(--comparison-field-height) - var(--comparison-line-height)) / 2
+    + var(--comparison-menu-gap)
+  ));
+}
+
+.comparison-expression__editor .cm-tooltip-autocomplete > ul {
+  max-height: 19.5rem;
+  font-family: inherit;
+}
+
+.comparison-expression__editor .cm-tooltip-autocomplete > ul > li {
+  min-height: 2.5rem;
+  padding: var(--s2) .625rem;
+  border-radius: .375rem;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.comparison-expression__editor .cm-tooltip-autocomplete > ul > li[aria-selected="true"] {
+  background: #e8eef2;
+  color: var(--ink);
+}
+
+.comparison-expression__editor .cm-completionLabel {
+  font-weight: 500;
+}
+
+.comparison-expression__editor .cm-completionDetail {
+  margin-left: auto;
+  color: var(--muted);
+  font-style: normal;
+}
+
+.comparison-expression__explanation {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + var(--comparison-menu-gap));
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  box-shadow: none;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .comparison-composer {
+    transition: none;
+  }
+}
