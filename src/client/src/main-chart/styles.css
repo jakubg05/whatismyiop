@@ -1,5 +1,5 @@
 :root { --chart-height: 28rem; }
-.chart-panel { max-width: 92rem; margin: max(3rem, calc((100dvh - 3.5rem - var(--chart-height)) / 2)) auto 0; padding: 0; }
+.chart-panel { max-width: 92rem; margin: 0 auto; padding: 0; }
 .chart-toolbar { min-width: 0; min-height: var(--control-sm); margin-top: var(--s2); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); }
 .chart-filters { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .ui-chart-select { position: relative; min-width: 0; min-height: var(--control-sm); border: 1px solid var(--line); border-radius: var(--radius); display: inline-flex; background: var(--canvas); }

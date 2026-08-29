@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   CartesianGrid,
   ErrorBar,
@@ -115,6 +115,7 @@ export default function App() {
   const [trendMode, setTrendMode] = useState<TrendMode>("adjusted");
   const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [diurnalEye, setDiurnalEye] = useState<Eye>("OD");
+  const [chartAnnotationOffset, setChartAnnotationOffset] = useState(0);
   const [mode, setMode] = useState<ChartMode>(null);
   const [now, setNow] = useState(() => wallClockTimestamp());
   const [ranges, setRanges] = useState<SavedRange[]>([]);
@@ -559,7 +560,7 @@ export default function App() {
       ) : (
         <>
           <div className={`analysis-shell ${mode ? "analysis-shell--editor-open" : ""}`}>
-          <div className="analysis-main">
+          <div className="analysis-main" style={{ "--chart-annotation-offset": `${chartAnnotationOffset}px` } as CSSProperties}>
           <TopNavigation
             fileName={fileName}
             measurementCount={measurements.length}
@@ -604,6 +605,7 @@ export default function App() {
             presentTime={now}
             fullDomain={chartFullDomain}
             yDomain={chartYDomain}
+            onAnnotationTopOffsetChange={setChartAnnotationOffset}
           />
 
           <section className="comparison-workspace">

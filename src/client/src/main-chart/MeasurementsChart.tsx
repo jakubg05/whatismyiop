@@ -3,6 +3,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -84,6 +85,7 @@ type Props = {
   presentTime: number;
   fullDomain: TimeDomain;
   yDomain: TimeDomain;
+  onAnnotationTopOffsetChange?: (offset: number) => void;
 };
 
 function eyeLabel(eye: Eye): string {
@@ -134,8 +136,11 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   presentTime,
   fullDomain,
   yDomain,
+  onAnnotationTopOffsetChange,
 }: Props) {
+  const chartPanel = useRef<HTMLElement>(null);
   const chart = useRef<HTMLDivElement>(null);
+  const annotationLabelsContainer = useRef<HTMLDivElement>(null);
   const focusedRangeLabel = useRef<HTMLDivElement>(null);
   const plotOverlayRef = useRef<HTMLDivElement>(null);
   const dragPreview = useRef<HTMLDivElement>(null);
@@ -520,6 +525,18 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       });
   }, [chartWidth, domainEnd, domainStart, draftEventLabel, draftEventTime, draftRange, draftRangeLabel, draggedRangeFocus, events, focusedAnnotation, mode, presentTime, ranges, showEvents, showPeriods, visibleDraftRange]);
   const annotationLaneCount = Math.max(1, ...annotationLabels.map((label) => label.lane + 1));
+
+  useLayoutEffect(() => {
+    if (!onAnnotationTopOffsetChange) return;
+    if (annotationLabels.length === 0) {
+      onAnnotationTopOffsetChange(0);
+      return;
+    }
+    const panelTop = chartPanel.current?.getBoundingClientRect().top;
+    const labelsTop = annotationLabelsContainer.current?.getBoundingClientRect().top;
+    if (panelTop === undefined || labelsTop === undefined) return;
+    onAnnotationTopOffsetChange(Math.max(0, Math.round(panelTop - labelsTop)));
+  }, [annotationLabels.length, annotationLaneCount, chartWidth, onAnnotationTopOffsetChange]);
   const visibleRanges = focusedAnnotation?.startsWith("event:")
     ? []
     : focusedAnnotation?.startsWith("range:")
@@ -625,9 +642,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   return (
-    <section className="panel chart-panel">
+    <section ref={chartPanel} className="panel chart-panel">
       <div ref={chart} className="chart-wrap" style={{ marginTop: `${annotationLaneCount * 22}px` }}>
-        <div className="chart-annotation-labels" style={{ height: `${annotationLaneCount * 22}px` }}>
+        <div ref={annotationLabelsContainer} className="chart-annotation-labels" style={{ height: `${annotationLaneCount * 22}px` }}>
           {annotationLabels.map((label) => (
             <div
               key={label.id}
