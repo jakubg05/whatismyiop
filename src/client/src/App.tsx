@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   CartesianGrid,
@@ -32,6 +33,7 @@ import {
 } from "./comparison";
 import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartAnnotationPreview, type ChartMode, type DraftRange, type TrendMode } from "./main-chart";
 import { periodPalette } from "./periodPalette";
+import { SiteFooter } from "./SiteFooter";
 import { TopNavigation } from "./TopNavigation";
 import { Button, SegmentedControl } from "./shared";
 
@@ -51,7 +53,7 @@ type PersistedState = {
   events: SavedEvent[];
 };
 
-const STORAGE_KEY = "icare-analytics:v1";
+const STORAGE_KEY = "whatismyiop:v1";
 
 function emptyDraftRange(): DraftRange {
   return { label: "", start: "", startTime: "00:00", end: "", endTime: "23:59", openEnded: false };
@@ -490,7 +492,7 @@ export default function App() {
             </svg>
             <div className="import-dropzone__copy">
               <h1>Drop your measurements.csv here</h1>
-              <p>Explore your IOP readings, trends, and comparisons. Your file stays in this browser and is never uploaded.</p>
+              <p>Explore your IOP readings, trends, and comparisons. The app processes your file locally and does not send its contents to us.</p>
             </div>
             <Button variant="primary" onClick={(event) => {
               event.stopPropagation();
@@ -508,13 +510,16 @@ export default function App() {
                 href="https://github.com/jakubg05/whatismyiop"
                 target="_blank"
                 rel="noreferrer"
-                aria-label="Open source on GitHub"
+                aria-label="View source on GitHub"
                 onClick={(event) => event.stopPropagation()}
               >
                 <svg className="import-dropzone__github" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75a9.5 9.5 0 0 0-3 18.51c.48.09.65-.2.65-.46v-1.67c-2.67.58-3.23-1.13-3.23-1.13-.44-1.1-1.07-1.4-1.07-1.4-.87-.6.07-.58.07-.58.96.07 1.47.99 1.47.99.86 1.47 2.25 1.05 2.8.8.09-.62.34-1.05.61-1.29-2.13-.24-4.37-1.07-4.37-4.7 0-1.04.37-1.89.99-2.55-.1-.24-.43-1.21.09-2.52 0 0 .8-.26 2.61.97A9.1 9.1 0 0 1 12 7.42a9 9 0 0 1 2.38.32c1.81-1.23 2.61-.97 2.61-.97.52 1.31.19 2.28.09 2.52.62.66.99 1.51.99 2.55 0 3.64-2.24 4.45-4.38 4.69.35.3.65.88.65 1.77v2.5c0 .26.18.56.66.46A9.5 9.5 0 0 0 12 2.75Z" /></svg>
-                <span>Open source</span>
+                <span>Source on GitHub</span>
               </a>
             </div>
+            <p className="import-dropzone__notice">
+              Your file is saved in this browser until you clear it. This tool does not diagnose conditions or recommend treatment. <Link to="/policy" onClick={(event) => event.stopPropagation()}>Privacy</Link> · <Link to="/disclaimer" onClick={(event) => event.stopPropagation()}>Medical disclaimer</Link>
+            </p>
           </section>}
 
           {data && <div className="comparison-overlay">
@@ -609,46 +614,13 @@ export default function App() {
             </section>
           </section>
 
-          <footer className="site-footer">
-            <div className="site-footer__inner">
-              <section className="site-footer__about">
-                <div className="site-footer__brand">
-                  <img src="/whatismyiop_mark_black.svg" alt="" />
-                  <strong>WhatIsMyIOP.com</strong>
-                </div>
-                <p>Explore home IOP measurements, trends, and comparisons without sending your health data to a server.</p>
-                <a className="site-footer__github" href="https://github.com/jakubg05/whatismyiop" target="_blank" rel="noreferrer">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75a9.5 9.5 0 0 0-3 18.51c.48.09.65-.2.65-.46v-1.67c-2.67.58-3.23-1.13-3.23-1.13-.44-1.1-1.07-1.4-1.07-1.4-.87-.6.07-.58.07-.58.96.07 1.47.99 1.47.99.86 1.47 2.25 1.05 2.8.8.09-.62.34-1.05.61-1.29-2.13-.24-4.37-1.07-4.37-4.7 0-1.04.37-1.89.99-2.55-.1-.24-.43-1.21.09-2.52 0 0 .8-.26 2.61.97A9.1 9.1 0 0 1 12 7.42a9 9 0 0 1 2.38.32c1.81-1.23 2.61-.97 2.61-.97.52 1.31.19 2.28.09 2.52.62.66.99 1.51.99 2.55 0 3.64-2.24 4.45-4.38 4.69.35.3.65.88.65 1.77v2.5c0 .26.18.56.66.46A9.5 9.5 0 0 0 12 2.75Z" /></svg>
-                  <span>Open source on GitHub</span>
-                </a>
-              </section>
-
-              <section className="site-footer__privacy">
-                <h2>Private by design</h2>
-                <p>Your CSV is processed and stored only in this browser. No account, upload, or tracking profile is required.</p>
-              </section>
-
-              {data && <section className="site-footer__data">
-                <h2>Your local data</h2>
-                <div className="site-footer__file">
-                  <strong>{fileName}</strong>
-                  <span>{measurements.length.toLocaleString()} records stored locally</span>
-                </div>
-                <div className="site-footer__actions">
-                  <Button variant="secondary" onClick={() => fileInput.current?.click()}>Choose another CSV</Button>
-                  <Button variant="quiet" className="clear-button" onClick={clearStoredData}>Clear data</Button>
-                </div>
-              </section>}
-
-              <div className="site-footer__bottom">
-                <span>Free</span>
-                <span aria-hidden="true">·</span>
-                <span>Processed locally</span>
-                <span aria-hidden="true">·</span>
-                <span>Open source</span>
-              </div>
-            </div>
-          </footer>
+          <SiteFooter
+            variant="full"
+            fileName={fileName}
+            measurementCount={measurements.length}
+            onChooseFile={() => fileInput.current?.click()}
+            onClearData={clearStoredData}
+          />
           </div>
 
           <ChartEditor

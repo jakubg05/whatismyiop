@@ -9,6 +9,7 @@ export function TopNavigation({ fileName, measurementCount, hasData }: TopNaviga
     <header className="app-topbar">
       <div className="app-brand">
         <img src="/whatismyiop_mark_black.svg" alt="" />
+        <strong>WhatIsMyIop.com</strong>
       </div>
       <div className="nav-data" aria-label={hasData ? `${fileName}, ${measurementCount.toLocaleString()} records stored locally` : "No records loaded"}>
         <strong>{hasData ? fileName : "No file selected"}</strong>
