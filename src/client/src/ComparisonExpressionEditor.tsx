@@ -192,6 +192,12 @@ function acceptFirstCompletion(view: EditorView): boolean {
   return acceptCompletion(view);
 }
 
+function startCompletionWhenFocused(view: EditorView): void {
+  window.setTimeout(() => {
+    if (view.hasFocus) startCompletion(view);
+  }, 0);
+}
+
 export function ComparisonExpressionEditor({
   catalog,
   value,
@@ -276,7 +282,7 @@ export function ComparisonExpressionEditor({
         annotations: [Transaction.userEvent.of("input.complete"), pickedCompletion.of(completion)],
         scrollIntoView: true,
       });
-      window.setTimeout(() => startCompletion(view), 0);
+      startCompletionWhenFocused(view);
     };
 
     const source = (context: CompletionContext): CompletionResult | null => {
@@ -353,7 +359,7 @@ export function ComparisonExpressionEditor({
           annotations: Transaction.userEvent.of("input.complete"),
           scrollIntoView: true,
         });
-        window.setTimeout(() => startCompletion(view), 0);
+        startCompletionWhenFocused(view);
         return true;
       }
       if (previous && (previous.role === "duration" || previous.role === "and") && !/\s/.test(text[from] ?? "")) {
@@ -363,7 +369,7 @@ export function ComparisonExpressionEditor({
           annotations: Transaction.userEvent.of("input.complete"),
           scrollIntoView: true,
         });
-        window.setTimeout(() => startCompletion(view), 0);
+        startCompletionWhenFocused(view);
         return true;
       }
       return false;
@@ -427,7 +433,7 @@ export function ComparisonExpressionEditor({
           focus: (_event, view) => {
             setFocused(true);
             updateExplanation(view);
-            window.setTimeout(() => startCompletion(view), 0);
+            startCompletionWhenFocused(view);
             return false;
           },
           blur: (_event, view) => {
@@ -446,12 +452,21 @@ export function ComparisonExpressionEditor({
           if (update.docChanged || completionStatus(update.state) !== "active") updatePreview(null);
           if (update.docChanged || update.geometryChanged) updateEditorWidth(update.view);
           if (update.docChanged || update.selectionSet || update.focusChanged) updateExplanation(update.view);
-          if (update.selectionSet && update.view.hasFocus) window.setTimeout(() => startCompletion(update.view), 0);
+          if (update.selectionSet && update.view.hasFocus) startCompletionWhenFocused(update.view);
         }),
       ],
     });
     const view = new EditorView({ state, parent: host.current });
     viewRef.current = view;
+    const handleDocumentPointerDown = (event: PointerEvent) => {
+      const root = composer.current;
+      if (!root || root.contains(event.target as Node)) return;
+      updatePreview(null);
+      closeCompletion(view);
+      view.contentDOM.blur();
+      setFocused(false);
+      setExplanation((current) => ({ ...current, visible: false }));
+    };
     const handlePointerOver = (event: PointerEvent) => updatePreview(comparisonPreviewFromTarget(event.target));
     const handlePointerOut = (event: PointerEvent) => {
       const from = comparisonPreviewFromTarget(event.target);
@@ -459,6 +474,7 @@ export function ComparisonExpressionEditor({
       if (from?.kind === to?.kind && from?.label === to?.label) return;
       updatePreview(to);
     };
+    document.addEventListener("pointerdown", handleDocumentPointerDown);
     view.dom.addEventListener("pointerover", handlePointerOver);
     view.dom.addEventListener("pointerout", handlePointerOut);
     updateExplanation(view);
@@ -468,6 +484,7 @@ export function ComparisonExpressionEditor({
     return () => {
       window.cancelAnimationFrame(widthFrame);
       resizeObserver.disconnect();
+      document.removeEventListener("pointerdown", handleDocumentPointerDown);
       view.dom.removeEventListener("pointerover", handlePointerOver);
       view.dom.removeEventListener("pointerout", handlePointerOut);
       updatePreview(null);
@@ -498,13 +515,15 @@ export function ComparisonExpressionEditor({
           className="comparison-expression__clear"
           type="button"
           aria-label="Clear comparison expressions"
-          onMouseDown={(event) => event.preventDefault()}
           onClick={() => {
             const view = viewRef.current;
             if (!view) return;
-            view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "" }, selection: { anchor: 0 }, annotations: Transaction.userEvent.of("delete") });
             closeCompletion(view);
             view.contentDOM.blur();
+            setFocused(false);
+            setExplanation((current) => ({ ...current, visible: false }));
+            view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "" }, selection: { anchor: 0 }, annotations: Transaction.userEvent.of("delete") });
+            closeCompletion(view);
           }}
         >×</button>}
       </div>
