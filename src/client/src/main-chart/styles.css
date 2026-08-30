@@ -1,5 +1,5 @@
 :root { --chart-height: 28rem; }
-.chart-panel { max-width: 92rem; margin: max(3rem, calc((100dvh - 3.5rem - var(--chart-height)) / 2)) auto 0; padding: 0; }
+.chart-panel { max-width: 92rem; margin: 0 auto; padding: 0; }
 .chart-toolbar { min-width: 0; min-height: var(--control-sm); margin-top: var(--s2); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); }
 .chart-filters { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .ui-chart-select { position: relative; min-width: 0; min-height: var(--control-sm); border: 1px solid var(--line); border-radius: var(--radius); display: inline-flex; background: var(--canvas); }
@@ -7,17 +7,18 @@
 .ui-chart-select__label { color: var(--subtle); font-size: .6875rem; font-weight: 400; line-height: 1; text-align: left; }
 .ui-chart-select__value { min-width: 0; display: flex; align-items: center; gap: .1875rem; color: inherit; font-size: .75rem; font-weight: 500; line-height: 1; text-align: left; } .ui-chart-select__value > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ui-chart-select__value svg { flex: 0 0 auto; width: .625rem; height: .625rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; transition: transform var(--fast) var(--ease); } .ui-chart-select__trigger[aria-expanded="true"] .ui-chart-select__value svg { transform: rotate(180deg); }
-.ui-chart-select__menu { position: absolute; z-index: 30; top: calc(100% + .375rem); left: -1px; width: max-content; min-width: calc(100% + 2px); border: 1px solid var(--line); border-radius: .5rem; display: grid; overflow: hidden; background: var(--surface); }
-.ui-chart-select__menu button { width: 100%; min-height: 2.125rem; padding: 0 .75rem; border: 0; border-radius: 0; outline: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); background: transparent; color: var(--ink); font-family: var(--font); font-size: .75rem; font-weight: 400; text-align: left; cursor: pointer; }
-.ui-chart-select__menu button + button { border-top: 1px solid var(--line); } .ui-chart-select__menu button:hover, .ui-chart-select__menu button:focus-visible { background: var(--hover); } .ui-chart-select__menu button svg { width: .75rem; height: .75rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.75; }
-.ui-chart-select__menu-action { padding: .625rem .75rem; border-top: 1px solid var(--line); }
-.ui-chart-select__menu .ui-chart-select__menu-link { width: auto; min-height: 0; padding: 0; display: inline-flex; align-items: center; gap: .375rem; color: var(--subtle); text-decoration: none; text-underline-offset: .15em; }
-.ui-chart-select__menu .ui-chart-select__menu-link:hover, .ui-chart-select__menu .ui-chart-select__menu-link:focus-visible { background: transparent; color: var(--muted); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); }
+.ui-chart-select__menu { position: absolute; z-index: 30; top: calc(100% + .375rem); left: -1px; width: max-content; min-width: calc(100% + 2px); padding: var(--s1); border: 1px solid rgb(255 255 255 / 9%); border-radius: .75rem; display: grid; overflow: hidden; background: #2b2b2b; color: #f3f3f3; box-shadow: 0 .75rem 2rem rgb(0 0 0 / 24%); }
+.ui-chart-select__menu button { width: 100%; min-height: 2rem; padding: 0 .625rem; border: 0; border-radius: .5rem; outline: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); background: transparent; color: #e5e7eb; font-family: var(--font); font-size: .75rem; font-weight: 400; text-align: left; cursor: pointer; }
+.ui-chart-select__menu button + button { border-top: 0; } .ui-chart-select__menu button[aria-checked="true"] { background: rgb(255 255 255 / 8%); color: #fff; } .ui-chart-select__menu button:hover, .ui-chart-select__menu button:focus-visible { background: rgb(255 255 255 / 12%); color: #fff; } .ui-chart-select__menu button svg { width: .75rem; height: .75rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.75; }
+.ui-chart-select__menu-action { margin-top: var(--s1); padding: var(--s2) .625rem var(--s1); border-top: 1px solid rgb(255 255 255 / 9%); }
+.ui-chart-select__menu .ui-chart-select__menu-link { width: auto; min-height: 1.5rem; padding: 0; display: inline-flex; align-items: center; gap: .375rem; color: #aeb4bc; text-decoration: none; text-underline-offset: .15em; }
+.ui-chart-select__menu .ui-chart-select__menu-link:hover, .ui-chart-select__menu .ui-chart-select__menu-link:focus-visible { background: transparent; color: #dce1e7; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); }
 .measurement-view-control { border: 1px solid var(--line); border-radius: var(--radius); display: flex; align-items: stretch; background: var(--canvas); }
 .measurement-view-control button { border: 0; outline: 0; background: transparent; color: var(--muted); font-family: var(--font); cursor: pointer; }
-.measurement-view-control .ui-chart-select__menu button { color: var(--ink); }
-.measurement-view-control .ui-chart-select__menu .ui-chart-select__menu-link { color: var(--subtle); }
-.measurement-view-control .ui-chart-select__menu .ui-chart-select__menu-link:hover, .measurement-view-control .ui-chart-select__menu .ui-chart-select__menu-link:focus-visible { color: var(--muted); }
+.measurement-view-control .ui-chart-select__menu button { color: #e5e7eb; }
+.measurement-view-control .ui-chart-select__menu button[aria-checked="true"], .measurement-view-control .ui-chart-select__menu button:hover, .measurement-view-control .ui-chart-select__menu button:focus-visible { color: #fff; }
+.measurement-view-control .ui-chart-select__menu .ui-chart-select__menu-link { color: #aeb4bc; }
+.measurement-view-control .ui-chart-select__menu .ui-chart-select__menu-link:hover, .measurement-view-control .ui-chart-select__menu .ui-chart-select__menu-link:focus-visible { color: #dce1e7; }
 .measurement-view-control__sessions { min-height: 0; border: 0; border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px); }
 .measurement-view-control__sessions .ui-chart-select__trigger { min-height: 100%; border-radius: inherit; color: inherit; }
 .measurement-view-control__sessions--active, .measurement-view-control__raw[aria-pressed="true"] { background: var(--surface); color: var(--ink); }
@@ -30,8 +31,14 @@
 .ui-chart-toggle:last-child { border-left: 1px solid var(--line); border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0; }
 .ui-chart-toggle:hover { color: var(--ink); } .ui-chart-toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; } .ui-chart-toggle:has(input:checked) { background: var(--surface); color: var(--ink); } .ui-chart-toggle:not(:has(input:checked)) .dot { opacity: .3; }
 .ui-chart-toggle:not(:has(input:checked)) { background: var(--hover); color: var(--subtle); }
+.ui-chart-toggle--disabled { color: var(--subtle); cursor: not-allowed; opacity: .62; }
 
 .chart-wrap { position: relative; width: 100%; height: var(--chart-height); user-select: none; }
+.chart-empty-message { position: absolute; z-index: 5; inset: 12px 20px 40px 52px; display: grid; place-content: center; justify-items: center; gap: var(--s1); color: var(--muted); text-align: center; pointer-events: none; }
+.chart-empty-message span { color: var(--ink); font-size: .8125rem; font-weight: 500; }
+.chart-empty-message small { font-size: .75rem; }
+.chart-panel--empty .measurement-canvas { pointer-events: none; }
+.chart-panel--empty .chart-toolbar { opacity: .42; pointer-events: none; }
 .chart-daylight-background { position: absolute; z-index: 0; inset: 12px 20px 40px 52px; overflow: hidden; pointer-events: none; transition: opacity 160ms var(--ease); }
 .chart-daylight-day { position: absolute; inset-block: 0; background: linear-gradient(90deg, #102c55 0%, #234f7e calc(var(--sunrise) - 5%), #e4a68e var(--sunrise), #dbeaf2 calc(var(--sunrise) + 7%), #f4f5f0 50%, #eadbc4 calc(var(--sunset) - 7%), #d98f96 var(--sunset), #234f7e calc(var(--sunset) + 5%), #102c55 100%); }
 .chart-wrap > .recharts-responsive-container { position: relative; z-index: 1; }

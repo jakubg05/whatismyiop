@@ -21,6 +21,7 @@ import {
   YAxis,
 } from "recharts";
 import { dateTimeBoundary, formatDateInput, formatTimeInput, type Eye, type Measurement, type SessionAggregation } from "../analysis";
+import { eventPalette, periodPalette as rangePalette } from "../periodPalette";
 import { clipDomain, daylightBackground, intersectDomains, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
 import { moveRangeEdge, rangeTimeDomain, type EditableRange } from "./range";
@@ -35,6 +36,9 @@ export type DraftRange = EditableRange;
 
 type ChartRange = DraftRange & { id: string };
 type ChartEvent = { id: string; label: string; time: number };
+export type ChartAnnotationPreview =
+  | { kind: "range"; value: ChartRange; paletteIndex: number }
+  | { kind: "event"; value: ChartEvent; paletteIndex: number };
 type AnnotationLabel = {
   id: string;
   focusId?: string;
@@ -50,23 +54,9 @@ type AnnotationDrag = { start: number; startX: number; moved: boolean };
 type RangeEdge = "start" | "end";
 type HandleDrag = { kind: RangeEdge | "event"; time: number };
 
-const RANGE_PALETTE = [
-  { stroke: "#5f7f9d", fill: "#a9c2d6" },
-  { stroke: "#9a7632", fill: "#e5c982" },
-  { stroke: "#66856f", fill: "#b8d0bd" },
-  { stroke: "#7d6b9b", fill: "#c9bddd" },
-  { stroke: "#9a6674", fill: "#ddb8c1" },
-  { stroke: "#4f8585", fill: "#a9cecc" },
-] as const;
-
-const EVENT_COLORS = ["#8f6aa8", "#b56f8a", "#b47b5c", "#5d9290", "#7384b5", "#8b9253"] as const;
-
-function rangePalette(index: number) {
-  return RANGE_PALETTE[index % RANGE_PALETTE.length];
-}
-
-function eventColor(index: number) {
-  return EVENT_COLORS[index % EVENT_COLORS.length];
+function paletteIndex<T extends { id: string }>(values: readonly T[], value: T, fallback: number): number {
+  const index = values.findIndex((item) => item.id === value.id);
+  return index >= 0 ? index : fallback;
 }
 
 type Props = {
@@ -79,6 +69,10 @@ type Props = {
   onOpenSessionInfo: () => void;
   ranges: ChartRange[];
   events: ChartEvent[];
+  comparisonRanges: ChartRange[];
+  comparisonMode: boolean;
+  annotationPreview: ChartAnnotationPreview | null;
+  onComparisonBlocked: () => void;
   mode: ChartMode;
   onSelectRange: (range: Omit<DraftRange, "label">) => void;
   onSelectEvent: (time: number) => void;
@@ -129,6 +123,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   onOpenSessionInfo,
   ranges,
   events,
+  comparisonRanges,
+  comparisonMode,
+  annotationPreview,
+  onComparisonBlocked,
   mode,
   onSelectRange,
   onSelectEvent,
@@ -172,6 +170,21 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [showEvents, setShowEvents] = useState(true);
   const [periodHandleEdges, setPeriodHandleEdges] = useState<readonly [RangeEdge, RangeEdge]>(["start", "end"]);
   const annotationEditorOpen = mode === "range" || mode === "event";
+  const annotationPreviewActive = annotationPreview !== null;
+  const annotationDisplayMode = comparisonMode || annotationPreviewActive;
+  const previewFocusId = annotationPreview
+    ? `${annotationPreview.kind}:${annotationPreview.value.id}`
+    : null;
+  const displayRanges = annotationPreview?.kind === "range"
+    ? [annotationPreview.value]
+    : annotationPreviewActive
+      ? []
+      : comparisonMode ? comparisonRanges : ranges;
+  const displayEvents = annotationPreview?.kind === "event"
+    ? [annotationPreview.value]
+    : annotationPreviewActive
+      ? []
+      : comparisonMode ? [] : events;
   const [domainStart, domainEnd] = domain;
   const [fullDomainStart, fullDomainEnd] = fullDomain;
   const pressureDomain = useMemo(() => {
@@ -228,7 +241,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }, [showEvents, showPeriods]);
 
   const handlePlotHoverTimeChange = useCallback((time: number | null) => {
-    const nextIds = time === null || !showPeriods || focusedAnnotation !== null || annotationEditorOpen
+    const nextIds = time === null || annotationDisplayMode || !showPeriods || focusedAnnotation !== null || annotationEditorOpen
       ? []
       : ranges.flatMap((range) => {
         const start = dateTimeBoundary(range.start, range.startTime);
@@ -239,9 +252,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       current.length === nextIds.length && current.every((id, index) => id === nextIds[index])
         ? current
         : nextIds);
-  }, [annotationEditorOpen, focusedAnnotation, presentTime, ranges, showPeriods]);
+  }, [annotationDisplayMode, annotationEditorOpen, focusedAnnotation, presentTime, ranges, showPeriods]);
 
-  const hoverFocus = !annotationEditorOpen && focusedAnnotation === null ? hoveredAnnotation : null;
+  const hoverFocus = previewFocusId ?? (!annotationEditorOpen && focusedAnnotation === null ? hoveredAnnotation : null);
   const hoveredRange = hoverFocus?.startsWith("range:")
     ? ranges.find((range) => hoverFocus === `range:${range.id}`) ?? null
     : null;
@@ -347,7 +360,12 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   function startAnnotation(time: number, clientX: number) {
-    if (mode) return;
+    if (mode || measurements.length === 0) return;
+    if (comparisonMode) {
+      onComparisonBlocked();
+      dragRef.current = null;
+      return;
+    }
     dragRef.current = { start: time, startX: clientX, moved: false };
     if (dragPreview.current) dragPreview.current.style.display = "none";
   }
@@ -365,6 +383,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   function finishAnnotation(end: number, _ratio: number, clientX: number) {
+    if (comparisonMode) return;
     const drag = dragRef.current;
     if (!drag) return;
     const moved = drag.moved || Math.abs(clientX - drag.startX) >= 4;
@@ -479,9 +498,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     : null;
   const annotationLabels = useMemo(() => {
     const labels: AnnotationLabel[] = [];
-    for (const [index, range] of ranges.entries()) {
-      const editing = focusedAnnotation === `range:${range.id}`;
-      if (!showPeriods && !editing) continue;
+    for (const [index, range] of displayRanges.entries()) {
+      const editing = !annotationDisplayMode && focusedAnnotation === `range:${range.id}`;
+      if (!annotationDisplayMode && !showPeriods && !editing) continue;
       const liveDomain = editing
         ? draggedRangeFocus ?? rangeTimeDomain(draftRange, presentTime)
         : rangeTimeDomain(range, presentTime);
@@ -490,32 +509,37 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       if (start !== null && end !== null && start <= domainEnd && end >= domainStart) {
         labels.push({
           id: range.id,
-          focusId: `range:${range.id}`,
+          focusId: annotationDisplayMode && !annotationPreviewActive ? undefined : `range:${range.id}`,
           kind: "range",
           text: editing ? draftRangeLabel : range.label,
           time: Math.max(start, domainStart),
           endTime: Math.min(end, domainEnd),
-          color: rangePalette(index).stroke,
+          color: rangePalette(annotationPreview?.kind === "range" && annotationPreview.value.id === range.id
+            ? annotationPreview.paletteIndex
+            : paletteIndex(ranges, range, index)).stroke,
         });
       }
     }
-    for (const [index, event] of events.entries()) {
-      if (!showEvents && focusedAnnotation !== `event:${event.id}`) continue;
+    for (const [index, event] of displayEvents.entries()) {
+      if (!annotationPreviewActive && !showEvents && focusedAnnotation !== `event:${event.id}`) continue;
       if (event.time >= domainStart && event.time <= domainEnd) {
-        labels.push({ id: event.id, focusId: `event:${event.id}`, kind: "event", text: focusedAnnotation === `event:${event.id}` ? draftEventLabel : event.label, time: event.time, color: eventColor(index) });
+        const colorIndex = annotationPreview?.kind === "event" && annotationPreview.value.id === event.id
+          ? annotationPreview.paletteIndex
+          : paletteIndex(events, event, index);
+        labels.push({ id: event.id, focusId: `event:${event.id}`, kind: "event", text: focusedAnnotation === `event:${event.id}` ? draftEventLabel : event.label, time: event.time, color: eventPalette(colorIndex) });
       }
     }
-    if (mode === "range" && visibleDraftRange) {
+    if (!annotationDisplayMode && mode === "range" && visibleDraftRange) {
       labels.push({ id: "draft-range", kind: "range", text: draftRangeLabel.trim() || "Period", time: visibleDraftRange[0], endTime: visibleDraftRange[1], color: rangePalette(ranges.length).stroke, draft: true });
     }
-    if (mode === "event" && draftEventTime !== null && draftEventTime >= domainStart && draftEventTime <= domainEnd) {
-      labels.push({ id: "draft-event", kind: "event", text: draftEventLabel.trim() || "Event", time: draftEventTime, color: eventColor(events.length), draft: true });
+    if (!annotationDisplayMode && mode === "event" && draftEventTime !== null && draftEventTime >= domainStart && draftEventTime <= domainEnd) {
+      labels.push({ id: "draft-event", kind: "event", text: draftEventLabel.trim() || "Event", time: draftEventTime, color: eventPalette(events.length), draft: true });
     }
 
     const plotWidth = Math.max(1, chartWidth - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
     const laneEnds: number[] = [];
     return labels
-      .filter((label) => focusedAnnotation === null || label.focusId === focusedAnnotation)
+      .filter((label) => annotationPreviewActive || focusedAnnotation === null || label.focusId === focusedAnnotation)
       .sort((a, b) => a.time - b.time)
       .map((label) => {
         const left = ((label.time - domainStart) / Math.max(1, domainEnd - domainStart)) * plotWidth;
@@ -530,19 +554,20 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         laneEnds[lane] = left + width;
         return { ...label, left, width, lane, fullWidth };
       });
-  }, [chartWidth, domainEnd, domainStart, draftEventLabel, draftEventTime, draftRange, draftRangeLabel, draggedRangeFocus, events, focusedAnnotation, mode, presentTime, ranges, showEvents, showPeriods, visibleDraftRange]);
+  }, [annotationDisplayMode, annotationPreview, annotationPreviewActive, chartWidth, displayEvents, displayRanges, domainEnd, domainStart, draftEventLabel, draftEventTime, draftRange, draftRangeLabel, draggedRangeFocus, events, focusedAnnotation, mode, presentTime, ranges, showEvents, showPeriods, visibleDraftRange]);
   const annotationLaneCount = Math.max(1, ...annotationLabels.map((label) => label.lane + 1));
-  const visibleRanges = focusedAnnotation?.startsWith("event:")
+
+  const visibleRanges = annotationPreview?.kind === "range" ? [annotationPreview.value] : annotationPreviewActive ? [] : comparisonMode ? comparisonRanges : focusedAnnotation?.startsWith("event:")
     ? []
     : focusedAnnotation?.startsWith("range:")
       ? ranges.filter((range) => focusedAnnotation === `range:${range.id}`)
       : showPeriods ? ranges : [];
-  const visibleEvents = focusedAnnotation?.startsWith("range:")
+  const visibleEvents = annotationPreview?.kind === "event" ? [annotationPreview.value] : annotationPreviewActive ? [] : comparisonMode ? [] : focusedAnnotation?.startsWith("range:")
     ? []
     : focusedAnnotation?.startsWith("event:")
       ? events.filter((event) => focusedAnnotation === `event:${event.id}`)
       : showEvents ? events : [];
-  const activeAnnotation = focusedAnnotation ?? hoverFocus;
+  const activeAnnotation = previewFocusId ?? focusedAnnotation ?? hoverFocus;
   const focusedRangeIndex = activeAnnotation?.startsWith("range:")
     ? ranges.findIndex((range) => activeAnnotation === `range:${range.id}`)
     : -1;
@@ -550,7 +575,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     ? events.findIndex((event) => activeAnnotation === `event:${event.id}`)
     : -1;
   const selectionColor = mode === "event" || focusedEventIndex >= 0
-    ? eventColor(focusedEventIndex >= 0 ? focusedEventIndex : events.length)
+    ? eventPalette(focusedEventIndex >= 0 ? focusedEventIndex : events.length)
     : rangePalette(focusedRangeIndex >= 0 ? focusedRangeIndex : ranges.length).stroke;
   const activeRange = activeAnnotation?.startsWith("range:")
     ? ranges.find((range) => activeAnnotation === `range:${range.id}`) ?? null
@@ -637,7 +662,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   return (
-    <section className="panel chart-panel">
+    <section className={`panel chart-panel${measurements.length === 0 ? " chart-panel--empty" : ""}`}>
       <div ref={chart} className="chart-wrap" style={{ marginTop: `${annotationLaneCount * 22}px` }}>
         <div className="chart-annotation-labels" style={{ height: `${annotationLaneCount * 22}px` }}>
           {annotationLabels.map((label) => (
@@ -712,7 +737,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             <XAxis type="number" dataKey="time" domain={domain} allowDataOverflow tickFormatter={formatChartTime} tick={{ fill: "var(--muted)", fontSize: 12 }} minTickGap={48} />
             <YAxis width={52} type="number" dataKey="iop" domain={pressureDomain} ticks={pressureTicks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
             {visibleRanges.map((range) => {
-              const index = ranges.indexOf(range);
+              const index = annotationPreview?.kind === "range" && annotationPreview.value.id === range.id
+                ? annotationPreview.paletteIndex
+                : paletteIndex(ranges, range, displayRanges.indexOf(range));
               const visible = visibleRangeDomain(range);
               if (!visible) return null;
               const color = rangePalette(index);
@@ -724,14 +751,17 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                 <ReferenceLine x={visible[1]} stroke={color.stroke} strokeWidth={2} strokeDasharray={editing ? "4 3" : undefined} strokeOpacity={muted ? 0.14 : 0.55} />
               </Fragment>;
             })}
-            {focusedAnnotation === null && visibleDraftRange && (
+            {!annotationDisplayMode && focusedAnnotation === null && visibleDraftRange && (
               <ReferenceArea x1={visibleDraftRange[0]} x2={visibleDraftRange[1]} fill={rangePalette(ranges.length).fill} fillOpacity={0.2} stroke="none" />
             )}
-            {visibleEvents.map((event) => (
-              <ReferenceLine key={event.id} x={event.time} stroke={eventColor(events.indexOf(event))} strokeWidth={2} strokeOpacity={annotationIsMuted(`event:${event.id}`) ? 0.2 : 1} />
-            ))}
-            {focusedAnnotation === null && mode === "event" && draftEventTime !== null && (
-              <ReferenceLine x={draftEventTime} stroke={eventColor(events.length)} strokeWidth={2} strokeDasharray="4 3" />
+            {visibleEvents.map((event) => {
+              const index = annotationPreview?.kind === "event" && annotationPreview.value.id === event.id
+                ? annotationPreview.paletteIndex
+                : paletteIndex(events, event, displayEvents.indexOf(event));
+              return <ReferenceLine key={event.id} x={event.time} stroke={eventPalette(index)} strokeWidth={2} strokeOpacity={annotationIsMuted(`event:${event.id}`) ? 0.2 : 1} />;
+            })}
+            {!annotationDisplayMode && focusedAnnotation === null && mode === "event" && draftEventTime !== null && (
+              <ReferenceLine x={draftEventTime} stroke={eventPalette(events.length)} strokeWidth={2} strokeDasharray="4 3" />
             )}
           </ScatterChart>
         </ResponsiveContainer>
@@ -754,6 +784,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           yMin={pressureDomain[0]}
           yMax={pressureDomain[1]}
         />
+        {measurements.length === 0 && <div className="chart-empty-message" aria-hidden="true">
+          <span>Your measurements will appear here</span>
+          <small>Showing the last 30 days</small>
+        </div>}
         <div
           ref={plotOverlayRef}
           className="chart-selection-layer"
@@ -865,8 +899,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
         </button>
         <div className="annotation-toggles" role="group" aria-label="Annotation visibility">
-          <ChartToggle label="Periods" checked={showPeriods} onChange={() => setShowPeriods((current) => !current)} />
-          <ChartToggle label="Events" checked={showEvents} onChange={() => setShowEvents((current) => !current)} />
+          <ChartToggle label="Periods" checked={showPeriods} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowPeriods((current) => !current)} />
+          <ChartToggle label="Events" checked={showEvents} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowEvents((current) => !current)} />
         </div>
         <div className="eye-toggles">
           {(["OD", "OS"] as Eye[]).map((eye) => (

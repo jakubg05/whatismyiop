@@ -1,8 +1,7 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   CartesianGrid,
   ErrorBar,
-  Legend,
   ReferenceArea,
   ResponsiveContainer,
   Scatter,
@@ -14,18 +13,27 @@ import {
 import {
   formatDateInput,
   formatTimeInput,
-  inDateRange,
+  coalesceMeasurementSessions,
   dateTimeBoundary,
   parseMeasurementsCsv,
-  summarize,
   type Eye,
-  type Measurement,
   type ParseResult,
-  type Summary,
 } from "./analysis";
-import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartMode, type DraftRange, type TrendMode } from "./main-chart";
+import { ComparisonExpressionEditor, type ComparisonValuePreview } from "./ComparisonExpressionEditor";
+import { useComparisonExpression } from "./ComparisonExpressionState";
+import {
+  binDiurnalSessions,
+  comparisonLabelError,
+  NOW_COMPARISON_EVENT_ID,
+  parseComparisonExpression,
+  resolveComparisonSegments,
+  type ComparisonCatalog,
+  type DiurnalPoint,
+} from "./comparison";
+import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartAnnotationPreview, type ChartMode, type DraftRange, type TrendMode } from "./main-chart";
+import { periodPalette } from "./periodPalette";
 import { TopNavigation } from "./TopNavigation";
-import { Button, SectionHeading, SegmentedControl } from "./shared";
+import { Button, SegmentedControl } from "./shared";
 
 type SavedRange = DraftRange & { id: string };
 
@@ -43,19 +51,6 @@ type PersistedState = {
   events: SavedEvent[];
 };
 
-type DateRange = { start: string; startTime: string; end: string; endTime: string };
-
-type DiurnalPoint = {
-  bin: number;
-  minuteOfDay: number;
-  mean: number;
-  sd: number;
-  count: number;
-  periodLabel: string;
-  eye: Eye;
-};
-
-const PERIOD_COLORS = ["#346f9c", "#b47722", "#6b5595", "#43815d", "#a55252", "#477d88"];
 const STORAGE_KEY = "icare-analytics:v1";
 
 function emptyDraftRange(): DraftRange {
@@ -66,94 +61,19 @@ function eyeLabel(eye: Eye): string {
   return eye === "OD" ? "Right eye" : "Left eye";
 }
 
-function displayDate(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  return match ? `${match[3]}.${match[2]}.${match[1]}` : "";
-}
-
-function oneDecimal(value: number | null): string {
-  return value === null ? "–" : value.toFixed(1);
-}
-
 function diurnalBinLabel(bin: number): string {
   const startHour = bin * 3;
   const endHour = startHour + 2;
   return `${String(startHour).padStart(2, "0")}:00–${String(endHour).padStart(2, "0")}:59`;
 }
 
-function binDiurnalMeasurements(measurements: Measurement[], eye: Eye, range: SavedRange, effectiveEnd: string, effectiveEndTime: string): DiurnalPoint[] {
-  const buckets = Array.from({ length: 8 }, () => [] as number[]);
-  measurements
-    .filter((measurement) => measurement.eye === eye && inDateRange(measurement, range.start, effectiveEnd, range.startTime, effectiveEndTime))
-    .forEach((measurement) => {
-      const hour = Number(measurement.timestampText.slice(11, 13));
-      const minute = Number(measurement.timestampText.slice(14, 16));
-      const second = Number(measurement.timestampText.slice(17, 19));
-      const bin = Math.min(7, Math.floor((hour * 60 + minute + second / 60) / 180));
-      buckets[bin].push(measurement.iop);
-    });
-
-  return buckets.flatMap((values, bin) => {
-    if (values.length === 0) return [];
-    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
-    const variance = values.length > 1
-      ? values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1)
-      : 0;
-    return [{
-      bin,
-      minuteOfDay: bin * 180 + 90,
-      mean,
-      sd: Math.sqrt(variance),
-      count: values.length,
-      periodLabel: range.label,
-      eye,
-    }];
-  });
+function wallClockTimestamp(time = Date.now()): number {
+  const date = new Date(time);
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
 }
 
-function SummaryCard({ title, range, measurements, endLabel }: {
-  title: string;
-  range: DateRange;
-  measurements: Measurement[];
-  endLabel?: string;
-}) {
-  const selected = useMemo(
-    () => measurements.filter((measurement) => inDateRange(measurement, range.start, range.end, range.startTime, range.endTime)),
-    [measurements, range],
-  );
-  const summaries = useMemo(() => ({
-    OD: summarize(selected.filter((measurement) => measurement.eye === "OD")),
-    OS: summarize(selected.filter((measurement) => measurement.eye === "OS")),
-  }), [selected]);
-
-  const metric = (eye: Eye, summary: Summary) => (
-    <div className="eye-summary" key={eye}>
-      <div className="eye-summary__title">
-        <span className={`dot dot--${eye.toLowerCase()}`} />
-        {eyeLabel(eye)}
-      </div>
-      <div className="big-number">{oneDecimal(summary.median)}</div>
-      <div className="big-label">median mmHg</div>
-      <dl>
-        <div><dt>Mean</dt><dd>{oneDecimal(summary.mean)}</dd></div>
-        <div><dt>Range</dt><dd>{summary.min ?? "–"}–{summary.max ?? "–"}</dd></div>
-        <div><dt>Readings</dt><dd>{summary.count}</dd></div>
-      </dl>
-    </div>
-  );
-
-  return (
-    <section className="summary-card">
-      <div className="summary-card__heading">
-        <span>{title}</span>
-        <span>{range.start && range.end ? `${displayDate(range.start)} – ${endLabel ?? displayDate(range.end)}` : "DD.MM.YYYY"}</span>
-      </div>
-      <div className="summary-grid">
-        {metric("OD", summaries.OD)}
-        {metric("OS", summaries.OS)}
-      </div>
-    </section>
-  );
+function diurnalTickLabel(value: number): string {
+  return `${String(Math.floor(value / 60)).padStart(2, "0")}:00`;
 }
 
 function DiurnalTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: DiurnalPoint }> }) {
@@ -165,25 +85,32 @@ function DiurnalTooltip({ active, payload }: { active?: boolean; payload?: Array
       <span>{diurnalBinLabel(point.bin)}</span>
       <span>Mean: {point.mean.toFixed(1)} mmHg</span>
       <span>SD: {point.sd.toFixed(1)} mmHg</span>
-      <span>n: {point.count}</span>
+      <span>Sessions: {point.count}</span>
     </div>
   );
 }
 
 export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
+  const dragDepth = useRef(0);
+  const { expression, setExpression, clearExpression } = useComparisonExpression();
   const [data, setData] = useState<ParseResult | null>(null);
   const [fileName, setFileName] = useState("");
   const [rawCsv, setRawCsv] = useState("");
   const [error, setError] = useState("");
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [visibleEyes, setVisibleEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [trendMode, setTrendMode] = useState<TrendMode>("adjusted");
   const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [diurnalEye, setDiurnalEye] = useState<Eye>("OD");
   const [mode, setMode] = useState<ChartMode>(null);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => wallClockTimestamp());
   const [ranges, setRanges] = useState<SavedRange[]>([]);
   const [events, setEvents] = useState<SavedEvent[]>([]);
+  const [comparisonValuePreview, setComparisonValuePreview] = useState<ComparisonValuePreview | null>(null);
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
+  const toastIds = useRef(new Set<string>());
+  const [toastDismissalCount, setToastDismissalCount] = useState(0);
   const [draftRange, setDraftRange] = useState<DraftRange>(emptyDraftRange);
   const [draftEvent, setDraftEvent] = useState({ label: "", date: "", clock: "" });
   const [editingRangeId, setEditingRangeId] = useState<string | null>(null);
@@ -192,8 +119,9 @@ export default function App() {
   const chartDraftEvent = useDeferredValue(draftEvent);
 
   const measurements = data?.measurements ?? [];
-  const fullDomainStart = measurements[0]?.time ?? 0;
-  const fullDomainEnd = measurements.at(-1)?.time ?? 0;
+  const measurementSessions = useMemo(() => coalesceMeasurementSessions(measurements), [measurements]);
+  const fullDomainStart = measurements[0]?.time ?? now - 30 * 86_400_000;
+  const fullDomainEnd = measurements.at(-1)?.time ?? now;
   const [minimumIop, maximumIop] = useMemo(() => {
     let minimum = Number.POSITIVE_INFINITY;
     let maximum = Number.NEGATIVE_INFINITY;
@@ -201,26 +129,61 @@ export default function App() {
       minimum = Math.min(minimum, measurement.iop);
       maximum = Math.max(maximum, measurement.iop);
     }
-    return Number.isFinite(minimum) ? [Math.floor(minimum - 2), Math.ceil(maximum + 2)] : [0, 1];
+    return Number.isFinite(minimum) ? [Math.floor(minimum - 2), Math.ceil(maximum + 2)] : [5, 35];
   }, [measurements]);
   const today = formatDateInput(now);
   const currentTime = formatTimeInput(now);
-  const diurnalSeries = useMemo(() => ranges.map((range, rangeIndex) => {
+  const comparisonCatalog = useMemo<ComparisonCatalog>(() => ({ periods: ranges, events, now }), [events, now, ranges]);
+  const comparisonExpression = useMemo(() => parseComparisonExpression(expression, comparisonCatalog), [comparisonCatalog, expression]);
+  const comparisonRanges = useMemo(
+    () => resolveComparisonSegments(comparisonExpression.segments, comparisonCatalog, fullDomainStart, fullDomainEnd, now),
+    [comparisonCatalog, comparisonExpression.segments, fullDomainEnd, fullDomainStart, now],
+  );
+  const comparisonMode = comparisonExpression.segments.length > 0;
+  const chartAnnotationPreview = useMemo<ChartAnnotationPreview | null>(() => {
+    if (comparisonValuePreview?.kind === "period") {
+      const paletteIndex = ranges.findIndex((item) => item.label === comparisonValuePreview.label);
+      return paletteIndex >= 0 ? { kind: "range", value: ranges[paletteIndex], paletteIndex } : null;
+    }
+    if (comparisonValuePreview?.kind === "event") {
+      if (comparisonValuePreview.label === "now") {
+        return {
+          kind: "event",
+          value: { id: NOW_COMPARISON_EVENT_ID, label: "now", time: now },
+          paletteIndex: events.length,
+        };
+      }
+      const paletteIndex = events.findIndex((item) => item.label === comparisonValuePreview.label);
+      return paletteIndex >= 0 ? { kind: "event", value: events[paletteIndex], paletteIndex } : null;
+    }
+    return null;
+  }, [comparisonValuePreview, events, now, ranges]);
+  const diurnalSeries = useMemo(() => comparisonRanges.map((range) => {
     const effectiveEnd = range.openEnded ? today : range.end;
     const effectiveEndTime = range.openEnded ? currentTime : range.endTime;
+    const comparisonIndex = comparisonRanges.findIndex((item) => item.id === range.id);
     return {
       id: range.id,
       name: range.label,
-      color: PERIOD_COLORS[rangeIndex % PERIOD_COLORS.length],
-      data: binDiurnalMeasurements(measurements, diurnalEye, range, effectiveEnd, effectiveEndTime),
+      color: periodPalette(comparisonIndex).stroke,
+      data: binDiurnalSessions(measurementSessions, diurnalEye, range, effectiveEnd, effectiveEndTime, range.openEnded ? now : undefined),
     };
-  }), [currentTime, diurnalEye, measurements, ranges, today]);
+  }), [comparisonRanges, currentTime, diurnalEye, measurementSessions, now, today]);
   const diurnalPoints = useMemo(() => diurnalSeries.flatMap((series) => series.data), [diurnalSeries]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    const timer = window.setInterval(() => setNow(wallClockTimestamp()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!comparisonMode || (mode !== "range" && mode !== "event")) return;
+    setMode(null);
+    setEditingRangeId(null);
+    setEditingEventId(null);
+    setDraftRange(emptyDraftRange());
+    setDraftEvent({ label: "", date: "", clock: "" });
+  }, [comparisonMode, mode]);
 
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
@@ -233,13 +196,19 @@ export default function App() {
       setRawCsv(state.csvText);
       setFileName(state.fileName);
       setData(result);
+      setEvents(state.events.filter((event, index, all) => event
+        && typeof event.id === "string"
+        && typeof event.label === "string"
+        && event.label.trim().length > 0
+        && typeof event.time === "number"
+        && Number.isFinite(event.time)
+        && all.findIndex((candidate) => candidate?.id === event.id) === index));
       setRanges(state.ranges.map((range) => ({
         ...range,
         startTime: typeof range.startTime === "string" ? range.startTime : "00:00",
         end: range.openEnded ? "" : range.end,
         endTime: range.openEnded ? "" : typeof range.endTime === "string" ? range.endTime : "23:59",
       })));
-      setEvents(state.events);
     } catch {
       setError("Saved browser data could not be restored.");
     }
@@ -266,12 +235,12 @@ export default function App() {
       setFileName(file.name);
       setRanges([]);
       setEvents([]);
+      clearExpression();
       setEditingRangeId(null);
       setEditingEventId(null);
       setMode(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Could not read this CSV file.");
-      setData(null);
     }
   }
 
@@ -282,6 +251,7 @@ export default function App() {
     setFileName("");
     setRanges([]);
     setEvents([]);
+    clearExpression();
     setEditingRangeId(null);
     setEditingEventId(null);
     setMode(null);
@@ -299,15 +269,24 @@ export default function App() {
       setError("Range start must be before its end.");
       return;
     }
+    const label = orderedRange.label;
+    const labelError = comparisonLabelError(label, "period", comparisonCatalog, editingRangeId ?? undefined);
+    if (labelError) {
+      setError(labelError);
+      return;
+    }
     const saved = {
       ...orderedRange,
       end: orderedRange.openEnded ? "" : effectiveEnd,
       endTime: orderedRange.openEnded ? "" : effectiveEndTime,
-      label: orderedRange.label.trim(),
+      label,
     };
-    setRanges((current) => editingRangeId
-      ? current.map((range) => range.id === editingRangeId ? { ...saved, id: range.id } : range)
-      : [...current, { ...saved, id: crypto.randomUUID() }]);
+    if (editingRangeId) {
+      setRanges((current) => current.map((range) => range.id === editingRangeId ? { ...saved, id: range.id } : range));
+    } else {
+      const id = crypto.randomUUID();
+      setRanges((current) => [...current, { ...saved, id }]);
+    }
     setEditingRangeId(null);
     setDraftRange(emptyDraftRange());
     setMode(null);
@@ -321,9 +300,18 @@ export default function App() {
   function addEvent() {
     const time = eventTimestamp();
     if (!draftEvent.label.trim() || time === null) return;
-    setEvents((current) => editingEventId
-      ? current.map((event) => event.id === editingEventId ? { ...event, label: draftEvent.label.trim(), time } : event)
-      : [...current, { id: crypto.randomUUID(), label: draftEvent.label.trim(), time }]);
+    const label = draftEvent.label;
+    const labelError = comparisonLabelError(label, "event", comparisonCatalog, editingEventId ?? undefined);
+    if (labelError) {
+      setError(labelError);
+      return;
+    }
+    if (editingEventId) {
+      const nextEvent = { id: editingEventId, label, time };
+      setEvents((current) => current.map((event) => event.id === editingEventId ? nextEvent : event));
+    } else {
+      setEvents((current) => [...current, { id: crypto.randomUUID(), label, time }]);
+    }
     setEditingEventId(null);
     setDraftEvent({ label: "", date: "", clock: "" });
     setMode(null);
@@ -339,9 +327,38 @@ export default function App() {
   }, []);
 
   function deleteDraft() {
-    if (editingRangeId) setRanges((current) => current.filter((range) => range.id !== editingRangeId));
-    if (editingEventId) setEvents((current) => current.filter((event) => event.id !== editingEventId));
+    if (editingRangeId) {
+      setRanges((current) => current.filter((range) => range.id !== editingRangeId));
+    }
+    if (editingEventId) {
+      setEvents((current) => current.filter((event) => event.id !== editingEventId));
+    }
     cancelDraft();
+  }
+
+  function handleDragEnter(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    dragDepth.current += 1;
+    setIsDraggingFile(true);
+  }
+
+  function handleDragOver(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setIsDraggingFile(false);
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    dragDepth.current = 0;
+    setIsDraggingFile(false);
+    const file = event.dataTransfer.files[0];
+    if (file) void loadFile(file);
   }
 
   const setDraftEventTime = useCallback((time: number) => {
@@ -413,6 +430,18 @@ export default function App() {
   }, []);
   const chartFullDomain = useMemo(() => [fullDomainStart, fullDomainEnd] as [number, number], [fullDomainEnd, fullDomainStart]);
   const chartYDomain = useMemo(() => [minimumIop, maximumIop] as [number, number], [maximumIop, minimumIop]);
+  const dismissToast = useCallback((id: string) => {
+    if (!toastIds.current.delete(id)) return;
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+    setToastDismissalCount((count) => count + 1);
+  }, []);
+  const showComparisonBlockedToast = useCallback(() => {
+    const id = crypto.randomUUID();
+    const message = "Clear the search expressions before creating or editing periods and events.";
+    toastIds.current.add(id);
+    setToasts((current) => [...current, { id, message }]);
+    window.setTimeout(() => dismissToast(id), 5_000);
+  }, [dismissToast]);
 
   return (
     <main>
@@ -424,22 +453,78 @@ export default function App() {
       }} />
 
       {error && <div className="error-banner">{error}</div>}
+      <div className="toast-stack" aria-label="Notifications">
+        {toasts.map((toast) => <div key={toast.id} className="warning-toast" role="status">
+          <span>{toast.message}</span>
+          <button type="button" aria-label="Dismiss notification" onClick={() => dismissToast(toast.id)}>×</button>
+        </div>)}
+      </div>
+      <span className="visually-hidden" aria-live="polite">{toastDismissalCount > 0 && <span key={toastDismissalCount}>Notification dismissed.</span>}</span>
 
-      {!data ? (
-        <section className="empty-state" onClick={() => fileInput.current?.click()}>
-          <img className="empty-state-logo" src="/whatismyiop_mark_black.svg" alt="What Is My IOP" />
-          <Button variant="primary">Choose measurements.csv</Button>
-        </section>
-      ) : (
-        <>
-          <div className={`analysis-shell ${mode ? "analysis-shell--editor-open" : ""}`}>
+      <div className={`analysis-shell ${mode ? "analysis-shell--editor-open" : ""}`}>
           <div className="analysis-main">
           <TopNavigation
             fileName={fileName}
             measurementCount={measurements.length}
-            onClearData={clearStoredData}
-            onChooseFile={() => fileInput.current?.click()}
+            hasData={data !== null}
           />
+
+          {!data && <section
+            className={`import-dropzone${isDraggingFile ? " import-dropzone--dragging" : ""}`}
+            aria-label="Import IOP measurements"
+            onClick={() => fileInput.current?.click()}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <svg className="import-dropzone__outline" aria-hidden="true">
+              <rect
+                x="1"
+                y="1"
+                width="calc(100% - 2px)"
+                height="calc(100% - 2px)"
+                rx="13"
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+            <div className="import-dropzone__copy">
+              <h1>Drop your measurements.csv here</h1>
+              <p>Explore your IOP readings, trends, and comparisons. Your file stays in this browser and is never uploaded.</p>
+            </div>
+            <Button variant="primary" onClick={(event) => {
+              event.stopPropagation();
+              fileInput.current?.click();
+            }}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" /></svg>
+              <span>Choose measurements.csv</span>
+            </Button>
+            <div className="import-dropzone__facts" aria-label="Import details">
+              <span>Free</span>
+              <span aria-hidden="true">·</span>
+              <span>Processed locally</span>
+              <span aria-hidden="true">·</span>
+              <a
+                href="https://github.com/jakubg05/whatismyiop"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open source on GitHub"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <svg className="import-dropzone__github" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75a9.5 9.5 0 0 0-3 18.51c.48.09.65-.2.65-.46v-1.67c-2.67.58-3.23-1.13-3.23-1.13-.44-1.1-1.07-1.4-1.07-1.4-.87-.6.07-.58.07-.58.96.07 1.47.99 1.47.99.86 1.47 2.25 1.05 2.8.8.09-.62.34-1.05.61-1.29-2.13-.24-4.37-1.07-4.37-4.7 0-1.04.37-1.89.99-2.55-.1-.24-.43-1.21.09-2.52 0 0 .8-.26 2.61.97A9.1 9.1 0 0 1 12 7.42a9 9 0 0 1 2.38.32c1.81-1.23 2.61-.97 2.61-.97.52 1.31.19 2.28.09 2.52.62.66.99 1.51.99 2.55 0 3.64-2.24 4.45-4.38 4.69.35.3.65.88.65 1.77v2.5c0 .26.18.56.66.46A9.5 9.5 0 0 0 12 2.75Z" /></svg>
+                <span>Open source</span>
+              </a>
+            </div>
+          </section>}
+
+          {data && <div className="comparison-overlay">
+            <ComparisonExpressionEditor
+              catalog={comparisonCatalog}
+              value={expression}
+              onChange={setExpression}
+              onPreviewChange={setComparisonValuePreview}
+            />
+          </div>}
 
           <MeasurementsChart
             measurements={measurements}
@@ -451,6 +536,10 @@ export default function App() {
             onOpenSessionInfo={openSessionInfo}
             ranges={ranges}
             events={events}
+            comparisonRanges={comparisonRanges}
+            comparisonMode={comparisonMode}
+            annotationPreview={chartAnnotationPreview}
+            onComparisonBlocked={showComparisonBlockedToast}
             mode={mode}
             onSelectRange={selectRange}
             onSelectEvent={selectEvent}
@@ -470,60 +559,96 @@ export default function App() {
             yDomain={chartYDomain}
           />
 
-          {ranges.length > 0 && <section className="work-grid">
-            <div className="panel controls-panel">
-              <SectionHeading eyebrow="Periods" title="Comparison" />
-              <div className="comparisons">
-                {ranges.map((range) => <SummaryCard key={range.id} title={range.label} range={{
-                  start: range.start,
-                  startTime: range.startTime,
-                  end: range.openEnded ? today : range.end,
-                  endTime: range.openEnded ? currentTime : range.endTime,
-                }} endLabel={range.openEnded ? "Present" : undefined} measurements={measurements} />)}
+          <section className="comparison-workspace">
+            <section className="diurnal-section">
+              {diurnalPoints.length > 0 ? <>
+                <div className="diurnal-chart">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ScatterChart data={diurnalPoints} margin={{ top: 16, right: 20, bottom: 20, left: 0 }}>
+                      <CartesianGrid stroke="var(--line)" vertical={false} />
+                      {Array.from({ length: 8 }, (_, bin) => bin % 2 === 1 && (
+                        <ReferenceArea key={bin} x1={bin * 180} x2={(bin + 1) * 180} fill="#e8ecee" fillOpacity={0.72} stroke="none" />
+                      ))}
+                      <XAxis
+                        type="number"
+                        dataKey="minuteOfDay"
+                        domain={[0, 1440]}
+                        ticks={Array.from({ length: 8 }, (_, bin) => bin * 180 + 90)}
+                        tickFormatter={diurnalTickLabel}
+                        minTickGap={18}
+                        tick={{ fill: "var(--muted)", fontSize: 11 }}
+                      />
+                      <YAxis width={52} type="number" dataKey="mean" domain={["dataMin - 2", "dataMax + 2"]} allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
+                      <Tooltip content={<DiurnalTooltip />} />
+                      {diurnalSeries.map((series) => (
+                        <Scatter key={series.id} name={series.name} data={series.data} fill={series.color} line={{ stroke: series.color, strokeWidth: 2 }} shape="circle">
+                          <ErrorBar dataKey="sd" width={8} stroke={series.color} strokeWidth={1.5} direction="y" />
+                        </Scatter>
+                      ))}
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="diurnal-series-status" aria-label="Comparison segments">
+                  {diurnalSeries.map((series) => <div key={series.id} className="diurnal-series-status__item">
+                    <span className="diurnal-series-status__swatch" style={{ backgroundColor: series.color }} aria-hidden="true" />
+                    <span className="diurnal-series-status__label" title={series.name}>{series.name}</span>
+                    {series.data.length === 0 && <em>No readings</em>}
+                  </div>)}
+                </div>
+                <footer className="diurnal-controls">
+                  <SegmentedControl label="Eye shown in diurnal chart" value={diurnalEye} options={["OD", "OS"] as const} optionLabel={(eye) => eye === "OD" ? "Right" : "Left"} onChange={setDiurnalEye} />
+                </footer>
+              </> : <div className="diurnal-empty">
+                <span>{!data ? "Import measurements to view diurnal patterns." : comparisonMode ? "No readings" : "Add a comparison segment to view diurnal patterns."}</span>
+                <small>{!data
+                  ? "The diurnal chart will summarize readings by time of day."
+                  : comparisonMode
+                  ? `No ${diurnalEye === "OD" ? "right" : "left"}-eye sessions fall inside the active comparison segments.`
+                  : "You can create comparison segments using the search box at the top of the screen."}</small>
+              </div>}
+            </section>
+          </section>
+
+          <footer className="site-footer">
+            <div className="site-footer__inner">
+              <section className="site-footer__about">
+                <div className="site-footer__brand">
+                  <img src="/whatismyiop_mark_black.svg" alt="" />
+                  <strong>WhatIsMyIOP.com</strong>
+                </div>
+                <p>Explore home IOP measurements, trends, and comparisons without sending your health data to a server.</p>
+                <a className="site-footer__github" href="https://github.com/jakubg05/whatismyiop" target="_blank" rel="noreferrer">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75a9.5 9.5 0 0 0-3 18.51c.48.09.65-.2.65-.46v-1.67c-2.67.58-3.23-1.13-3.23-1.13-.44-1.1-1.07-1.4-1.07-1.4-.87-.6.07-.58.07-.58.96.07 1.47.99 1.47.99.86 1.47 2.25 1.05 2.8.8.09-.62.34-1.05.61-1.29-2.13-.24-4.37-1.07-4.37-4.7 0-1.04.37-1.89.99-2.55-.1-.24-.43-1.21.09-2.52 0 0 .8-.26 2.61.97A9.1 9.1 0 0 1 12 7.42a9 9 0 0 1 2.38.32c1.81-1.23 2.61-.97 2.61-.97.52 1.31.19 2.28.09 2.52.62.66.99 1.51.99 2.55 0 3.64-2.24 4.45-4.38 4.69.35.3.65.88.65 1.77v2.5c0 .26.18.56.66.46A9.5 9.5 0 0 0 12 2.75Z" /></svg>
+                  <span>Open source on GitHub</span>
+                </a>
+              </section>
+
+              <section className="site-footer__privacy">
+                <h2>Private by design</h2>
+                <p>Your CSV is processed and stored only in this browser. No account, upload, or tracking profile is required.</p>
+              </section>
+
+              {data && <section className="site-footer__data">
+                <h2>Your local data</h2>
+                <div className="site-footer__file">
+                  <strong>{fileName}</strong>
+                  <span>{measurements.length.toLocaleString()} records stored locally</span>
+                </div>
+                <div className="site-footer__actions">
+                  <Button variant="secondary" onClick={() => fileInput.current?.click()}>Choose another CSV</Button>
+                  <Button variant="quiet" className="clear-button" onClick={clearStoredData}>Clear data</Button>
+                </div>
+              </section>}
+
+              <div className="site-footer__bottom">
+                <span>Free</span>
+                <span aria-hidden="true">·</span>
+                <span>Processed locally</span>
+                <span aria-hidden="true">·</span>
+                <span>Open source</span>
               </div>
             </div>
-          </section>}
-
-          {ranges.length > 0 && <section className="diurnal-section">
-            <SectionHeading
-              eyebrow="Periods"
-              title="Diurnal pattern"
-              actions={<SegmentedControl label="Eye shown in diurnal chart" value={diurnalEye} options={["OD", "OS"] as const} optionLabel={(eye) => eye === "OD" ? "Right" : "Left"} onChange={setDiurnalEye} />}
-            />
-            <div className="diurnal-chart">
-            <ResponsiveContainer width="100%" height="100%">
-              <ScatterChart data={diurnalPoints} margin={{ top: 16, right: 20, bottom: 20, left: 0 }}>
-                <CartesianGrid stroke="var(--line)" vertical={false} />
-                {Array.from({ length: 8 }, (_, bin) => bin % 2 === 1 && (
-                  <ReferenceArea key={bin} x1={bin * 180} x2={(bin + 1) * 180} fill="#e8ecee" fillOpacity={0.72} stroke="none" />
-                ))}
-                <XAxis
-                  type="number"
-                  dataKey="minuteOfDay"
-                  domain={[0, 1440]}
-                  ticks={Array.from({ length: 8 }, (_, bin) => bin * 180 + 90)}
-                  tickFormatter={(value) => diurnalBinLabel(Math.floor(value / 180))}
-                  tick={{ fill: "var(--muted)", fontSize: 11 }}
-                />
-                <YAxis width={52} type="number" dataKey="mean" domain={["dataMin - 2", "dataMax + 2"]} allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
-                <Tooltip content={<DiurnalTooltip />} />
-                <Legend height={34} verticalAlign="top" align="right" />
-                {diurnalSeries.map((series) => (
-                  <Scatter
-                    key={series.id}
-                    name={series.name}
-                    data={series.data}
-                    fill={series.color}
-                    line={{ stroke: series.color, strokeWidth: 2 }}
-                    shape="circle"
-                  >
-                    <ErrorBar dataKey="sd" width={8} stroke={series.color} strokeWidth={1.5} direction="y" />
-                  </Scatter>
-                ))}
-              </ScatterChart>
-            </ResponsiveContainer>
-            </div>
-          </section>}
+          </footer>
           </div>
 
           <ChartEditor
@@ -541,9 +666,7 @@ export default function App() {
             onTrendModeChange={setTrendMode}
             onOpenSessionInfo={openSessionInfo}
           />
-          </div>
-        </>
-      )}
+      </div>
     </main>
   );
 }

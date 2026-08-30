@@ -1,5 +1,5 @@
 :root {
-  --font: "Geist Variable", "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --body: 400 .875rem/1.5 var(--font); --small: 400 .75rem/1.45 var(--font);
   --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1rem; --s5: 1.5rem; --s6: 2rem;
   --gutter: clamp(1.25rem, 2.5vw, 2rem); --control: 2.5rem; --control-sm: 2rem;
@@ -26,4 +26,5 @@ main { min-height: 100vh; }
 .ui-toggle { width: 1.75rem; height: 1rem; padding: 0; border: 0; border-radius: 999px; display: block; background: transparent; cursor: pointer; } .ui-toggle:disabled { cursor: default; } .ui-toggle:focus-visible { outline: 1px solid hsl(207 100% 60%); outline-offset: 2px; } .publication-switch-track { position: relative; width: 1.75rem; height: 1rem; border-radius: 999px; display: block; background: hsl(0 0% 42%); transition: background-color var(--fast) var(--ease); } .publication-switch-track > span { position: absolute; top: 2px; left: 2px; width: .75rem; height: .75rem; border-radius: 50%; background: var(--editor-ink); transition: left var(--fast) var(--ease); } .ui-toggle[aria-checked="true"] .publication-switch-track { background: hsl(207 100% 60%); } .ui-toggle[aria-checked="true"] .publication-switch-track > span { left: calc(100% - .75rem - 2px); }
 .dot { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; } .dot--od { background: var(--od); } .dot--os { background: var(--os); }
 label { color: var(--muted); font: var(--small); }
+@media (max-width: 64rem) { :root { --editor-width: 45vw; } }
 @media (max-width: 40rem) { :root { --editor-width: 100vw; --gutter: .75rem; } }

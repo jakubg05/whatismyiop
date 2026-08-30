@@ -1,0 +1,3 @@
+# Use CodeMirror for comparison expressions
+
+Use modular CodeMirror 6 packages as the single-line Comparison Expression editor because the experience requires native character-level editing, selection, clipboard, history, non-atomic syntax decoration, and caret-aware autocomplete. CodeMirror owns those editor mechanics, while application code owns the fixed comparison grammar, canonical formatting, longest-valid-prefix parsing, legal completions, Comparison Segment derivation, and chart behavior; this avoids both an atomic token interface and a hand-built contenteditable or text-overlay editor.
