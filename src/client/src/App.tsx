@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
   CartesianGrid,
   ErrorBar,
@@ -92,11 +92,13 @@ function DiurnalTooltip({ active, payload }: { active?: boolean; payload?: Array
 
 export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
+  const dragDepth = useRef(0);
   const { expression, setExpression, clearExpression } = useComparisonExpression();
   const [data, setData] = useState<ParseResult | null>(null);
   const [fileName, setFileName] = useState("");
   const [rawCsv, setRawCsv] = useState("");
   const [error, setError] = useState("");
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [visibleEyes, setVisibleEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [trendMode, setTrendMode] = useState<TrendMode>("adjusted");
   const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
@@ -118,8 +120,8 @@ export default function App() {
 
   const measurements = data?.measurements ?? [];
   const measurementSessions = useMemo(() => coalesceMeasurementSessions(measurements), [measurements]);
-  const fullDomainStart = measurements[0]?.time ?? 0;
-  const fullDomainEnd = measurements.at(-1)?.time ?? 0;
+  const fullDomainStart = measurements[0]?.time ?? now - 30 * 86_400_000;
+  const fullDomainEnd = measurements.at(-1)?.time ?? now;
   const [minimumIop, maximumIop] = useMemo(() => {
     let minimum = Number.POSITIVE_INFINITY;
     let maximum = Number.NEGATIVE_INFINITY;
@@ -127,7 +129,7 @@ export default function App() {
       minimum = Math.min(minimum, measurement.iop);
       maximum = Math.max(maximum, measurement.iop);
     }
-    return Number.isFinite(minimum) ? [Math.floor(minimum - 2), Math.ceil(maximum + 2)] : [0, 1];
+    return Number.isFinite(minimum) ? [Math.floor(minimum - 2), Math.ceil(maximum + 2)] : [5, 35];
   }, [measurements]);
   const today = formatDateInput(now);
   const currentTime = formatTimeInput(now);
@@ -334,6 +336,31 @@ export default function App() {
     cancelDraft();
   }
 
+  function handleDragEnter(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    dragDepth.current += 1;
+    setIsDraggingFile(true);
+  }
+
+  function handleDragOver(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleDragLeave(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setIsDraggingFile(false);
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    dragDepth.current = 0;
+    setIsDraggingFile(false);
+    const file = event.dataTransfer.files[0];
+    if (file) void loadFile(file);
+  }
+
   const setDraftEventTime = useCallback((time: number) => {
     setDraftEvent((current) => ({
       ...current,
@@ -434,30 +461,70 @@ export default function App() {
       </div>
       <span className="visually-hidden" aria-live="polite">{toastDismissalCount > 0 && <span key={toastDismissalCount}>Notification dismissed.</span>}</span>
 
-      {!data ? (
-        <section className="empty-state" onClick={() => fileInput.current?.click()}>
-          <img className="empty-state-logo" src="/whatismyiop_mark_black.svg" alt="What Is My IOP" />
-          <Button variant="primary">Choose measurements.csv</Button>
-        </section>
-      ) : (
-        <>
-          <div className={`analysis-shell ${mode ? "analysis-shell--editor-open" : ""}`}>
+      <div className={`analysis-shell ${mode ? "analysis-shell--editor-open" : ""}`}>
           <div className="analysis-main">
           <TopNavigation
             fileName={fileName}
             measurementCount={measurements.length}
-            onClearData={clearStoredData}
-            onChooseFile={() => fileInput.current?.click()}
+            hasData={data !== null}
           />
 
-          <div className="comparison-overlay">
+          {!data && <section
+            className={`import-dropzone${isDraggingFile ? " import-dropzone--dragging" : ""}`}
+            aria-label="Import IOP measurements"
+            onClick={() => fileInput.current?.click()}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <svg className="import-dropzone__outline" aria-hidden="true">
+              <rect
+                x="1"
+                y="1"
+                width="calc(100% - 2px)"
+                height="calc(100% - 2px)"
+                rx="13"
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+            <div className="import-dropzone__copy">
+              <h1>Drop your measurements.csv here</h1>
+              <p>Explore your IOP readings, trends, and comparisons. Your file stays in this browser and is never uploaded.</p>
+            </div>
+            <Button variant="primary" onClick={(event) => {
+              event.stopPropagation();
+              fileInput.current?.click();
+            }}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" /></svg>
+              <span>Choose measurements.csv</span>
+            </Button>
+            <div className="import-dropzone__facts" aria-label="Import details">
+              <span>Free</span>
+              <span aria-hidden="true">·</span>
+              <span>Processed locally</span>
+              <span aria-hidden="true">·</span>
+              <a
+                href="https://github.com/jakubg05/whatismyiop"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Open source on GitHub"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <svg className="import-dropzone__github" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75a9.5 9.5 0 0 0-3 18.51c.48.09.65-.2.65-.46v-1.67c-2.67.58-3.23-1.13-3.23-1.13-.44-1.1-1.07-1.4-1.07-1.4-.87-.6.07-.58.07-.58.96.07 1.47.99 1.47.99.86 1.47 2.25 1.05 2.8.8.09-.62.34-1.05.61-1.29-2.13-.24-4.37-1.07-4.37-4.7 0-1.04.37-1.89.99-2.55-.1-.24-.43-1.21.09-2.52 0 0 .8-.26 2.61.97A9.1 9.1 0 0 1 12 7.42a9 9 0 0 1 2.38.32c1.81-1.23 2.61-.97 2.61-.97.52 1.31.19 2.28.09 2.52.62.66.99 1.51.99 2.55 0 3.64-2.24 4.45-4.38 4.69.35.3.65.88.65 1.77v2.5c0 .26.18.56.66.46A9.5 9.5 0 0 0 12 2.75Z" /></svg>
+                <span>Open source</span>
+              </a>
+            </div>
+          </section>}
+
+          {data && <div className="comparison-overlay">
             <ComparisonExpressionEditor
               catalog={comparisonCatalog}
               value={expression}
               onChange={setExpression}
               onPreviewChange={setComparisonValuePreview}
             />
-          </div>
+          </div>}
 
           <MeasurementsChart
             measurements={measurements}
@@ -532,13 +599,56 @@ export default function App() {
                   <SegmentedControl label="Eye shown in diurnal chart" value={diurnalEye} options={["OD", "OS"] as const} optionLabel={(eye) => eye === "OD" ? "Right" : "Left"} onChange={setDiurnalEye} />
                 </footer>
               </> : <div className="diurnal-empty">
-                <span>{comparisonMode ? "No readings" : "Add a comparison segment to view diurnal patterns."}</span>
-                <small>{comparisonMode
+                <span>{!data ? "Import measurements to view diurnal patterns." : comparisonMode ? "No readings" : "Add a comparison segment to view diurnal patterns."}</span>
+                <small>{!data
+                  ? "The diurnal chart will summarize readings by time of day."
+                  : comparisonMode
                   ? `No ${diurnalEye === "OD" ? "right" : "left"}-eye sessions fall inside the active comparison segments.`
                   : "You can create comparison segments using the search box at the top of the screen."}</small>
               </div>}
             </section>
           </section>
+
+          <footer className="site-footer">
+            <div className="site-footer__inner">
+              <section className="site-footer__about">
+                <div className="site-footer__brand">
+                  <img src="/whatismyiop_mark_black.svg" alt="" />
+                  <strong>WhatIsMyIOP.com</strong>
+                </div>
+                <p>Explore home IOP measurements, trends, and comparisons without sending your health data to a server.</p>
+                <a className="site-footer__github" href="https://github.com/jakubg05/whatismyiop" target="_blank" rel="noreferrer">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75a9.5 9.5 0 0 0-3 18.51c.48.09.65-.2.65-.46v-1.67c-2.67.58-3.23-1.13-3.23-1.13-.44-1.1-1.07-1.4-1.07-1.4-.87-.6.07-.58.07-.58.96.07 1.47.99 1.47.99.86 1.47 2.25 1.05 2.8.8.09-.62.34-1.05.61-1.29-2.13-.24-4.37-1.07-4.37-4.7 0-1.04.37-1.89.99-2.55-.1-.24-.43-1.21.09-2.52 0 0 .8-.26 2.61.97A9.1 9.1 0 0 1 12 7.42a9 9 0 0 1 2.38.32c1.81-1.23 2.61-.97 2.61-.97.52 1.31.19 2.28.09 2.52.62.66.99 1.51.99 2.55 0 3.64-2.24 4.45-4.38 4.69.35.3.65.88.65 1.77v2.5c0 .26.18.56.66.46A9.5 9.5 0 0 0 12 2.75Z" /></svg>
+                  <span>Open source on GitHub</span>
+                </a>
+              </section>
+
+              <section className="site-footer__privacy">
+                <h2>Private by design</h2>
+                <p>Your CSV is processed and stored only in this browser. No account, upload, or tracking profile is required.</p>
+              </section>
+
+              {data && <section className="site-footer__data">
+                <h2>Your local data</h2>
+                <div className="site-footer__file">
+                  <strong>{fileName}</strong>
+                  <span>{measurements.length.toLocaleString()} records stored locally</span>
+                </div>
+                <div className="site-footer__actions">
+                  <Button variant="secondary" onClick={() => fileInput.current?.click()}>Choose another CSV</Button>
+                  <Button variant="quiet" className="clear-button" onClick={clearStoredData}>Clear data</Button>
+                </div>
+              </section>}
+
+              <div className="site-footer__bottom">
+                <span>Free</span>
+                <span aria-hidden="true">·</span>
+                <span>Processed locally</span>
+                <span aria-hidden="true">·</span>
+                <span>Open source</span>
+              </div>
+            </div>
+          </footer>
           </div>
 
           <ChartEditor
@@ -556,9 +666,7 @@ export default function App() {
             onTrendModeChange={setTrendMode}
             onOpenSessionInfo={openSessionInfo}
           />
-          </div>
-        </>
-      )}
+      </div>
     </main>
   );
 }

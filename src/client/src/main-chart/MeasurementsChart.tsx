@@ -360,7 +360,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   function startAnnotation(time: number, clientX: number) {
-    if (mode) return;
+    if (mode || measurements.length === 0) return;
     if (comparisonMode) {
       onComparisonBlocked();
       dragRef.current = null;
@@ -662,7 +662,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   return (
-    <section className="panel chart-panel">
+    <section className={`panel chart-panel${measurements.length === 0 ? " chart-panel--empty" : ""}`}>
       <div ref={chart} className="chart-wrap" style={{ marginTop: `${annotationLaneCount * 22}px` }}>
         <div className="chart-annotation-labels" style={{ height: `${annotationLaneCount * 22}px` }}>
           {annotationLabels.map((label) => (
@@ -784,6 +784,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           yMin={pressureDomain[0]}
           yMax={pressureDomain[1]}
         />
+        {measurements.length === 0 && <div className="chart-empty-message" aria-hidden="true">
+          <span>Your measurements will appear here</span>
+          <small>Showing the last 30 days</small>
+        </div>}
         <div
           ref={plotOverlayRef}
           className="chart-selection-layer"

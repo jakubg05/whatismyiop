@@ -34,6 +34,11 @@
 .ui-chart-toggle--disabled { color: var(--subtle); cursor: not-allowed; opacity: .62; }
 
 .chart-wrap { position: relative; width: 100%; height: var(--chart-height); user-select: none; }
+.chart-empty-message { position: absolute; z-index: 5; inset: 12px 20px 40px 52px; display: grid; place-content: center; justify-items: center; gap: var(--s1); color: var(--muted); text-align: center; pointer-events: none; }
+.chart-empty-message span { color: var(--ink); font-size: .8125rem; font-weight: 500; }
+.chart-empty-message small { font-size: .75rem; }
+.chart-panel--empty .measurement-canvas { pointer-events: none; }
+.chart-panel--empty .chart-toolbar { opacity: .42; pointer-events: none; }
 .chart-daylight-background { position: absolute; z-index: 0; inset: 12px 20px 40px 52px; overflow: hidden; pointer-events: none; transition: opacity 160ms var(--ease); }
 .chart-daylight-day { position: absolute; inset-block: 0; background: linear-gradient(90deg, #102c55 0%, #234f7e calc(var(--sunrise) - 5%), #e4a68e var(--sunrise), #dbeaf2 calc(var(--sunrise) + 7%), #f4f5f0 50%, #eadbc4 calc(var(--sunset) - 7%), #d98f96 var(--sunset), #234f7e calc(var(--sunset) + 5%), #102c55 100%); }
 .chart-wrap > .recharts-responsive-container { position: relative; z-index: 1; }
