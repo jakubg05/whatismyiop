@@ -15,6 +15,7 @@ import {
   type SessionPoint,
 } from "../analysis";
 import { panDomain, type TimeDomain } from "./chartNavigation";
+import { CHART_PLOT_LEFT, CHART_PLOT_RIGHT } from "./format";
 import { buildTrendSeries, interpolateTrend, interpolateTrendEstimate, splitTrendSegment, trendEstimatesForDomain, type EyeTrend, type TrendEstimate, type TrendMode } from "./trend";
 import { tetherHorizontalOverlay } from "./tooltipPosition";
 
@@ -62,7 +63,7 @@ type MeasurementVisibility = {
 };
 
 const COLORS = { OD: "#a63d74", OS: "#3f7d4e" } as const;
-export const MEASUREMENT_PLOT = { left: 52, right: 20, top: 12, bottom: 40 } as const;
+export const MEASUREMENT_PLOT = { left: CHART_PLOT_LEFT, right: CHART_PLOT_RIGHT, top: 12, bottom: 40 } as const;
 const HIT_RADIUS = 12;
 const RAW_RADIUS = 2;
 const SESSION_RADIUS = 4;
