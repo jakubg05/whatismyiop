@@ -852,6 +852,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         </div>
       </div>
       <div className="chart-toolbar">
+        <p className="chart-interaction-hint"><kbd>Ctrl</kbd> + click to add an event · <kbd>Ctrl</kbd> + drag to add a period</p>
         <div className="chart-filters" role="group" aria-label="Measurement filters">
           <ChartSelect
             className="chart-filter chart-filter--position"

@@ -491,20 +491,18 @@ export default function App() {
               />
             </svg>
             <div className="import-dropzone__copy">
-              <h1>Drop your measurements.csv here</h1>
-              <p>Explore your IOP readings, trends, and comparisons. The app processes your file locally and does not send its contents to us.</p>
+              <h1>Make sense of your home IOP measurements</h1>
+              <p>Explore trends, compare periods, and prepare a clearer view to discuss with your eye-care professional.</p>
             </div>
             <Button variant="primary" onClick={(event) => {
               event.stopPropagation();
               fileInput.current?.click();
             }}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" /></svg>
-              <span>Choose measurements.csv</span>
+              <span>Choose CSV export</span>
             </Button>
             <div className="import-dropzone__facts" aria-label="Import details">
-              <span>Free</span>
-              <span aria-hidden="true">·</span>
-              <span>Processed locally</span>
+              <span>Currently supports iCare HOME2 CSV exports</span>
               <span aria-hidden="true">·</span>
               <a
                 href="https://github.com/jakubg05/whatismyiop"

@@ -1,6 +1,9 @@
 :root { --chart-height: 28rem; }
 .chart-panel { max-width: 92rem; margin: 0 auto; padding: 0; }
 .chart-toolbar { min-width: 0; min-height: var(--control-sm); margin-top: var(--s2); display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); }
+.chart-interaction-hint { min-height: var(--control-sm); margin-right: auto; display: flex; align-items: center; color: var(--subtle); font: var(--small); }
+.chart-interaction-hint kbd { margin: 0 .2rem; padding: .0625rem .3rem; border: 1px solid var(--line); border-radius: .25rem; background: var(--surface); color: var(--muted); font: inherit; line-height: 1.2; }
+.chart-interaction-hint kbd:first-child { margin-left: 0; }
 .chart-filters { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .ui-chart-select { position: relative; min-width: 0; min-height: var(--control-sm); border: 1px solid var(--line); border-radius: var(--radius); display: inline-flex; background: var(--canvas); }
 .ui-chart-select__trigger { width: auto; min-height: calc(var(--control-sm) - 2px); height: 100%; padding: 0 var(--s2); border: 0; border-radius: calc(var(--radius) - 1px); outline: 0; display: flex; align-items: center; justify-content: flex-start; gap: var(--s2); background: transparent; color: var(--ink); font-family: var(--font); cursor: pointer; }

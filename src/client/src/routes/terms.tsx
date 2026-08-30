@@ -22,6 +22,11 @@ function Terms() {
       </section>
 
       <section>
+        <h2>File compatibility</h2>
+        <p>The website currently supports CSV exports from the iCare HOME2 tonometer. Other device models and export formats may differ and may not work. References to iCare HOME2 identify file compatibility only; WhatIsMyIOP.com is independent and is not affiliated with or endorsed by the device manufacturer.</p>
+      </section>
+
+      <section>
         <h2>Not medical care</h2>
         <p>The website is not a healthcare provider and does not provide diagnosis, monitoring by a clinician, treatment, or emergency services. It does not determine whether a reading or trend is safe and must not be used as the sole basis for starting, stopping, or changing treatment.</p>
       </section>
