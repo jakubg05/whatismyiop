@@ -19,17 +19,18 @@ import {
   type Eye,
   type ParseResult,
 } from "./analysis";
-import { ComparisonExpressionEditor } from "./ComparisonExpressionEditor";
+import { ComparisonExpressionEditor, type ComparisonValuePreview } from "./ComparisonExpressionEditor";
 import { useComparisonExpression } from "./ComparisonExpressionState";
 import {
   binDiurnalSessions,
   comparisonLabelError,
+  NOW_COMPARISON_EVENT_ID,
   parseComparisonExpression,
   resolveComparisonSegments,
   type ComparisonCatalog,
   type DiurnalPoint,
 } from "./comparison";
-import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartMode, type DraftRange, type TrendMode } from "./main-chart";
+import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartAnnotationPreview, type ChartMode, type DraftRange, type TrendMode } from "./main-chart";
 import { periodPalette } from "./periodPalette";
 import { TopNavigation } from "./TopNavigation";
 import { Button, SegmentedControl } from "./shared";
@@ -105,6 +106,7 @@ export default function App() {
   const [now, setNow] = useState(() => wallClockTimestamp());
   const [ranges, setRanges] = useState<SavedRange[]>([]);
   const [events, setEvents] = useState<SavedEvent[]>([]);
+  const [comparisonValuePreview, setComparisonValuePreview] = useState<ComparisonValuePreview | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
   const toastIds = useRef(new Set<string>());
   const [toastDismissalCount, setToastDismissalCount] = useState(0);
@@ -130,13 +132,31 @@ export default function App() {
   }, [measurements]);
   const today = formatDateInput(now);
   const currentTime = formatTimeInput(now);
-  const comparisonCatalog = useMemo<ComparisonCatalog>(() => ({ periods: ranges, events }), [events, ranges]);
+  const comparisonCatalog = useMemo<ComparisonCatalog>(() => ({ periods: ranges, events, now }), [events, now, ranges]);
   const comparisonExpression = useMemo(() => parseComparisonExpression(expression, comparisonCatalog), [comparisonCatalog, expression]);
   const comparisonRanges = useMemo(
     () => resolveComparisonSegments(comparisonExpression.segments, comparisonCatalog, fullDomainStart, fullDomainEnd, now),
     [comparisonCatalog, comparisonExpression.segments, fullDomainEnd, fullDomainStart, now],
   );
   const comparisonMode = comparisonExpression.segments.length > 0;
+  const chartAnnotationPreview = useMemo<ChartAnnotationPreview | null>(() => {
+    if (comparisonValuePreview?.kind === "period") {
+      const paletteIndex = ranges.findIndex((item) => item.label === comparisonValuePreview.label);
+      return paletteIndex >= 0 ? { kind: "range", value: ranges[paletteIndex], paletteIndex } : null;
+    }
+    if (comparisonValuePreview?.kind === "event") {
+      if (comparisonValuePreview.label === "now") {
+        return {
+          kind: "event",
+          value: { id: NOW_COMPARISON_EVENT_ID, label: "now", time: now },
+          paletteIndex: events.length,
+        };
+      }
+      const paletteIndex = events.findIndex((item) => item.label === comparisonValuePreview.label);
+      return paletteIndex >= 0 ? { kind: "event", value: events[paletteIndex], paletteIndex } : null;
+    }
+    return null;
+  }, [comparisonValuePreview, events, now, ranges]);
   const diurnalSeries = useMemo(() => comparisonRanges.map((range) => {
     const effectiveEnd = range.openEnded ? today : range.end;
     const effectiveEndTime = range.openEnded ? currentTime : range.endTime;
@@ -431,7 +451,12 @@ export default function App() {
             onChooseFile={() => fileInput.current?.click()}
           />
 
-          <ComparisonExpressionEditor catalog={comparisonCatalog} value={expression} onChange={setExpression} />
+          <ComparisonExpressionEditor
+            catalog={comparisonCatalog}
+            value={expression}
+            onChange={setExpression}
+            onPreviewChange={setComparisonValuePreview}
+          />
 
           <MeasurementsChart
             measurements={measurements}
@@ -445,6 +470,7 @@ export default function App() {
             events={events}
             comparisonRanges={comparisonRanges}
             comparisonMode={comparisonMode}
+            annotationPreview={chartAnnotationPreview}
             onComparisonBlocked={showComparisonBlockedToast}
             mode={mode}
             onSelectRange={selectRange}
