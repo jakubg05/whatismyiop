@@ -465,11 +465,7 @@ export default function App() {
 
       <div className={`analysis-shell ${mode ? "analysis-shell--editor-open" : ""}`}>
           <div className="analysis-main">
-          <TopNavigation
-            fileName={fileName}
-            measurementCount={measurements.length}
-            hasData={data !== null}
-          />
+          <TopNavigation />
 
           {!data && <section
             className={`import-dropzone${isDraggingFile ? " import-dropzone--dragging" : ""}`}
