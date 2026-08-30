@@ -14,7 +14,7 @@ export type ComparisonPeriod = {
 };
 
 export type ComparisonEvent = { id: string; label: string; time: number };
-export type ComparisonCatalog = { periods: readonly ComparisonPeriod[]; events: readonly ComparisonEvent[] };
+export type ComparisonCatalog = { periods: readonly ComparisonPeriod[]; events: readonly ComparisonEvent[]; now?: number };
 
 export type ComparisonSegmentDefinition =
   | { kind: "period"; periodId: string; label: string; sourceFrom: number; sourceTo: number }
@@ -43,9 +43,7 @@ export type ComparisonExpectedState =
   | "segment-start"
   | "duration"
   | "direction"
-  | "target-type"
-  | "period-value"
-  | "event-value"
+  | "target-value"
   | "and"
   | "maximum";
 
@@ -53,7 +51,7 @@ export type ComparisonTokenRole =
   | "segment-keyword"
   | "duration"
   | "direction"
-  | "target-type"
+  | "direct-period-value"
   | "period-value"
   | "event-value"
   | "and";
@@ -104,8 +102,10 @@ export type DiurnalPoint = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const MAX_COMPARISON_DAYS = 36_500;
 export const MAX_COMPARISON_SEGMENTS = 6;
+export const NOW_COMPARISON_EVENT_ID = "comparison-now";
 export const RECOMMENDED_DURATIONS = ["7d", "14d", "30d", "90d"] as const;
 const LABEL_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N}_-]*$/u;
+const RESERVED_LABELS = new Set(["and", "range", "before", "after", "now"]);
 
 export function isValidComparisonLabel(label: string): boolean {
   return LABEL_PATTERN.test(label);
@@ -118,9 +118,14 @@ export function comparisonLabelError(
   excludingId?: string,
 ): string | null {
   if (!isValidComparisonLabel(label)) return "Labels may contain letters, numbers, hyphens, and underscores, and must begin with a letter or number.";
-  const values = type === "period" ? catalog.periods : catalog.events;
-  if (values.some((value) => value.id !== excludingId && value.label.toLocaleLowerCase() === label.toLocaleLowerCase())) {
-    return `A ${type} named ${label} already exists.`;
+  const normalized = label.toLocaleLowerCase();
+  if (RESERVED_LABELS.has(normalized)) return "Labels cannot use the reserved comparison words AND, range, before, after, or now.";
+  const duplicate = [
+    ...catalog.periods.map((value) => ({ ...value, type: "period" as const })),
+    ...catalog.events.map((value) => ({ ...value, type: "event" as const })),
+  ].find((value) => !(value.type === type && value.id === excludingId) && value.label.toLocaleLowerCase() === normalized);
+  if (duplicate) {
+    return `A period or event named ${label} already exists.`;
   }
   return null;
 }
@@ -154,9 +159,27 @@ function readWord(text: string, from: number): { word: string; from: number; to:
   return match ? { word: match[0], from: start, to: start + match[0].length } : null;
 }
 
-function targetByLabel<T extends { label: string }>(values: readonly T[], label: string): T | null {
+function isMatchingTargetLabel(candidate: string, label: string): boolean {
   const normalized = label.toLocaleLowerCase();
-  return values.find((value) => isValidComparisonLabel(value.label) && value.label.toLocaleLowerCase() === normalized) ?? null;
+  if (RESERVED_LABELS.has(normalized)) return false;
+  return isValidComparisonLabel(candidate)
+    && !RESERVED_LABELS.has(candidate.toLocaleLowerCase())
+    && candidate.toLocaleLowerCase() === normalized;
+}
+
+function targetValueByLabel(catalog: ComparisonCatalog, label: string): { type: ComparisonTargetType; value: ComparisonPeriod | ComparisonEvent } | null {
+  if (label.toLocaleLowerCase() === "now") {
+    return { type: "event", value: { id: NOW_COMPARISON_EVENT_ID, label: "now", time: catalog.now ?? Date.now() } };
+  }
+  const matches = [
+    ...catalog.periods
+      .filter((value) => isMatchingTargetLabel(value.label, label))
+      .map((value) => ({ type: "period" as const, value })),
+    ...catalog.events
+      .filter((value) => isMatchingTargetLabel(value.label, label))
+      .map((value) => ({ type: "event" as const, value })),
+  ];
+  return matches.length === 1 ? matches[0] : null;
 }
 
 export function parseComparisonExpression(text: string, catalog: ComparisonCatalog): ComparisonParseResult {
@@ -183,31 +206,25 @@ export function parseComparisonExpression(text: string, catalog: ComparisonCatal
     const segmentFrom = skipWhitespace(text, position);
     if (segmentFrom >= text.length) break;
     const startKeyword = readColonKeyword(text, position);
-    if (!startKeyword || !["period", "range", "before", "after"].includes(startKeyword.word)) {
-      fail("segment-start", segmentFrom);
-      break;
-    }
-    append({ from: startKeyword.from, to: startKeyword.to, canonical: `${startKeyword.word}:`, style: "keyword", role: "segment-keyword" });
-
     let days: number | null = null;
     let direction: ComparisonDirection | null = null;
     let targetType: ComparisonTargetType | null = null;
     let targetId = "";
     let targetLabel = "";
 
-    if (startKeyword.word === "period") {
-      expected = "period-value";
+    if (!startKeyword || !["range", "before", "after"].includes(startKeyword.word)) {
       const value = readWord(text, position);
       if (!value) break;
-      const period = targetByLabel(catalog.periods, value.word);
-      if (!period) {
-        fail("period-value", value.from);
+      const target = targetValueByLabel(catalog, value.word);
+      if (target?.type !== "period") {
+        fail("segment-start", value.from);
         break;
       }
-      append({ from: value.from, to: value.to, canonical: period.label, style: "value", role: "period-value" });
-      const label = `period:${period.label}`;
-      segments.push({ kind: "period", periodId: period.id, label, sourceFrom: segmentFrom, sourceTo: position });
+      const period = target.value as ComparisonPeriod;
+      append({ from: value.from, to: value.to, canonical: period.label, style: "value", role: "direct-period-value" });
+      segments.push({ kind: "period", periodId: period.id, label: period.label, sourceFrom: segmentFrom, sourceTo: position });
     } else {
+      append({ from: startKeyword.from, to: startKeyword.to, canonical: `${startKeyword.word}:`, style: "keyword", role: "segment-keyword" });
       if (startKeyword.word === "range") {
         expected = "duration";
         const value = readWord(text, position);
@@ -233,39 +250,23 @@ export function parseComparisonExpression(text: string, catalog: ComparisonCatal
         tokens[tokens.length - 1].role = "direction";
       }
 
-      expected = "target-type";
-      const typeKeyword = readColonKeyword(text, position);
-      const typeStart = skipWhitespace(text, position);
-      if (!typeKeyword || (typeKeyword.word !== "period" && typeKeyword.word !== "event")) {
-        if (typeStart < text.length) fail("target-type", typeStart);
-        break;
-      }
-      targetType = typeKeyword.word;
-      append({ from: typeKeyword.from, to: typeKeyword.to, canonical: `${targetType}:`, style: "keyword", role: "target-type" });
-
-      expected = targetType === "period" ? "period-value" : "event-value";
+      expected = "target-value";
       const value = readWord(text, position);
       if (!value) break;
-      if (targetType === "period") {
-        const period = targetByLabel(catalog.periods, value.word);
-        if (!period || (direction === "after" && period.openEnded)) {
-          fail("period-value", value.from);
-          break;
-        }
-        targetId = period.id;
-        targetLabel = period.label;
-        append({ from: value.from, to: value.to, canonical: period.label, style: "value", role: "period-value" });
-      } else {
-        const event = targetByLabel(catalog.events, value.word);
-        if (!event) {
-          fail("event-value", value.from);
-          break;
-        }
-        targetId = event.id;
-        targetLabel = event.label;
-        append({ from: value.from, to: value.to, canonical: event.label, style: "value", role: "event-value" });
+      const target = targetValueByLabel(catalog, value.word);
+      if (!target || (target.type === "period" && direction === "after" && (target.value as ComparisonPeriod).openEnded)) {
+        fail("target-value", value.from);
+        break;
       }
-      const label = `${days === null ? "" : `range:${days}d `}${direction}:${targetType}:${targetLabel}`;
+      targetType = target.type;
+      targetId = target.value.id;
+      targetLabel = target.value.label;
+      if (targetType === "period") {
+        append({ from: value.from, to: value.to, canonical: targetLabel, style: "value", role: "period-value" });
+      } else {
+        append({ from: value.from, to: value.to, canonical: targetLabel, style: "value", role: "event-value" });
+      }
+      const label = `${days === null ? "" : `range:${days}d `}${direction}:${targetLabel}`;
       segments.push({ kind: "relative", days, direction, targetType, targetId, label, sourceFrom: segmentFrom, sourceTo: position });
     }
 
@@ -309,34 +310,43 @@ export function parseComparisonExpression(text: string, catalog: ComparisonCatal
 function optionMessage(expected: ComparisonExpectedState, count: number): string {
   if (expected === "maximum") return "Six comparison segments are already shown";
   if (expected === "duration") return count ? `${count} suggested durations` : "Expected a whole-day duration such as 14d";
-  if (expected === "target-type") return count ? "Choose period: or event:" : "Expected period: or event:";
-  if (expected === "period-value") return count ? `${count} matching periods` : "No matching period";
-  if (expected === "event-value") return count ? `${count} matching annotations` : "No matching annotation";
+  if (expected === "target-value") return count ? `${count} matching periods and annotations` : "No matching period or annotation";
   if (expected === "and") return count ? "Add another comparison segment" : "Expected AND";
-  return count ? `${count} suggestions` : `Expected ${expected === "direction" ? "before: or after:" : "a comparison keyword"}`;
+  return count ? `${count} suggestions` : `Expected ${expected === "direction" ? "before: or after:" : "a comparison keyword or saved period"}`;
 }
 
 function completionsForState(expected: ComparisonExpectedState, catalog: ComparisonCatalog, direction: ComparisonDirection | null): ComparisonCompletion[] {
-  if (expected === "segment-start") return ["period:", "range:", "before:", "after:"].map((label) => ({ label, type: "keyword" as const }));
-  if (expected === "duration") return RECOMMENDED_DURATIONS.map((label) => ({ label, type: "duration" as const }));
-  if (expected === "direction") return ["before:", "after:"].map((label) => ({ label, type: "keyword" as const }));
-  if (expected === "target-type") return ["period:", "event:"].map((label) => ({ label, type: "keyword" as const }));
-  if (expected === "period-value") return catalog.periods
-    .filter((period) => isValidComparisonLabel(period.label) && !(direction === "after" && period.openEnded))
-    .map((period) => ({ label: period.label, detail: period.openEnded ? "Open-ended period" : `${period.start} – ${period.end}`, type: "period" as const }));
-  if (expected === "event-value") return catalog.events
-    .filter((event) => isValidComparisonLabel(event.label))
-    .map((event) => ({ label: event.label, detail: `${formatDateInput(event.time)} ${formatTimeInput(event.time)}`, type: "event" as const }));
-  if (expected === "and") return [{ label: "AND", type: "delimiter" }];
+  const periodOptions = catalog.periods
+    .filter((period) => targetValueByLabel(catalog, period.label)?.value.id === period.id && !(direction === "after" && period.openEnded))
+    .map((period) => ({ label: period.label, detail: `${period.start} ${period.openEnded ? "now" : period.end}`, type: "period" as const }));
+  const eventOptions = catalog.events
+    .filter((event) => targetValueByLabel(catalog, event.label)?.value.id === event.id)
+    .map((event) => ({ label: event.label, detail: formatDateInput(event.time), type: "event" as const }));
+  eventOptions.push({ label: "now", detail: formatDateInput(catalog.now ?? Date.now()), type: "event" });
+  if (expected === "segment-start") return [
+    { label: "range:", detail: "Window around a target", type: "keyword" },
+    { label: "before:", detail: "Time before a target", type: "keyword" },
+    { label: "after:", detail: "Time after a target", type: "keyword" },
+    ...periodOptions,
+  ];
+  if (expected === "duration") return RECOMMENDED_DURATIONS.map((label) => ({
+    label,
+    detail: `${Number.parseInt(label, 10)} day window`,
+    type: "duration" as const,
+  }));
+  if (expected === "direction") return [
+    { label: "before:", detail: "Use time before the target", type: "keyword" },
+    { label: "after:", detail: "Use time after the target", type: "keyword" },
+  ];
+  if (expected === "target-value") return [...periodOptions, ...eventOptions];
+  if (expected === "and") return [{ label: "AND", detail: "Add another comparison segment", type: "delimiter" }];
   return [];
 }
 
 function tokenExpected(token: ComparisonToken): ComparisonExpectedState {
   if (token.role === "duration") return "duration";
   if (token.role === "direction") return "direction";
-  if (token.role === "target-type") return "target-type";
-  if (token.role === "period-value") return "period-value";
-  if (token.role === "event-value") return "event-value";
+  if (token.role === "period-value" || token.role === "event-value") return "target-value";
   if (token.role === "and") return "and";
   return "segment-start";
 }
@@ -346,7 +356,7 @@ function directionBefore(text: string, position: number, catalog: ComparisonCata
   for (let index = prefix.tokens.length - 1; index >= 0; index -= 1) {
     const token = prefix.tokens[index];
     if (token.role === "and") return null;
-    if (token.role === "segment-keyword" && token.canonical === "period:") return null;
+    if (token.role === "direct-period-value") return null;
     if (token.role === "direction") return token.canonical.startsWith("after") ? "after" : "before";
   }
   return null;
@@ -406,7 +416,9 @@ export function resolveComparisonSegments(
       openEnded = period.openEnded;
       end = openEnded ? presentTime : dateTimeBoundary(period.end, period.endTime, true);
     } else if (definition.targetType === "event") {
-      const event = catalog.events.find((item) => item.id === definition.targetId);
+      const event = definition.targetId === NOW_COMPARISON_EVENT_ID
+        ? { id: NOW_COMPARISON_EVENT_ID, label: "now", time: presentTime }
+        : catalog.events.find((item) => item.id === definition.targetId);
       if (!event) return [];
       if (definition.days === null) {
         start = definition.direction === "before" ? domainStart : event.time;
