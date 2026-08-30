@@ -1,13 +1,7 @@
 import { KatexMath as Math } from "./KatexMath";
 
-export function TrendExplanation({ onOpenSessions }: { onOpenSessions: () => void }) {
-  return (
-    <details className="trend-explanation">
-      <summary>
-        <span>How are trends calculated?</span>
-        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="m4.5 2.5 3.5 3.5-3.5 3.5" /></svg>
-      </summary>
-      <div className="trend-explanation__body">
+export function TrendExplanation({ onOpenSessions, expanded = false }: { onOpenSessions: () => void; expanded?: boolean }) {
+  const body = <div className="trend-explanation__body">
         <p>
           A trend is a smoothed summary of your session pressures, calculated separately for each eye. It is not a forecast and it does not invent readings beyond the dates you measured.
         </p>
@@ -44,7 +38,17 @@ export function TrendExplanation({ onOpenSessions }: { onOpenSessions: () => voi
           Hovering the curve shows an approximate uncertainty band based on how closely nearby sessions agree. A wider band means the underlying sessions are less consistent. It describes confidence in the smoothed pattern, not a safe range, a diagnosis, or a prediction of your next reading.
         </p>
         <Math block>{String.raw`\text{more agreement}\;\Longrightarrow\;\text{more confidence in the trend}`}</Math>
-      </div>
+  </div>;
+
+  if (expanded) return <div className="trend-explanation trend-explanation--standalone">{body}</div>;
+
+  return (
+    <details className="trend-explanation">
+      <summary>
+        <span>How are trends calculated?</span>
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="m4.5 2.5 3.5 3.5-3.5 3.5" /></svg>
+      </summary>
+      {body}
     </details>
   );
 }

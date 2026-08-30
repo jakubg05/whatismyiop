@@ -31,7 +31,7 @@ import {
   type ComparisonCatalog,
   type DiurnalPoint,
 } from "./comparison";
-import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartAnnotationPreview, type ChartMode, type DraftRange, type TrendMode } from "./main-chart";
+import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartAnnotationPreview, type ChartMode, type DraftRange, type TimeDomain } from "./main-chart";
 import { periodPalette } from "./periodPalette";
 import { SiteFooter } from "./SiteFooter";
 import { TopNavigation } from "./TopNavigation";
@@ -102,8 +102,6 @@ export default function App() {
   const [error, setError] = useState("");
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [visibleEyes, setVisibleEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
-  const [trendMode, setTrendMode] = useState<TrendMode>("adjusted");
-  const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [diurnalEye, setDiurnalEye] = useState<Eye>("OD");
   const [mode, setMode] = useState<ChartMode>(null);
   const [now, setNow] = useState(() => wallClockTimestamp());
@@ -124,6 +122,8 @@ export default function App() {
   const measurementSessions = useMemo(() => coalesceMeasurementSessions(measurements), [measurements]);
   const fullDomainStart = measurements[0]?.time ?? now - 30 * 86_400_000;
   const fullDomainEnd = measurements.at(-1)?.time ?? now;
+  const chartFullDomain = useMemo<TimeDomain>(() => [fullDomainStart, fullDomainEnd], [fullDomainEnd, fullDomainStart]);
+  const [chartDomain, setChartDomain] = useState<TimeDomain>(chartFullDomain);
   const [minimumIop, maximumIop] = useMemo(() => {
     let minimum = Number.POSITIVE_INFINITY;
     let maximum = Number.NEGATIVE_INFINITY;
@@ -177,6 +177,10 @@ export default function App() {
     const timer = window.setInterval(() => setNow(wallClockTimestamp()), 60_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    setChartDomain(chartFullDomain);
+  }, [chartFullDomain, data]);
 
   useEffect(() => {
     if (!comparisonMode || (mode !== "range" && mode !== "event")) return;
@@ -411,11 +415,8 @@ export default function App() {
   const toggleEye = useCallback((eye: Eye) => {
     setVisibleEyes((current) => ({ ...current, [eye]: !current[eye] }));
   }, []);
-  const toggleTrendEye = useCallback((eye: Eye) => {
-    setVisibleTrendEyes((current) => ({ ...current, [eye]: !current[eye] }));
-  }, []);
-  const toggleTrendSettings = useCallback(() => {
-    setMode((current) => current === "trend" ? null : "trend");
+  const openTrendInfo = useCallback(() => {
+    setMode("trend");
     setDraftRange(emptyDraftRange());
     setDraftEvent({ label: "", date: "", clock: "" });
     setEditingRangeId(null);
@@ -430,7 +431,14 @@ export default function App() {
     setEditingEventId(null);
     setError("");
   }, []);
-  const chartFullDomain = useMemo(() => [fullDomainStart, fullDomainEnd] as [number, number], [fullDomainEnd, fullDomainStart]);
+  const openHeatmapInfo = useCallback(() => {
+    setMode("heatmap");
+    setDraftRange(emptyDraftRange());
+    setDraftEvent({ label: "", date: "", clock: "" });
+    setEditingRangeId(null);
+    setEditingEventId(null);
+    setError("");
+  }, []);
   const chartYDomain = useMemo(() => [minimumIop, maximumIop] as [number, number], [maximumIop, minimumIop]);
   const dismissToast = useCallback((id: string) => {
     if (!toastIds.current.delete(id)) return;
@@ -529,10 +537,9 @@ export default function App() {
             measurements={measurements}
             visibleEyes={visibleEyes}
             onToggleEye={toggleEye}
-            trendMode={trendMode}
-            visibleTrendEyes={visibleTrendEyes}
-            onOpenTrendSettings={toggleTrendSettings}
+            onOpenTrendInfo={openTrendInfo}
             onOpenSessionInfo={openSessionInfo}
+            onOpenHeatmapInfo={openHeatmapInfo}
             ranges={ranges}
             events={events}
             comparisonRanges={comparisonRanges}
@@ -554,6 +561,8 @@ export default function App() {
             onDraftEventTime={setDraftEventTime}
             today={today}
             presentTime={now}
+            domain={chartDomain}
+            onDomainChange={setChartDomain}
             fullDomain={chartFullDomain}
             yDomain={chartYDomain}
           />
@@ -595,10 +604,12 @@ export default function App() {
                   </div>)}
                 </div>
                 <footer className="diurnal-controls">
-                  <SegmentedControl label="Eye shown in diurnal chart" value={diurnalEye} options={["OD", "OS"] as const} optionLabel={(eye) => eye === "OD" ? "Right" : "Left"} onChange={setDiurnalEye} />
+                  <SegmentedControl label="Eye shown in diurnal chart" value={diurnalEye} options={["OS", "OD"] as const} optionLabel={(eye) => eye === "OD" ? "Right" : "Left"} onChange={setDiurnalEye} />
                 </footer>
-              </> : <div className="diurnal-empty">
-                <span>{!data ? "Import measurements to view diurnal patterns." : comparisonMode ? "No readings" : "Add a comparison segment to view diurnal patterns."}</span>
+              </> : <div className={`diurnal-empty${data && !comparisonMode ? " diurnal-empty--unselected" : ""}`}>
+                <span>
+                  {!data ? "Import measurements to view diurnal patterns." : comparisonMode ? "No readings" : "Add a comparison segment to view diurnal patterns."}
+                </span>
                 <small>{!data
                   ? "The diurnal chart will summarize readings by time of day."
                   : comparisonMode
@@ -622,14 +633,10 @@ export default function App() {
             draftRangeLabel={draftRange.label}
             draftEventLabel={draftEvent.label}
             isEditing={Boolean(editingRangeId || editingEventId)}
-            trendMode={trendMode}
-            visibleTrendEyes={visibleTrendEyes}
             onSaveRange={addRange}
             onSaveEvent={addEvent}
             onDelete={deleteDraft}
             onCancel={cancelDraft}
-            onToggleTrendEye={toggleTrendEye}
-            onTrendModeChange={setTrendMode}
             onOpenSessionInfo={openSessionInfo}
           />
       </div>

@@ -6,7 +6,9 @@ import {
   type CSSProperties,
   type FocusEvent,
 } from "react";
+import type { Eye } from "../analysis";
 import { DateInput, Toggle } from "../shared/ui";
+import type { TrendMode } from "./trend";
 
 export const ChartDateTag = forwardRef<HTMLDivElement, {
   value: string;
@@ -187,4 +189,205 @@ export function ChartSelect<T extends string>({ label, value, options, action, o
       </div>}
     </div>
   );
+}
+
+function ChartControlOption({ label, colorClass, checked, disabled = false, multiple = false, onClick }: {
+  label: string;
+  colorClass?: string;
+  checked: boolean;
+  disabled?: boolean;
+  multiple?: boolean;
+  onClick: () => void;
+}) {
+  return <button
+    className="chart-control__option"
+    type="button"
+    role={multiple ? "checkbox" : "radio"}
+    aria-checked={checked}
+    disabled={disabled}
+    onClick={onClick}
+  >
+    <span className="chart-control__option-copy">
+      {colorClass && <span className={`dot ${colorClass}`} aria-hidden="true" />}
+      <span>{label}</span>
+    </span>
+    {checked && <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg>}
+  </button>;
+}
+
+export function HeatmapControl({
+  visible,
+  eye,
+  uncertainRegions,
+  onToggleVisible,
+  onEyeChange,
+  onToggleUncertainRegions,
+  onOpenExplanation,
+}: {
+  visible: boolean;
+  eye: Eye;
+  uncertainRegions: boolean;
+  onToggleVisible: () => void;
+  onEyeChange: (eye: Eye) => void;
+  onToggleUncertainRegions: () => void;
+  onOpenExplanation: () => void;
+}) {
+  const root = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const selectedLabel = visible ? eye === "OS" ? "Left" : "Right" : "Off";
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return <div ref={root} className="ui-chart-select heatmap-control">
+    <button
+      className="ui-chart-select__trigger"
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      onClick={() => setOpen((current) => !current)}
+    >
+      <span className="ui-chart-select__label">Heatmap</span>
+      <span className="ui-chart-select__value">
+        <span>{selectedLabel}</span>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+      </span>
+    </button>
+    {open && <div className="ui-chart-select__menu chart-control__menu" role="dialog" aria-label="Heatmap settings">
+      <div className="chart-control__section">
+        <div className="chart-control__row">
+          <span>Show heatmap</span>
+          <Toggle className="chart-control__toggle" label="Show heatmap" checked={visible} onChange={onToggleVisible} />
+        </div>
+      </div>
+      <div className="chart-control__section" aria-disabled={!visible}>
+        <div className="chart-control__row">
+          <span>Show uncertain regions</span>
+          <Toggle className="chart-control__toggle" label="Show uncertain heatmap regions" checked={uncertainRegions} disabled={!visible} onChange={onToggleUncertainRegions} />
+        </div>
+      </div>
+      <div className="chart-control__section" role="group" aria-label="Eye shown in heatmap" aria-disabled={!visible}>
+          {(["OS", "OD"] as Eye[]).map((option) => <ChartControlOption
+            key={option}
+            label={option === "OS" ? "Left" : "Right"}
+            colorClass={`dot--${option.toLowerCase()}`}
+            checked={eye === option}
+            disabled={!visible}
+            onClick={() => onEyeChange(option)}
+          />)}
+      </div>
+      <div className="ui-chart-select__menu-action">
+        <button className="ui-chart-select__menu-link" type="button" onClick={() => {
+          onOpenExplanation();
+          setOpen(false);
+        }}>
+          <span>How heatmaps work</span>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+        </button>
+      </div>
+    </div>}
+  </div>;
+}
+
+export function TrendControl({
+  visible,
+  mode,
+  eyes,
+  onToggleVisible,
+  onModeChange,
+  onToggleEye,
+  onOpenExplanation,
+}: {
+  visible: boolean;
+  mode: Exclude<TrendMode, "off">;
+  eyes: Record<Eye, boolean>;
+  onToggleVisible: () => void;
+  onModeChange: (mode: Exclude<TrendMode, "off">) => void;
+  onToggleEye: (eye: Eye) => void;
+  onOpenExplanation: () => void;
+}) {
+  const root = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return <div ref={root} className="ui-chart-select trend-control">
+    <button
+      className="ui-chart-select__trigger"
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      onClick={() => setOpen((current) => !current)}
+    >
+      <span className="ui-chart-select__label">Trend</span>
+      <span className="ui-chart-select__value">
+        <span>{visible ? mode === "adjusted" ? "Adjusted" : "Observed" : "Off"}</span>
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+      </span>
+    </button>
+    {open && <div className="ui-chart-select__menu chart-control__menu" role="dialog" aria-label="Trend settings">
+      <div className="chart-control__section">
+        <div className="chart-control__row">
+          <span>Show trend</span>
+          <Toggle className="chart-control__toggle" label="Show trend" checked={visible} onChange={onToggleVisible} />
+        </div>
+      </div>
+      <div className="chart-control__section" role="group" aria-label="Trend type" aria-disabled={!visible}>
+          {(["adjusted", "observed"] as const).map((option) => <ChartControlOption
+            key={option}
+            label={option === "adjusted" ? "Adjusted" : "Observed"}
+            checked={mode === option}
+            disabled={!visible}
+            onClick={() => onModeChange(option)}
+          />)}
+      </div>
+      <div className="chart-control__section" role="group" aria-label="Eyes shown in trend" aria-disabled={!visible}>
+          {(["OS", "OD"] as Eye[]).map((option) => <ChartControlOption
+            key={option}
+            label={option === "OS" ? "Left" : "Right"}
+            colorClass={`dot--${option.toLowerCase()}`}
+            checked={eyes[option]}
+            disabled={!visible}
+            multiple
+            onClick={() => onToggleEye(option)}
+          />)}
+      </div>
+      <div className="ui-chart-select__menu-action">
+        <button className="ui-chart-select__menu-link" type="button" onClick={() => {
+          onOpenExplanation();
+          setOpen(false);
+        }}>
+          <span>How trends work</span>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+        </button>
+      </div>
+    </div>}
+  </div>;
 }

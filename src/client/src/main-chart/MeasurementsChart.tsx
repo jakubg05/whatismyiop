@@ -24,12 +24,13 @@ import { dateTimeBoundary, formatDateInput, formatTimeInput, type Eye, type Meas
 import { eventPalette, periodPalette as rangePalette } from "../periodPalette";
 import { clipDomain, daylightBackground, intersectDomains, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
+import { DiurnalHeatmapCanvas } from "./DiurnalHeatmapCanvas";
 import { moveRangeEdge, rangeTimeDomain, type EditableRange } from "./range";
 import { type TrendMode } from "./trend";
-import { ChartDateTag, ChartSelect, ChartToggle } from "./controls";
-import { formatChartTime } from "./format";
+import { ChartDateTag, ChartSelect, ChartToggle, HeatmapControl, TrendControl } from "./controls";
+import { chartTimeTicks, CHART_PLOT_LEFT, CHART_PLOT_RIGHT, formatChartTime } from "./format";
 
-export type ChartMode = "range" | "event" | "trend" | "sessions" | null;
+export type ChartMode = "range" | "event" | "trend" | "sessions" | "heatmap" | null;
 type PositionFilter = "all" | "sitting" | "laying";
 
 export type DraftRange = EditableRange;
@@ -63,10 +64,9 @@ type Props = {
   measurements: Measurement[];
   visibleEyes: Record<Eye, boolean>;
   onToggleEye: (eye: Eye) => void;
-  trendMode: TrendMode;
-  visibleTrendEyes: Record<Eye, boolean>;
-  onOpenTrendSettings: () => void;
+  onOpenTrendInfo: () => void;
   onOpenSessionInfo: () => void;
+  onOpenHeatmapInfo: () => void;
   ranges: ChartRange[];
   events: ChartEvent[];
   comparisonRanges: ChartRange[];
@@ -88,6 +88,8 @@ type Props = {
   onDraftEventTime: (time: number) => void;
   today: string;
   presentTime: number;
+  domain: TimeDomain;
+  onDomainChange: (domain: TimeDomain) => void;
   fullDomain: TimeDomain;
   yDomain: TimeDomain;
 };
@@ -117,10 +119,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   measurements,
   visibleEyes,
   onToggleEye,
-  trendMode,
-  visibleTrendEyes,
-  onOpenTrendSettings,
+  onOpenTrendInfo,
   onOpenSessionInfo,
+  onOpenHeatmapInfo,
   ranges,
   events,
   comparisonRanges,
@@ -142,6 +143,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   onDraftEventTime,
   today,
   presentTime,
+  domain,
+  onDomainChange,
   fullDomain,
   yDomain,
 }: Props) {
@@ -153,7 +156,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const dragRef = useRef<AnnotationDrag | null>(null);
   const handleDrag = useRef<HandleDrag | null>(null);
   const draftRangeRef = useRef(draftRange);
-  const [domain, setDomain] = useState<TimeDomain>(fullDomain);
   const domainRef = useRef(domain);
   const pendingDomain = useRef<TimeDomain | null>(null);
   const wheelFrame = useRef<number | null>(null);
@@ -168,6 +170,14 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [qualityFilter, setQualityFilter] = useState("all");
   const [showPeriods, setShowPeriods] = useState(true);
   const [showEvents, setShowEvents] = useState(true);
+  const [showTrend, setShowTrend] = useState(true);
+  const [trendType, setTrendType] = useState<Exclude<TrendMode, "off">>("adjusted");
+  const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
+  const [showHeatmap, setShowHeatmap] = useState(true);
+  const [renderHeatmap, setRenderHeatmap] = useState(true);
+  const [heatmapClosing, setHeatmapClosing] = useState(false);
+  const [heatmapEye, setHeatmapEye] = useState<Eye>("OS");
+  const [showUncertainRegions, setShowUncertainRegions] = useState(true);
   const [periodHandleEdges, setPeriodHandleEdges] = useState<readonly [RangeEdge, RangeEdge]>(["start", "end"]);
   const annotationEditorOpen = mode === "range" || mode === "event";
   const annotationPreviewActive = annotationPreview !== null;
@@ -186,7 +196,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       ? []
       : comparisonMode ? [] : events;
   const [domainStart, domainEnd] = domain;
-  const [fullDomainStart, fullDomainEnd] = fullDomain;
   const pressureDomain = useMemo(() => {
     const lower = Math.floor(yDomain[0] / 5) * 5;
     const upper = Math.ceil(yDomain[1] / 5) * 5;
@@ -207,6 +216,15 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       && (qualityFilter === "all" || measurement.quality === qualityFilter)),
     [measurements, positionFilter, qualityFilter],
   );
+  const heatmapEyes = useMemo<Record<Eye, boolean>>(
+    () => ({ OD: heatmapEye === "OD", OS: heatmapEye === "OS" }),
+    [heatmapEye],
+  );
+  const trendMode: TrendMode = showTrend ? trendType : "off";
+  const timeTicks = useMemo(
+    () => chartTimeTicks(domain, Math.max(1, chartWidth - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right)),
+    [chartWidth, domain],
+  );
   const daylight = useMemo(
     () => daylightBackground(domain),
     [domain],
@@ -215,12 +233,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   if (!handleDrag.current || handleDrag.current.kind === "event") draftRangeRef.current = draftRange;
 
   domainRef.current = domain;
-
-  useEffect(() => {
-    domainRef.current = fullDomain;
-    pendingDomain.current = null;
-    setDomain(fullDomain);
-  }, [fullDomainStart, fullDomainEnd, measurements]);
 
   const focusAnnotationLabelInput = useCallback((input: HTMLInputElement | null) => {
     if (!input) return;
@@ -231,6 +243,21 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   useEffect(() => {
     if (qualityFilter !== "all" && !qualityOptions.includes(qualityFilter)) setQualityFilter("all");
   }, [qualityFilter, qualityOptions]);
+
+  useEffect(() => {
+    if (showHeatmap) {
+      setRenderHeatmap(true);
+      setHeatmapClosing(false);
+      return;
+    }
+    if (!renderHeatmap) return;
+    setHeatmapClosing(true);
+    const timeout = window.setTimeout(() => {
+      setRenderHeatmap(false);
+      setHeatmapClosing(false);
+    }, 280);
+    return () => window.clearTimeout(timeout);
+  }, [renderHeatmap, showHeatmap]);
 
   useEffect(() => {
     setHoveredAnnotation((current) => {
@@ -312,7 +339,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       if (wheelFrame.current === null) {
         wheelFrame.current = window.requestAnimationFrame(() => {
           wheelFrame.current = null;
-          if (pendingDomain.current) setDomain(pendingDomain.current);
+          if (pendingDomain.current) onDomainChange(pendingDomain.current);
           pendingDomain.current = null;
         });
       }
@@ -323,7 +350,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       element.removeEventListener("wheel", handleWheel, { capture: true });
       if (wheelFrame.current !== null) window.cancelAnimationFrame(wheelFrame.current);
     };
-  }, []);
+  }, [onDomainChange]);
 
   useEffect(() => {
     const element = chart.current;
@@ -344,7 +371,17 @@ export const MeasurementsChart = memo(function MeasurementsChart({
 
   function changeDomain(next: TimeDomain) {
     domainRef.current = next;
-    setDomain(next);
+    onDomainChange(next);
+  }
+
+  function toggleTrendEye(eye: Eye) {
+    const otherEye = eye === "OD" ? "OS" : "OD";
+    if (visibleTrendEyes[eye] && !visibleTrendEyes[otherEye]) {
+      setVisibleTrendEyes({ OD: true, OS: true });
+      setShowTrend(false);
+      return;
+    }
+    setVisibleTrendEyes((current) => ({ ...current, [eye]: !current[eye] }));
   }
 
   function ratioForTime(time: number): number {
@@ -663,7 +700,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
 
   return (
     <section className={`panel chart-panel${measurements.length === 0 ? " chart-panel--empty" : ""}`}>
-      <div ref={chart} className="chart-wrap" style={{ marginTop: `${annotationLaneCount * 22}px` }}>
+      <div className={`chart-composite${renderHeatmap && measurements.length > 0 ? " chart-composite--heatmap" : ""}`} style={{ marginTop: `${annotationLaneCount * 22}px` }}>
+      <div ref={chart} className="chart-wrap">
         <div className="chart-annotation-labels" style={{ height: `${annotationLaneCount * 22}px` }}>
           {annotationLabels.map((label) => (
             <div
@@ -732,10 +770,21 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           />)}
         </div>}
         <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart margin={{ top: 12, right: 20, bottom: 10, left: 0 }}>
+          <ScatterChart margin={{ top: 12, right: CHART_PLOT_RIGHT, bottom: 10, left: 0 }}>
             <CartesianGrid stroke="rgb(0 0 0 / 10%)" vertical={false} />
-            <XAxis type="number" dataKey="time" domain={domain} allowDataOverflow tickFormatter={formatChartTime} tick={{ fill: "var(--muted)", fontSize: 12 }} minTickGap={48} />
-            <YAxis width={52} type="number" dataKey="iop" domain={pressureDomain} ticks={pressureTicks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
+            <XAxis
+              type="number"
+              dataKey="time"
+              domain={domain}
+              allowDataOverflow
+              ticks={timeTicks}
+              interval={0}
+              height={30}
+              tickFormatter={formatChartTime}
+              tick={renderHeatmap ? false : { fill: "var(--muted)", fontSize: 12 }}
+              tickLine={!renderHeatmap}
+            />
+            <YAxis width={CHART_PLOT_LEFT} type="number" dataKey="iop" domain={pressureDomain} ticks={renderHeatmap ? pressureTicks.slice(1) : pressureTicks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
             {visibleRanges.map((range) => {
               const index = annotationPreview?.kind === "range" && annotationPreview.value.id === range.id
                 ? annotationPreview.paletteIndex
@@ -851,6 +900,17 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           /></div>}
         </div>
       </div>
+      {renderHeatmap && measurements.length > 0 && <DiurnalHeatmapCanvas
+        measurements={filteredMeasurements}
+        visibleEyes={heatmapEyes}
+        domain={domain}
+        fullDomain={fullDomain}
+        timeTicks={timeTicks}
+        closing={heatmapClosing}
+        showUncertainRegions={showUncertainRegions}
+        onDomainChange={changeDomain}
+      />}
+      </div>
       <div className="chart-toolbar">
         <p className="chart-interaction-hint"><kbd>Ctrl</kbd> + click to add an event · <kbd>Ctrl</kbd> + drag to add a period</p>
         <div className="chart-filters" role="group" aria-label="Measurement filters">
@@ -885,7 +945,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               { value: "median", label: "Median" },
               { value: "average", label: "Average" },
             ]}
-            action={{ label: "How sessions work?", onSelect: onOpenSessionInfo }}
+            action={{ label: "How sessions work", onSelect: onOpenSessionInfo }}
             pressed={measurementView === "sessions"}
             onTrigger={() => setMeasurementView("sessions")}
             onChange={(aggregation) => {
@@ -895,16 +955,33 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           />
           <button className="measurement-view-control__raw" type="button" aria-pressed={measurementView === "raw"} onClick={() => setMeasurementView("raw")}>Raw</button>
         </div>
-        <button className="chart-settings-trigger" type="button" aria-pressed={mode === "trend"} onClick={onOpenTrendSettings}>
-          <span>Trend</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
-        </button>
+        <TrendControl
+          visible={showTrend}
+          mode={trendType}
+          eyes={visibleTrendEyes}
+          onToggleVisible={() => setShowTrend((current) => !current)}
+          onModeChange={(value) => {
+            setTrendType(value);
+            setShowTrend(true);
+          }}
+          onToggleEye={toggleTrendEye}
+          onOpenExplanation={onOpenTrendInfo}
+        />
+        <HeatmapControl
+          visible={showHeatmap}
+          eye={heatmapEye}
+          uncertainRegions={showUncertainRegions}
+          onToggleVisible={() => setShowHeatmap((current) => !current)}
+          onEyeChange={setHeatmapEye}
+          onToggleUncertainRegions={() => setShowUncertainRegions((current) => !current)}
+          onOpenExplanation={onOpenHeatmapInfo}
+        />
         <div className="annotation-toggles" role="group" aria-label="Annotation visibility">
           <ChartToggle label="Periods" checked={showPeriods} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowPeriods((current) => !current)} />
           <ChartToggle label="Events" checked={showEvents} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowEvents((current) => !current)} />
         </div>
-        <div className="eye-toggles">
-          {(["OD", "OS"] as Eye[]).map((eye) => (
+        <div className="eye-toggles" role="group" aria-label="Measurement eyes">
+          {(["OS", "OD"] as Eye[]).map((eye) => (
             <ChartToggle key={eye} label={eyeLabel(eye)} colorClass={`dot--${eye.toLowerCase()}`} checked={visibleEyes[eye]} onChange={() => onToggleEye(eye)} />
           ))}
         </div>

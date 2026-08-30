@@ -87,6 +87,7 @@
 .warning-toast button { width: 1.5rem; height: 1.5rem; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-size: 1rem; }
 @keyframes toast-drop { from { opacity: 0; transform: translateY(-.75rem); } to { opacity: 1; transform: translateY(0); } }
 .diurnal-section { min-width: 0; padding: 0; } .diurnal-chart { width: 100%; height: 24.5rem; } .diurnal-empty { width: 100%; height: 24.5rem; padding: var(--s6) var(--s4); border: 1px solid #eceef1; border-radius: var(--radius-panel); display: grid; place-content: center; justify-items: center; gap: var(--s1); background: transparent; color: var(--muted); text-align: center; } .diurnal-empty span { color: var(--ink); font-size: .8125rem; font-weight: 500; } .diurnal-empty small { max-width: 28rem; color: var(--muted); font-size: .75rem; }
+.diurnal-empty--unselected { border-color: transparent; }
 .diurnal-series-status { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2) var(--s4); padding: var(--s2) var(--s3) 0; font: var(--small); }
 .diurnal-series-status__item { min-width: 0; display: inline-flex; align-items: center; gap: var(--s1); }
 .diurnal-series-status__swatch { width: .5rem; height: .5rem; flex: 0 0 auto; border-radius: 50%; }

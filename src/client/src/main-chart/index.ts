@@ -3,3 +3,5 @@ export { MeasurementsChart } from "./MeasurementsChart";
 export type { ChartAnnotationPreview, ChartMode, DraftRange } from "./MeasurementsChart";
 export { normalizeRangeEdges } from "./range";
 export type { TrendMode } from "./trend";
+export type { TimeDomain } from "./chartNavigation";
+export { chartTimeTicks, formatChartTime } from "./format";
