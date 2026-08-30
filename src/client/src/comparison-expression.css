@@ -8,10 +8,7 @@
   width: 100%;
   max-width: 38rem;
   min-width: 0;
-  margin:
-    calc((var(--s5) + var(--s4) + var(--chart-leading-space) - var(--chart-annotation-offset, 0px)) / 2)
-    auto
-    calc((var(--s5) + var(--s4) + var(--chart-leading-space) + var(--chart-annotation-offset, 0px)) / 2);
+  margin: 0 auto;
   transition: max-width var(--medium) var(--ease);
 }
 
@@ -30,7 +27,7 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--s2);
-  overflow: hidden;
+  overflow: visible;
   background: var(--surface);
   color: var(--ink);
   transition:
@@ -62,7 +59,7 @@
   grid-row: 1;
   min-width: 0;
   height: var(--comparison-line-height);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .comparison-expression__editor .cm-editor,

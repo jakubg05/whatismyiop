@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
   CartesianGrid,
   ErrorBar,
@@ -101,7 +101,6 @@ export default function App() {
   const [trendMode, setTrendMode] = useState<TrendMode>("adjusted");
   const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [diurnalEye, setDiurnalEye] = useState<Eye>("OD");
-  const [chartAnnotationOffset, setChartAnnotationOffset] = useState(0);
   const [mode, setMode] = useState<ChartMode>(null);
   const [now, setNow] = useState(() => wallClockTimestamp());
   const [ranges, setRanges] = useState<SavedRange[]>([]);
@@ -443,7 +442,7 @@ export default function App() {
       ) : (
         <>
           <div className={`analysis-shell ${mode ? "analysis-shell--editor-open" : ""}`}>
-          <div className="analysis-main" style={{ "--chart-annotation-offset": `${chartAnnotationOffset}px` } as CSSProperties}>
+          <div className="analysis-main">
           <TopNavigation
             fileName={fileName}
             measurementCount={measurements.length}
@@ -451,12 +450,14 @@ export default function App() {
             onChooseFile={() => fileInput.current?.click()}
           />
 
-          <ComparisonExpressionEditor
-            catalog={comparisonCatalog}
-            value={expression}
-            onChange={setExpression}
-            onPreviewChange={setComparisonValuePreview}
-          />
+          <div className="comparison-overlay">
+            <ComparisonExpressionEditor
+              catalog={comparisonCatalog}
+              value={expression}
+              onChange={setExpression}
+              onPreviewChange={setComparisonValuePreview}
+            />
+          </div>
 
           <MeasurementsChart
             measurements={measurements}
@@ -489,50 +490,53 @@ export default function App() {
             presentTime={now}
             fullDomain={chartFullDomain}
             yDomain={chartYDomain}
-            onAnnotationTopOffsetChange={setChartAnnotationOffset}
           />
 
           <section className="comparison-workspace">
             <section className="diurnal-section">
-              <div className="diurnal-chart">
-              {diurnalPoints.length > 0 ? <ResponsiveContainer width="100%" height="100%">
-                <ScatterChart data={diurnalPoints} margin={{ top: 16, right: 20, bottom: 20, left: 0 }}>
-                  <CartesianGrid stroke="var(--line)" vertical={false} />
-                  {Array.from({ length: 8 }, (_, bin) => bin % 2 === 1 && (
-                    <ReferenceArea key={bin} x1={bin * 180} x2={(bin + 1) * 180} fill="#e8ecee" fillOpacity={0.72} stroke="none" />
-                  ))}
-                  <XAxis
-                    type="number"
-                    dataKey="minuteOfDay"
-                    domain={[0, 1440]}
-                    ticks={Array.from({ length: 8 }, (_, bin) => bin * 180 + 90)}
-                    tickFormatter={diurnalTickLabel}
-                    minTickGap={18}
-                    tick={{ fill: "var(--muted)", fontSize: 11 }}
-                  />
-                  <YAxis width={52} type="number" dataKey="mean" domain={["dataMin - 2", "dataMax + 2"]} allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
-                  <Tooltip content={<DiurnalTooltip />} />
-                  {diurnalSeries.map((series) => (
-                    <Scatter key={series.id} name={series.name} data={series.data} fill={series.color} line={{ stroke: series.color, strokeWidth: 2 }} shape="circle">
-                      <ErrorBar dataKey="sd" width={8} stroke={series.color} strokeWidth={1.5} direction="y" />
-                    </Scatter>
-                  ))}
-                </ScatterChart>
-              </ResponsiveContainer> : <div className="diurnal-chart__empty">
-                <span>{comparisonMode ? "No readings" : "Add a comparison segment to view its daily pattern"}</span>
-                <small>{comparisonMode ? `No ${diurnalEye === "OD" ? "right" : "left"}-eye sessions fall inside the active comparison segments.` : "Use the comparison expression to select a saved period or a window around an annotation or period boundary."}</small>
+              {diurnalPoints.length > 0 ? <>
+                <div className="diurnal-chart">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ScatterChart data={diurnalPoints} margin={{ top: 16, right: 20, bottom: 20, left: 0 }}>
+                      <CartesianGrid stroke="var(--line)" vertical={false} />
+                      {Array.from({ length: 8 }, (_, bin) => bin % 2 === 1 && (
+                        <ReferenceArea key={bin} x1={bin * 180} x2={(bin + 1) * 180} fill="#e8ecee" fillOpacity={0.72} stroke="none" />
+                      ))}
+                      <XAxis
+                        type="number"
+                        dataKey="minuteOfDay"
+                        domain={[0, 1440]}
+                        ticks={Array.from({ length: 8 }, (_, bin) => bin * 180 + 90)}
+                        tickFormatter={diurnalTickLabel}
+                        minTickGap={18}
+                        tick={{ fill: "var(--muted)", fontSize: 11 }}
+                      />
+                      <YAxis width={52} type="number" dataKey="mean" domain={["dataMin - 2", "dataMax + 2"]} allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
+                      <Tooltip content={<DiurnalTooltip />} />
+                      {diurnalSeries.map((series) => (
+                        <Scatter key={series.id} name={series.name} data={series.data} fill={series.color} line={{ stroke: series.color, strokeWidth: 2 }} shape="circle">
+                          <ErrorBar dataKey="sd" width={8} stroke={series.color} strokeWidth={1.5} direction="y" />
+                        </Scatter>
+                      ))}
+                    </ScatterChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="diurnal-series-status" aria-label="Comparison segments">
+                  {diurnalSeries.map((series) => <div key={series.id} className="diurnal-series-status__item">
+                    <span className="diurnal-series-status__swatch" style={{ backgroundColor: series.color }} aria-hidden="true" />
+                    <span className="diurnal-series-status__label" title={series.name}>{series.name}</span>
+                    {series.data.length === 0 && <em>No readings</em>}
+                  </div>)}
+                </div>
+                <footer className="diurnal-controls">
+                  <SegmentedControl label="Eye shown in diurnal chart" value={diurnalEye} options={["OD", "OS"] as const} optionLabel={(eye) => eye === "OD" ? "Right" : "Left"} onChange={setDiurnalEye} />
+                </footer>
+              </> : <div className="diurnal-empty">
+                <span>{comparisonMode ? "No readings" : "Add a comparison segment to view diurnal patterns."}</span>
+                <small>{comparisonMode
+                  ? `No ${diurnalEye === "OD" ? "right" : "left"}-eye sessions fall inside the active comparison segments.`
+                  : "You can create comparison segments using the search box at the top of the screen."}</small>
               </div>}
-              </div>
-              {comparisonMode && <div className="diurnal-series-status" aria-label="Comparison segments">
-                {diurnalSeries.map((series) => <div key={series.id} className="diurnal-series-status__item">
-                  <span className="diurnal-series-status__swatch" style={{ backgroundColor: series.color }} aria-hidden="true" />
-                  <span className="diurnal-series-status__label" title={series.name}>{series.name}</span>
-                  {series.data.length === 0 && <em>No readings</em>}
-                </div>)}
-              </div>}
-              <footer className="diurnal-controls">
-                <SegmentedControl label="Eye shown in diurnal chart" value={diurnalEye} options={["OD", "OS"] as const} optionLabel={(eye) => eye === "OD" ? "Right" : "Left"} onChange={setDiurnalEye} />
-              </footer>
             </section>
           </section>
           </div>
