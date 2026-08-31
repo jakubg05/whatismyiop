@@ -29,6 +29,7 @@
   gap: var(--s2);
   overflow: visible;
   background: var(--surface);
+  box-shadow: 0 .25rem .75rem rgb(0 0 0 / 6%);
   color: var(--ink);
   transition:
     border-color var(--fast) var(--ease),

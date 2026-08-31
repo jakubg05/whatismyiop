@@ -34,8 +34,8 @@ export function SiteFooter({
         </section>
 
         {variant === "full" && <section className="site-footer__privacy">
-          <h2>Private by design</h2>
-          <p>Your CSV is processed and stored in this browser. The app does not send its contents to us, and no account or tracking profile is required.</p>
+          <h2>Stored in your browser</h2>
+          <p>Your CSV stays on this device. WhatIsMyIOP does not upload your measurements or require an account.</p>
         </section>}
 
         {hasLocalData && <section className="site-footer__data">
