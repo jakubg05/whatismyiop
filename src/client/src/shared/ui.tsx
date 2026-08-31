@@ -1,4 +1,5 @@
-import { forwardRef, type InputHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, useId, type InputHTMLAttributes, type ReactNode } from "react";
+import type { Eye } from "../analysis";
 
 type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "quiet" | "danger" | "editor" | "editorPrimary";
@@ -38,6 +39,78 @@ export function SegmentedControl<T extends string>({ label, value, options, opti
         <button key={option} type="button" aria-pressed={value === option} onClick={() => onChange(option)}>{optionLabel?.(option) ?? option}</button>
       ))}
     </div>
+  );
+}
+
+type EyeToggleGroupProps = {
+  label: string;
+} & (
+  | { mode: "single"; value: Eye; onChange: (eye: Eye) => void }
+  | { mode: "multiple"; value: Record<Eye, boolean>; onChange: (eye: Eye) => void }
+);
+
+export type ToggleButtonOption<T extends string> = {
+  value: T;
+  label: ReactNode;
+  checked: boolean;
+  colorClass?: string;
+  ariaDisabled?: boolean;
+};
+
+export function ToggleButtonGroup<T extends string>({
+  label,
+  mode = "multiple",
+  options,
+  className = "",
+  onChange,
+}: {
+  label: string;
+  mode?: "single" | "multiple";
+  options: readonly ToggleButtonOption<T>[];
+  className?: string;
+  onChange: (value: T) => void;
+}) {
+  const groupName = useId();
+  const single = mode === "single";
+
+  return (
+    <div className={`ui-chart-toggle-group ui-chart-toggle-group--${mode} ${className}`.trim()} role={single ? "radiogroup" : "group"} aria-label={label}>
+      {options.map((option) => (
+        <label key={option.value} className={`ui-chart-toggle${option.ariaDisabled ? " ui-chart-toggle--disabled" : ""}`}>
+          <input
+            type={single ? "radio" : "checkbox"}
+            name={single ? groupName : undefined}
+            checked={option.checked}
+            aria-disabled={option.ariaDisabled || undefined}
+            onChange={(event) => {
+              if (option.ariaDisabled) event.preventDefault();
+              onChange(option.value);
+            }}
+          />
+          {option.colorClass && <span className={`dot ${option.colorClass}`} aria-hidden="true" />}
+          <span>{option.label}</span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+export function EyeToggleGroup(props: EyeToggleGroupProps) {
+  const single = props.mode === "single";
+
+  return (
+    <ToggleButtonGroup
+      className="eye-toggles"
+      mode={props.mode}
+      label={props.label}
+      options={(["OS", "OD"] as const).map((eye) => ({
+        value: eye,
+        label: eye === "OD" ? "Right" : "Left",
+        checked: single ? props.value === eye : props.value[eye],
+        colorClass: `dot--${eye.toLowerCase()}`,
+      }))}
+      onChange={props.onChange}
+    />
   );
 }
 

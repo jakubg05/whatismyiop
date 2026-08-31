@@ -15,6 +15,7 @@ import {
   type SessionPoint,
 } from "../analysis";
 import { panDomain, type TimeDomain } from "./chartNavigation";
+import { TargetLineOverlay } from "./controls";
 import { CHART_PLOT_LEFT, CHART_PLOT_RIGHT } from "./format";
 import { buildTrendSeries, interpolateTrend, interpolateTrendEstimate, splitTrendSegment, trendEstimatesForDomain, type EyeTrend, type TrendEstimate, type TrendMode } from "./trend";
 import { tetherHorizontalOverlay } from "./tooltipPosition";
@@ -50,6 +51,7 @@ type Props = {
   emphasizedRange: TimeDomain | null;
   yMin: number;
   yMax: number;
+  targetValue?: number;
 };
 
 type Drag = { pointerId: number; x: number; domain: TimeDomain; moved: boolean; point: HoveredPoint | null };
@@ -184,6 +186,7 @@ export function MeasurementCanvas({
   emphasizedRange,
   yMin,
   yMax,
+  targetValue,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drag = useRef<Drag | null>(null);
@@ -789,6 +792,12 @@ export function MeasurementCanvas({
         }}
         aria-label={`${measurements.length.toLocaleString()} pressure measurements`}
       />
+      {targetValue !== undefined && <TargetLineOverlay
+        className="target-line-overlay--history"
+        value={targetValue}
+        minimum={yMin}
+        maximum={yMax}
+      />}
       <div className="measurement-canvas-tooltip-viewport">
         {focusedPoint && <div
           className={`measurement-canvas-tooltip${focusedPoint.point.kind === "trend" ? ` measurement-canvas-tooltip--trend measurement-canvas-tooltip--notch-${focusedPoint.trendNotch?.side ?? "bottom"}` : ""}`}

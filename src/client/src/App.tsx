@@ -7,12 +7,15 @@ import {
   dateTimeBoundary,
   parseMeasurementsCsv,
   type Eye,
+  type MeasurementView,
   type ParseResult,
+  type SessionAggregation,
 } from "./analysis";
 import { ComparisonExpressionEditor, type ComparisonValuePreview } from "./ComparisonExpressionEditor";
 import { useComparisonExpression } from "./ComparisonExpressionState";
 import {
   binDiurnalSessions,
+  diurnalYAxisScale,
   comparisonLabelError,
   NOW_COMPARISON_EVENT_ID,
   parseComparisonExpression,
@@ -66,6 +69,14 @@ export default function App() {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [visibleEyes, setVisibleEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [diurnalEye, setDiurnalEye] = useState<Eye>("OD");
+  const [diurnalMeasurementView, setDiurnalMeasurementView] = useState<MeasurementView>("sessions");
+  const [diurnalSessionAggregation, setDiurnalSessionAggregation] = useState<SessionAggregation>("median");
+  const [targetEnabled, setTargetEnabled] = useState(false);
+  const [targetValue, setTargetValue] = useState(21);
+  const changeTargetValue = useCallback((value: number) => {
+    if (!Number.isFinite(value)) return;
+    setTargetValue(Math.min(100, Math.max(0.1, value)));
+  }, []);
   const [mode, setMode] = useState<ChartMode>(null);
   const [now, setNow] = useState(() => wallClockTimestamp());
   const [ranges, setRanges] = useState<SavedRange[]>([]);
@@ -81,7 +92,12 @@ export default function App() {
 
   const workspaceActive = data !== null;
   const measurements = data?.measurements ?? [];
-  const measurementSessions = useMemo(() => coalesceMeasurementSessions(measurements), [measurements]);
+  const diurnalObservations = useMemo(
+    () => diurnalMeasurementView === "raw"
+      ? measurements
+      : coalesceMeasurementSessions(measurements, diurnalSessionAggregation),
+    [diurnalMeasurementView, diurnalSessionAggregation, measurements],
+  );
   const fullDomainStart = measurements[0]?.time ?? now - 30 * 86_400_000;
   const fullDomainEnd = measurements.at(-1)?.time ?? now;
   const chartFullDomain = useMemo<TimeDomain>(() => [fullDomainStart, fullDomainEnd], [fullDomainEnd, fullDomainStart]);
@@ -130,9 +146,22 @@ export default function App() {
       id: range.id,
       name: range.label,
       color: periodPalette(comparisonIndex).stroke,
-      data: binDiurnalSessions(measurementSessions, diurnalEye, range, effectiveEnd, effectiveEndTime, range.openEnded ? now : undefined),
+      data: binDiurnalSessions(diurnalObservations, diurnalEye, range, effectiveEnd, effectiveEndTime, range.openEnded ? now : undefined),
     };
-  }), [comparisonRanges, currentTime, diurnalEye, measurementSessions, now, today]);
+  }), [comparisonRanges, currentTime, diurnalEye, diurnalObservations, now, today]);
+  const diurnalScale = useMemo(() => {
+    const observationSets = [
+      measurements,
+      coalesceMeasurementSessions(measurements, "median"),
+      coalesceMeasurementSessions(measurements, "average"),
+    ];
+    const points = observationSets.flatMap((observations) => (["OS", "OD"] as const).flatMap((eye) => comparisonRanges.flatMap((range) => {
+      const effectiveEnd = range.openEnded ? today : range.end;
+      const effectiveEndTime = range.openEnded ? currentTime : range.endTime;
+      return binDiurnalSessions(observations, eye, range, effectiveEnd, effectiveEndTime, range.openEnded ? now : undefined);
+    })));
+    return diurnalYAxisScale(points, targetEnabled ? targetValue : undefined);
+  }, [comparisonRanges, currentTime, measurements, now, targetEnabled, targetValue, today]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(wallClockTimestamp()), 60_000);
     return () => window.clearInterval(timer);
@@ -434,7 +463,10 @@ export default function App() {
     setEditingEventId(null);
     setDraftLabelError(null);
   }, []);
-  const chartYDomain = useMemo(() => [minimumIop, maximumIop] as [number, number], [maximumIop, minimumIop]);
+  const chartYDomain = useMemo(() => [
+    targetEnabled ? Math.min(minimumIop, Math.floor(targetValue - 2)) : minimumIop,
+    targetEnabled ? Math.max(maximumIop, Math.ceil(targetValue + 2)) : maximumIop,
+  ] as [number, number], [maximumIop, minimumIop, targetEnabled, targetValue]);
   const activeDraftLabelError = (mode === "range" || mode === "event") && draftLabelError?.kind === mode
     ? draftLabelError.message
     : null;
@@ -549,14 +581,28 @@ export default function App() {
             onDomainChange={setChartDomain}
             fullDomain={chartFullDomain}
             yDomain={chartYDomain}
+            targetEnabled={targetEnabled}
+            targetValue={targetValue}
+            onTargetEnabledChange={setTargetEnabled}
+            onTargetValueChange={changeTargetValue}
           />
 
           <section className="comparison-workspace">
             <section className="diurnal-section">
               <DiurnalChart
                 series={diurnalSeries}
+                yScale={diurnalScale}
+                targetEnabled={targetEnabled}
+                targetValue={targetValue}
+                onTargetEnabledChange={setTargetEnabled}
+                onTargetValueChange={changeTargetValue}
                 eye={diurnalEye}
                 onEyeChange={setDiurnalEye}
+                measurementView={diurnalMeasurementView}
+                sessionAggregation={diurnalSessionAggregation}
+                onMeasurementViewChange={setDiurnalMeasurementView}
+                onSessionAggregationChange={setDiurnalSessionAggregation}
+                onOpenSessionInfo={openSessionInfo}
                 inactive={!workspaceActive ? {
                   title: "Import measurements to view diurnal patterns.",
                   description: "The diurnal chart will summarize readings by time of day.",

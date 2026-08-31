@@ -5,8 +5,9 @@ import {
   useState,
   type CSSProperties,
   type FocusEvent,
+  type ReactNode,
 } from "react";
-import type { Eye } from "../analysis";
+import type { Eye, MeasurementView, SessionAggregation } from "../analysis";
 import { DateInput, Toggle } from "../shared/ui";
 import type { TrendMode } from "./trend";
 
@@ -85,25 +86,6 @@ export const ChartDateTag = forwardRef<HTMLDivElement, {
     </div>
   );
 });
-
-export function ChartToggle({ label, colorClass, checked, ariaDisabled = false, onChange }: {
-  label: string;
-  colorClass?: string;
-  checked: boolean;
-  ariaDisabled?: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <label className={`ui-chart-toggle${ariaDisabled ? " ui-chart-toggle--disabled" : ""}`}>
-      <input type="checkbox" checked={checked} aria-disabled={ariaDisabled} onChange={(event) => {
-        if (ariaDisabled) event.preventDefault();
-        onChange();
-      }} />
-      {colorClass && <span className={`dot ${colorClass}`} aria-hidden="true" />}
-      <span>{label}</span>
-    </label>
-  );
-}
 
 export function ChartSelect<T extends string>({ label, value, options, action, onChange, onTrigger, pressed, className = "" }: {
   label: string;
@@ -191,6 +173,240 @@ export function ChartSelect<T extends string>({ label, value, options, action, o
   );
 }
 
+export function MeasurementViewControl({
+  label,
+  view,
+  aggregation,
+  onViewChange,
+  onAggregationChange,
+  onOpenExplanation,
+}: {
+  label: string;
+  view: MeasurementView;
+  aggregation: SessionAggregation;
+  onViewChange: (view: MeasurementView) => void;
+  onAggregationChange: (aggregation: SessionAggregation) => void;
+  onOpenExplanation: () => void;
+}) {
+  return (
+    <div className="measurement-view-control" role="group" aria-label={label}>
+      <ChartSelect
+        className={`measurement-view-control__sessions${view === "sessions" ? " measurement-view-control__sessions--active" : ""}`}
+        label="Sessions"
+        value={aggregation}
+        options={[
+          { value: "median", label: "Median" },
+          { value: "average", label: "Average" },
+        ]}
+        action={{ label: "How sessions work", onSelect: onOpenExplanation }}
+        pressed={view === "sessions"}
+        onTrigger={() => onViewChange("sessions")}
+        onChange={(nextAggregation) => {
+          onAggregationChange(nextAggregation);
+          onViewChange("sessions");
+        }}
+      />
+      <button className="measurement-view-control__raw" type="button" aria-pressed={view === "raw"} onClick={() => onViewChange("raw")}>Raw</button>
+    </div>
+  );
+}
+
+export function SeriesVisibilityControl({
+  label,
+  items,
+  hiddenIds,
+  onToggle,
+}: {
+  label: string;
+  items: readonly { id: string; label: string; color: string; empty?: boolean }[];
+  hiddenIds: ReadonlySet<string>;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="series-visibility-control" role="group" aria-label={label}>
+      {items.map((item) => {
+        const visible = !hiddenIds.has(item.id);
+        return (
+          <button
+            key={item.id}
+            type="button"
+            className={`series-visibility-control__item${visible ? "" : " series-visibility-control__item--hidden"}`}
+            aria-pressed={visible}
+            title={`${visible ? "Hide" : "Show"} ${item.label}`}
+            onClick={() => onToggle(item.id)}
+          >
+            <span className="series-visibility-control__swatch" style={{ backgroundColor: item.color }} aria-hidden="true" />
+            <span className="series-visibility-control__label" title={item.label}>{item.label}</span>
+            {item.empty && <em>No readings</em>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ChartPopoverControl({
+  label,
+  value,
+  menuLabel,
+  className = "",
+  children,
+}: {
+  label: string;
+  value: string;
+  menuLabel: string;
+  className?: string;
+  children: (close: () => void) => ReactNode;
+}) {
+  const root = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={root}
+      className={`ui-chart-select ${className}`.trim()}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
+      <button
+        className="ui-chart-select__trigger"
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="ui-chart-select__label">{label}</span>
+        <span className="ui-chart-select__value">
+          <span>{value}</span>
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+        </span>
+      </button>
+      {open && <div className="ui-chart-select__menu chart-control__menu" role="dialog" aria-label={menuLabel}>
+        {children(() => setOpen(false))}
+      </div>}
+    </div>
+  );
+}
+
+export function TargetControl({
+  enabled,
+  value,
+  onEnabledChange,
+  onValueChange,
+}: {
+  enabled: boolean;
+  value: number;
+  onEnabledChange: (enabled: boolean) => void;
+  onValueChange: (value: number) => void;
+}) {
+  const minimumTarget = 0.1;
+  const maximumTarget = 100;
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => setDraft(String(value)), [value]);
+
+  function commitValue() {
+    const parsed = Number(draft);
+    if (!Number.isFinite(parsed) || parsed < minimumTarget) {
+      setDraft(String(value));
+      return;
+    }
+    const next = Math.min(maximumTarget, Math.round(parsed * 10) / 10);
+    setDraft(String(next));
+    onValueChange(next);
+  }
+
+  function updateValue(nextDraft: string) {
+    const parsed = Number(nextDraft);
+    if (!Number.isFinite(parsed) || parsed < minimumTarget) {
+      setDraft(nextDraft);
+      return;
+    }
+    const next = Math.min(maximumTarget, Math.round(parsed * 10) / 10);
+    setDraft(parsed > maximumTarget ? String(maximumTarget) : nextDraft);
+    onValueChange(next);
+    if (!enabled) onEnabledChange(true);
+  }
+
+  return (
+    <ChartPopoverControl
+      label="Target"
+      value={enabled ? `${value} mmHg` : "Off"}
+      menuLabel="Target pressure settings"
+      className="target-control"
+    >
+      {() => <>
+        <div className="chart-control__section">
+          <div className="chart-control__row">
+            <span>Show target</span>
+            <Toggle className="chart-control__toggle" label="Show target pressure" checked={enabled} onChange={() => onEnabledChange(!enabled)} />
+          </div>
+        </div>
+        <div className="chart-control__section chart-control__target-value" aria-disabled={!enabled}>
+          <div className="chart-control__target-input-group">
+            <input
+              className="chart-control__target-input"
+              type="number"
+              min={minimumTarget}
+              max={maximumTarget}
+              step="0.1"
+              inputMode="decimal"
+              aria-label="Target pressure in mmHg"
+              disabled={!enabled}
+              value={draft}
+              onChange={(event) => updateValue(event.target.value)}
+              onBlur={commitValue}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") {
+                  setDraft(String(value));
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+            <span>mmHg</span>
+          </div>
+        </div>
+      </>}
+    </ChartPopoverControl>
+  );
+}
+
+export function TargetLineOverlay({ value, minimum, maximum, className = "" }: {
+  value: number;
+  minimum: number;
+  maximum: number;
+  className?: string;
+}) {
+  const position = maximum === minimum ? 50 : Math.max(0, Math.min(100, (maximum - value) / (maximum - minimum) * 100));
+  return (
+    <div
+      className={`target-line-overlay ${className}`.trim()}
+      style={{ "--target-line-position": `${position}%` } as CSSProperties}
+      aria-hidden="true"
+    >
+      <div className="target-line-overlay__rule"><span>Target {value} mmHg</span></div>
+    </div>
+  );
+}
+
 function ChartControlOption({ label, colorClass, checked, disabled = false, multiple = false, onClick }: {
   label: string;
   colorClass?: string;
@@ -232,41 +448,10 @@ export function HeatmapControl({
   onToggleUncertainRegions: () => void;
   onOpenExplanation: () => void;
 }) {
-  const root = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
   const selectedLabel = visible ? eye === "OS" ? "Left" : "Right" : "Off";
 
-  useEffect(() => {
-    if (!open) return;
-    const closeOutside = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [open]);
-
-  return <div ref={root} className="ui-chart-select heatmap-control">
-    <button
-      className="ui-chart-select__trigger"
-      type="button"
-      aria-haspopup="dialog"
-      aria-expanded={open}
-      onClick={() => setOpen((current) => !current)}
-    >
-      <span className="ui-chart-select__label">Heatmap</span>
-      <span className="ui-chart-select__value">
-        <span>{selectedLabel}</span>
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
-      </span>
-    </button>
-    {open && <div className="ui-chart-select__menu chart-control__menu" role="dialog" aria-label="Heatmap settings">
+  return <ChartPopoverControl label="Heatmap" value={selectedLabel} menuLabel="Heatmap settings" className="heatmap-control">
+    {(close) => <>
       <div className="chart-control__section">
         <div className="chart-control__row">
           <span>Show heatmap</span>
@@ -292,14 +477,14 @@ export function HeatmapControl({
       <div className="ui-chart-select__menu-action">
         <button className="ui-chart-select__menu-link" type="button" onClick={() => {
           onOpenExplanation();
-          setOpen(false);
+          close();
         }}>
           <span>How heatmaps work</span>
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
         </button>
       </div>
-    </div>}
-  </div>;
+    </>}
+  </ChartPopoverControl>;
 }
 
 export function TrendControl({
@@ -319,40 +504,14 @@ export function TrendControl({
   onToggleEye: (eye: Eye) => void;
   onOpenExplanation: () => void;
 }) {
-  const root = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    const closeOutside = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("pointerdown", closeOutside);
-    window.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside);
-      window.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [open]);
-
-  return <div ref={root} className="ui-chart-select trend-control">
-    <button
-      className="ui-chart-select__trigger"
-      type="button"
-      aria-haspopup="dialog"
-      aria-expanded={open}
-      onClick={() => setOpen((current) => !current)}
-    >
-      <span className="ui-chart-select__label">Trend</span>
-      <span className="ui-chart-select__value">
-        <span>{visible ? mode === "adjusted" ? "Adjusted" : "Observed" : "Off"}</span>
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
-      </span>
-    </button>
-    {open && <div className="ui-chart-select__menu chart-control__menu" role="dialog" aria-label="Trend settings">
+  return <ChartPopoverControl
+    label="Trend"
+    value={visible ? mode === "adjusted" ? "Adjusted" : "Observed" : "Off"}
+    menuLabel="Trend settings"
+    className="trend-control"
+  >
+    {(close) => <>
       <div className="chart-control__section">
         <div className="chart-control__row">
           <span>Show trend</span>
@@ -382,12 +541,12 @@ export function TrendControl({
       <div className="ui-chart-select__menu-action">
         <button className="ui-chart-select__menu-link" type="button" onClick={() => {
           onOpenExplanation();
-          setOpen(false);
+          close();
         }}>
           <span>How trends work</span>
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
         </button>
       </div>
-    </div>}
-  </div>;
+    </>}
+  </ChartPopoverControl>;
 }

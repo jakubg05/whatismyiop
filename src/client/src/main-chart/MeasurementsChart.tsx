@@ -20,14 +20,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { dateTimeBoundary, formatDateInput, formatTimeInput, type Eye, type Measurement, type SessionAggregation } from "../analysis";
+import { dateTimeBoundary, formatDateInput, formatTimeInput, type Eye, type Measurement, type MeasurementView, type SessionAggregation } from "../analysis";
 import { eventPalette, periodPalette as rangePalette } from "../periodPalette";
+import { EyeToggleGroup, ToggleButtonGroup } from "../shared";
 import { clipDomain, daylightBackground, intersectDomains, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
 import { DiurnalHeatmapCanvas } from "./DiurnalHeatmapCanvas";
 import { moveRangeEdge, rangeTimeDomain, type EditableRange } from "./range";
 import { type TrendMode } from "./trend";
-import { ChartDateTag, ChartSelect, ChartToggle, HeatmapControl, TrendControl } from "./controls";
+import { ChartDateTag, ChartSelect, HeatmapControl, MeasurementViewControl, TargetControl, TrendControl } from "./controls";
 import { chartTimeTicks, CHART_PLOT_LEFT, CHART_PLOT_RIGHT, formatChartTime } from "./format";
 
 export type ChartMode = "range" | "event" | "trend" | "sessions" | "heatmap" | null;
@@ -93,6 +94,10 @@ type Props = {
   onDomainChange: (domain: TimeDomain) => void;
   fullDomain: TimeDomain;
   yDomain: TimeDomain;
+  targetEnabled: boolean;
+  targetValue: number;
+  onTargetEnabledChange: (enabled: boolean) => void;
+  onTargetValueChange: (value: number) => void;
 };
 
 function eyeLabel(eye: Eye): string {
@@ -149,6 +154,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   onDomainChange,
   fullDomain,
   yDomain,
+  targetEnabled,
+  targetValue,
+  onTargetEnabledChange,
+  onTargetValueChange,
 }: Props) {
   const chart = useRef<HTMLDivElement>(null);
   const focusedRangeLabel = useRef<HTMLDivElement>(null);
@@ -166,7 +175,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [hoveredAnnotation, setHoveredAnnotation] = useState<string | null>(null);
   const [hoveredRegionRangeIds, setHoveredRegionRangeIds] = useState<string[]>([]);
   const [draggedRangeFocus, setDraggedRangeFocus] = useState<TimeDomain | null>(null);
-  const [measurementView, setMeasurementView] = useState<"sessions" | "raw">("sessions");
+  const [measurementView, setMeasurementView] = useState<MeasurementView>("sessions");
   const [sessionAggregation, setSessionAggregation] = useState<SessionAggregation>("median");
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("all");
   const [qualityFilter, setQualityFilter] = useState("all");
@@ -843,6 +852,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           emphasizedRange={emphasizedRange}
           yMin={pressureDomain[0]}
           yMax={pressureDomain[1]}
+          targetValue={targetEnabled ? targetValue : undefined}
         />
         <div
           ref={plotOverlayRef}
@@ -918,7 +928,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         onDomainChange={changeDomain}
       />}
       </div>
-      <div className="chart-toolbar">
+      <div className="chart-toolbar" role="group" aria-label="History chart controls">
         <p className="chart-interaction-hint"><kbd>Ctrl</kbd> + click to add an event · <kbd>Ctrl</kbd> + drag to add a period</p>
         <div className="chart-filters" role="group" aria-label="Measurement filters">
           <ChartSelect
@@ -943,25 +953,20 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             onChange={setQualityFilter}
           />
         </div>
-        <div className="measurement-view-control" role="group" aria-label="Measurement view">
-          <ChartSelect
-            className={`measurement-view-control__sessions${measurementView === "sessions" ? " measurement-view-control__sessions--active" : ""}`}
-            label="Sessions"
-            value={sessionAggregation}
-            options={[
-              { value: "median", label: "Median" },
-              { value: "average", label: "Average" },
-            ]}
-            action={{ label: "How sessions work", onSelect: onOpenSessionInfo }}
-            pressed={measurementView === "sessions"}
-            onTrigger={() => setMeasurementView("sessions")}
-            onChange={(aggregation) => {
-              setSessionAggregation(aggregation);
-              setMeasurementView("sessions");
-            }}
-          />
-          <button className="measurement-view-control__raw" type="button" aria-pressed={measurementView === "raw"} onClick={() => setMeasurementView("raw")}>Raw</button>
-        </div>
+        <MeasurementViewControl
+          label="History chart measurement view"
+          view={measurementView}
+          aggregation={sessionAggregation}
+          onViewChange={setMeasurementView}
+          onAggregationChange={setSessionAggregation}
+          onOpenExplanation={onOpenSessionInfo}
+        />
+        <TargetControl
+          enabled={targetEnabled}
+          value={targetValue}
+          onEnabledChange={onTargetEnabledChange}
+          onValueChange={onTargetValueChange}
+        />
         <TrendControl
           visible={showTrend}
           mode={trendType}
@@ -983,15 +988,24 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           onToggleUncertainRegions={() => setShowUncertainRegions((current) => !current)}
           onOpenExplanation={onOpenHeatmapInfo}
         />
-        <div className="annotation-toggles" role="group" aria-label="Annotation visibility">
-          <ChartToggle label="Periods" checked={showPeriods} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowPeriods((current) => !current)} />
-          <ChartToggle label="Events" checked={showEvents} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowEvents((current) => !current)} />
-        </div>
-        <div className="eye-toggles" role="group" aria-label="Measurement eyes">
-          {(["OS", "OD"] as Eye[]).map((eye) => (
-            <ChartToggle key={eye} label={eyeLabel(eye)} colorClass={`dot--${eye.toLowerCase()}`} checked={visibleEyes[eye]} onChange={() => onToggleEye(eye)} />
-          ))}
-        </div>
+        <ToggleButtonGroup
+          className="annotation-toggles"
+          label="Annotation visibility"
+          options={[
+            { value: "periods", label: "Periods", checked: showPeriods, ariaDisabled: comparisonMode },
+            { value: "events", label: "Events", checked: showEvents, ariaDisabled: comparisonMode },
+          ]}
+          onChange={(value) => {
+            if (comparisonMode) {
+              onComparisonBlocked();
+            } else if (value === "periods") {
+              setShowPeriods((current) => !current);
+            } else {
+              setShowEvents((current) => !current);
+            }
+          }}
+        />
+        <EyeToggleGroup mode="multiple" label="Measurement eyes" value={visibleEyes} onChange={onToggleEye} />
       </div>
     </section>
   );
