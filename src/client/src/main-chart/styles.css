@@ -132,7 +132,7 @@
 .trend-explanation > summary:hover, .trend-explanation > summary:focus-visible { color: rgb(255 255 255 / 52%); outline: 0; }
 .trend-explanation > summary svg { flex: 0 0 auto; width: .75rem; height: .75rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; transition: transform var(--fast) var(--ease); }
 .trend-explanation[open] > summary svg { transform: rotate(90deg); }
-.trend-explanation__body { padding: var(--s3) 0 var(--s6); font-size: .75rem; line-height: 1.55; }
+.trend-explanation__body { padding: var(--s3) 0 calc(var(--s6) + var(--s4)); font-size: .75rem; line-height: 1.55; }
 .trend-explanation__body h3 { margin: var(--s5) 0 var(--s2); color: var(--editor-ink); font-size: .75rem; font-weight: 400; line-height: 1.35; }
 .trend-explanation__body p { margin: 0; }
 .trend-explanation__body p + p { margin-top: var(--s3); }
@@ -142,7 +142,7 @@
 .trend-explanation__math--block { margin: var(--s3) 0; display: block; overflow-x: auto; overflow-y: hidden; font-size: .8125rem; }
 .trend-explanation__math--block .katex-display { margin: 0; text-align: left; }
 .trend-explanation__math--block .katex-display > .katex { text-align: left; }
-.session-explanation { padding-bottom: var(--s6); color: var(--editor-muted); font-size: .75rem; line-height: 1.55; }
+.session-explanation { padding-bottom: calc(var(--s6) + var(--s4)); color: var(--editor-muted); font-size: .75rem; line-height: 1.55; }
 .session-explanation h3 { margin: var(--s5) 0 var(--s2); color: var(--editor-ink); font-size: .75rem; font-weight: 400; line-height: 1.35; }
 .session-explanation p { margin: 0; }
 .session-explanation p + p { margin-top: var(--s3); }
@@ -151,7 +151,7 @@
 .session-explanation__image-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: center; gap: var(--s2); }
 .session-explanation__image-label { margin-bottom: var(--s2); color: var(--editor-ink); }
 .session-explanation__example figcaption { margin-top: var(--s3); color: var(--editor-muted); }
-.heatmap-explanation { padding-bottom: var(--s6); color: var(--editor-muted); font-size: .75rem; line-height: 1.55; }
+.heatmap-explanation { padding-bottom: calc(var(--s6) + var(--s4)); color: var(--editor-muted); font-size: .75rem; line-height: 1.55; }
 .heatmap-explanation h3 { margin: var(--s5) 0 var(--s2); color: var(--editor-ink); font-size: .75rem; font-weight: 400; line-height: 1.35; }
 .heatmap-explanation p { margin: 0; }
 .heatmap-explanation p + p { margin-top: var(--s3); }
