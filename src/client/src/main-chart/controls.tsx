@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { Eye, MeasurementView, SessionAggregation } from "../analysis";
+import { MaterialSymbol } from "../MaterialSymbol";
 import { DateInput, Toggle } from "../shared/ui";
 
 export const ChartDateTag = forwardRef<HTMLDivElement, {
@@ -136,7 +137,7 @@ export function ChartSelect<T extends string>({ label, value, options, action, o
         <span className="ui-chart-select__label">{label}</span>
         <span className="ui-chart-select__value">
           <span>{selectedLabel}</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+          <MaterialSymbol name="expand_more" />
         </span>
       </button>
       {open && <div className="ui-chart-select__menu" role="menu" aria-label={label}>
@@ -151,7 +152,7 @@ export function ChartSelect<T extends string>({ label, value, options, action, o
           }}
         >
           <span>{option.label}</span>
-          {value === option.value && <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg>}
+          {value === option.value && <MaterialSymbol name="check" />}
         </button>)}
         {action && <div className="ui-chart-select__menu-action">
           <button
@@ -164,7 +165,7 @@ export function ChartSelect<T extends string>({ label, value, options, action, o
             }}
           >
             <span>{action.label}</span>
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+            <MaterialSymbol name="chevron_right" />
           </button>
         </div>}
       </div>}
@@ -294,7 +295,7 @@ function ChartPopoverControl({
         <span className="ui-chart-select__label">{label}</span>
         <span className="ui-chart-select__value">
           <span>{value}</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+          <MaterialSymbol name="expand_more" />
         </span>
       </button>
       {open && <div className="ui-chart-select__menu chart-control__menu" role="dialog" aria-label={menuLabel}>
@@ -426,7 +427,7 @@ function ChartControlOption({ label, colorClass, checked, disabled = false, mult
       {colorClass && <span className={`dot ${colorClass}`} aria-hidden="true" />}
       <span>{label}</span>
     </span>
-    {checked && <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m3 8 3 3 7-7" /></svg>}
+    {checked && <MaterialSymbol name="check" />}
   </button>;
 }
 
@@ -479,7 +480,7 @@ export function HeatmapControl({
           close();
         }}>
           <span>How heatmaps work</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+          <MaterialSymbol name="chevron_right" />
         </button>
       </div>
     </>}
@@ -530,7 +531,7 @@ export function TrendControl({
           close();
         }}>
           <span>How trends work</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
+          <MaterialSymbol name="chevron_right" />
         </button>
       </div>
     </>}

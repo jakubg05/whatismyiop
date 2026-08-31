@@ -4,7 +4,7 @@
 .chart-shortcuts { position: relative; min-height: var(--control-sm); margin-right: auto; }
 .chart-shortcuts__trigger { min-height: var(--control-sm); padding: 0 var(--s3); border: 1px solid var(--line); border-radius: var(--radius); outline: 0; display: inline-flex; align-items: center; gap: var(--s2); background: var(--canvas); color: var(--muted); font: var(--small); font-weight: 500; cursor: pointer; }
 .chart-shortcuts__trigger:hover, .chart-shortcuts__trigger:focus-visible, .chart-shortcuts__trigger[aria-expanded="true"] { background: var(--hover); color: var(--ink); }
-.chart-shortcuts__trigger svg { width: .75rem; height: .75rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; transition: transform var(--fast) var(--ease); }
+.chart-shortcuts__trigger svg { width: .875rem; height: .875rem; fill: currentColor; stroke: none; transition: transform var(--fast) var(--ease); }
 .chart-shortcuts__trigger[aria-expanded="true"] svg { transform: rotate(180deg); }
 .chart-shortcuts__menu { position: absolute; z-index: 50; top: calc(100% + .375rem); left: 0; width: min(22rem, calc(100vw - 2rem)); border: 1px solid var(--line); border-radius: .75rem; overflow: hidden; background: #fff; color: var(--ink); }
 .chart-shortcuts__menu dl > div { display: grid; grid-template-columns: minmax(7.5rem, .8fr) minmax(8rem, 1fr); align-items: center; column-gap: var(--s4); }
@@ -14,7 +14,7 @@
 .chart-shortcuts__menu dt, .chart-shortcuts__menu dd { margin: 0; font: var(--small); }
 .chart-shortcuts__menu dt { color: var(--ink); white-space: nowrap; }
 .chart-shortcuts__menu dd { color: var(--muted); }
-.chart-shortcuts__menu kbd { padding: .0625rem .3rem; border: 1px solid var(--line); border-radius: .25rem; background: var(--surface); color: var(--ink); font: inherit; line-height: 1.2; }
+.chart-shortcuts__menu kbd { padding: .0625rem .3rem; border: 1px solid var(--line); border-radius: .25rem; background: transparent; color: var(--ink); font: inherit; line-height: 1.2; }
 .chart-shortcuts__menu .chart-shortcuts__primary { background: #f6f2fa; }
 .chart-shortcuts__primary dd { color: #65448f; font-weight: 600; }
 .chart-filters { display: flex; flex-wrap: wrap; gap: var(--s2); }
@@ -22,10 +22,10 @@
 .ui-chart-select__trigger { width: auto; min-height: calc(var(--control-sm) - 2px); height: 100%; padding: 0 var(--s2); border: 0; border-radius: calc(var(--radius) - 1px); outline: 0; display: flex; align-items: center; justify-content: flex-start; gap: var(--s2); background: transparent; color: var(--ink); font-family: var(--font); cursor: pointer; }
 .ui-chart-select__label { color: var(--subtle); font-size: .6875rem; font-weight: 400; line-height: 1; text-align: left; }
 .ui-chart-select__value { min-width: 0; display: flex; align-items: center; gap: .1875rem; color: inherit; font-size: .75rem; font-weight: 500; line-height: 1; text-align: left; } .ui-chart-select__value > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ui-chart-select__value svg { flex: 0 0 auto; width: .625rem; height: .625rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; transition: transform var(--fast) var(--ease); } .ui-chart-select__trigger[aria-expanded="true"] .ui-chart-select__value svg { transform: rotate(180deg); }
+.ui-chart-select__value svg { flex: 0 0 auto; width: .75rem; height: .75rem; fill: currentColor; stroke: none; transition: transform var(--fast) var(--ease); } .ui-chart-select__trigger[aria-expanded="true"] .ui-chart-select__value svg { transform: rotate(180deg); }
 .ui-chart-select__menu { position: absolute; z-index: 30; top: calc(100% + .375rem); left: -1px; width: max-content; min-width: calc(100% + 2px); padding: var(--s1); border: 1px solid rgb(255 255 255 / 9%); border-radius: .75rem; display: grid; overflow: hidden; background: #2b2b2b; color: #f3f3f3; box-shadow: 0 .75rem 2rem rgb(0 0 0 / 24%); }
 .ui-chart-select__menu button { width: 100%; min-height: 2rem; padding: 0 .625rem; border: 0; border-radius: .5rem; outline: 0; display: flex; align-items: center; justify-content: space-between; gap: var(--s3); background: transparent; color: #e5e7eb; font-family: var(--font); font-size: .75rem; font-weight: 400; text-align: left; cursor: pointer; }
-.ui-chart-select__menu button + button { border-top: 0; } .ui-chart-select__menu button[aria-checked="true"] { background: rgb(255 255 255 / 8%); color: #fff; } .ui-chart-select__menu button:hover, .ui-chart-select__menu button:focus-visible { background: rgb(255 255 255 / 12%); color: #fff; } .ui-chart-select__menu button svg { width: .75rem; height: .75rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.75; }
+.ui-chart-select__menu button + button { border-top: 0; } .ui-chart-select__menu button[aria-checked="true"] { background: rgb(255 255 255 / 8%); color: #fff; } .ui-chart-select__menu button:hover, .ui-chart-select__menu button:focus-visible { background: rgb(255 255 255 / 12%); color: #fff; } .ui-chart-select__menu button svg { width: .875rem; height: .875rem; fill: currentColor; stroke: none; }
 .ui-chart-select__menu-action { margin-top: var(--s1); padding: var(--s2) .625rem var(--s1); }
 .ui-chart-select__menu .ui-chart-select__menu-link { width: auto; min-height: 1.5rem; padding: 0; display: inline-flex; align-items: center; gap: .375rem; color: rgb(255 255 255 / 52%); text-decoration: none; text-underline-offset: .15em; }
 .ui-chart-select__menu .ui-chart-select__menu-link:hover, .ui-chart-select__menu .ui-chart-select__menu-link:focus-visible { background: transparent; color: rgb(255 255 255 / 72%); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); }
@@ -60,7 +60,7 @@
 .ui-chart-select__menu .chart-control__toggle { width: 1.75rem; min-width: 1.75rem; min-height: 1rem; height: 1rem; padding: 0; border-radius: 999px; display: block; gap: 0; background: transparent; }
 .ui-chart-select__menu .chart-control__toggle:hover, .ui-chart-select__menu .chart-control__toggle:focus-visible { background: transparent; }
 .chart-control__toggle:focus-visible { outline-color: rgb(255 255 255 / 70%); }
-.chart-settings-trigger { min-width: 4rem; min-height: var(--control-sm); padding: 0 var(--s3); border: 1px solid var(--line); border-radius: var(--radius); display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); background: var(--canvas); color: var(--muted); font: var(--small); font-weight: 500; } .chart-settings-trigger:hover, .chart-settings-trigger:focus-visible, .chart-settings-trigger[aria-pressed="true"] { outline: 0; background: var(--hover); color: var(--ink); } .chart-settings-trigger svg { width: .75rem; height: .75rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }
+.chart-settings-trigger { min-width: 4rem; min-height: var(--control-sm); padding: 0 var(--s3); border: 1px solid var(--line); border-radius: var(--radius); display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); background: var(--canvas); color: var(--muted); font: var(--small); font-weight: 500; } .chart-settings-trigger:hover, .chart-settings-trigger:focus-visible, .chart-settings-trigger[aria-pressed="true"] { outline: 0; background: var(--hover); color: var(--ink); } .chart-settings-trigger svg { width: .875rem; height: .875rem; fill: currentColor; stroke: none; }
 
 .chart-wrap { position: relative; width: 100%; height: var(--chart-height); user-select: none; }
 .chart-composite { position: relative; width: 100%; }
@@ -153,7 +153,7 @@
 .trend-explanation > summary { width: max-content; max-width: 100%; min-height: 1.75rem; padding: 0; display: inline-flex; align-items: center; gap: var(--s2); list-style: none; color: rgb(255 255 255 / 38%); font-family: var(--font); font-size: .875rem; font-weight: 400; line-height: 1.3; cursor: pointer; }
 .trend-explanation > summary::-webkit-details-marker { display: none; }
 .trend-explanation > summary:hover, .trend-explanation > summary:focus-visible { color: rgb(255 255 255 / 52%); outline: 0; }
-.trend-explanation > summary svg { flex: 0 0 auto; width: .75rem; height: .75rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; transition: transform var(--fast) var(--ease); }
+.trend-explanation > summary svg { flex: 0 0 auto; width: .875rem; height: .875rem; fill: currentColor; stroke: none; transition: transform var(--fast) var(--ease); }
 .trend-explanation[open] > summary svg { transform: rotate(90deg); }
 .trend-explanation__body { padding: var(--s3) 0 calc(var(--s6) + var(--s4)); font-size: .75rem; line-height: 1.55; }
 .trend-explanation__body h3 { margin: var(--s5) 0 var(--s2); color: var(--editor-ink); font-size: .75rem; font-weight: 400; line-height: 1.35; }

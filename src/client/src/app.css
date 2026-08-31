@@ -20,7 +20,7 @@
 .import-dropzone__outline rect { fill: none; stroke: currentColor; stroke-width: 1.75; stroke-dasharray: 11 9; stroke-linecap: round; }
 .import-dropzone:focus-within, .import-dropzone--dragging { --drop-outline: hsl(0 0% 60%); background: hsl(0 0% 96.5%); box-shadow: inset 0 0 0 1px rgb(0 0 0 / 3%); }
 .import-dropzone .ui-button--primary { min-height: 3.3rem; padding-inline: 1.2rem; border-color: var(--cta); display: inline-flex; align-items: center; justify-content: center; gap: .6rem; background: var(--cta); color: #fff; font-size: .975rem; }
-.import-dropzone .ui-button--primary svg { width: 1.35rem; height: 1.35rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.import-dropzone .ui-button--primary svg { width: 1.35rem; height: 1.35rem; fill: currentColor; stroke: none; }
 .import-dropzone .ui-button--primary:hover, .import-dropzone .ui-button--primary:focus-visible { border-color: var(--cta-hover); background: var(--cta-hover); color: #fff; }
 .import-actions { position: relative; width: 16.8rem; filter: drop-shadow(0 .9rem 1.5rem rgb(0 0 0 / 14%)); }
 .import-actions__split { width: 100%; display: flex; }
@@ -31,7 +31,7 @@
 .import-dropzone .import-actions--open .import-actions__choose:hover, .import-dropzone .import-actions--open .import-actions__choose:focus-visible { border-color: var(--cta-hover); background: var(--cta-hover); }
 .import-dropzone .import-actions--open .import-actions__choose { border-radius: .6rem 0 0; }
 .import-dropzone .import-actions--open .import-actions__toggle { border-radius: 0 .6rem 0 0; }
-.import-dropzone .import-actions__toggle svg { width: 1.2rem; height: 1.2rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; transition: transform var(--fast) var(--ease); }
+.import-dropzone .import-actions__toggle svg { width: 1.2rem; height: 1.2rem; fill: currentColor; stroke: none; transition: transform var(--fast) var(--ease); }
 .import-actions--open .import-actions__toggle svg { transform: rotate(180deg); }
 .import-actions__menu { position: absolute; z-index: 10; top: 100%; right: 0; left: 0; box-sizing: border-box; overflow: hidden; border-top: 1px solid rgb(255 255 255 / 14%); border-radius: 0 0 .6rem .6rem; background: #2b2b2b; color: #f3f3f3; transform-origin: top; animation: import-menu-open var(--fast) var(--ease) both; }
 .import-actions__menu button { width: 100%; min-height: 3.6rem; padding: 0 .9rem; border: 0; border-radius: 0; display: flex; align-items: center; gap: .6rem; background: transparent; color: inherit; font-size: .9rem; text-align: left; white-space: nowrap; }
@@ -117,7 +117,8 @@
 .toast--error { background: #8f2d26; color: #fff5f4; }
 .toast--warning { background: #f2cf5b; color: #17140a; }
 .toast--info { background: #245b88; color: #f4f9ff; }
-.toast button { width: 1.5rem; height: 1.5rem; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-size: 1rem; }
+.toast button { width: 1.5rem; height: 1.5rem; padding: 0; border: 0; display: grid; place-items: center; background: transparent; color: inherit; font: inherit; }
+.toast button svg { width: 1rem; height: 1rem; fill: currentColor; }
 @keyframes toast-drop { from { opacity: 0; transform: translateY(-.75rem); } to { opacity: 1; transform: translateY(0); } }
 .diurnal-section { min-width: 0; padding: 0; } .diurnal-chart { position: relative; width: 100%; height: 24.5rem; } .diurnal-chart--inactive { padding: var(--s6) var(--s4); display: grid; place-content: center; justify-items: center; gap: var(--s1); color: var(--muted); text-align: center; } .diurnal-chart--inactive span { color: var(--ink); font-size: .8125rem; font-weight: 500; } .diurnal-chart--inactive small { max-width: 28rem; color: var(--muted); font-size: .75rem; }
 .series-visibility-control { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s2) var(--s4); padding: var(--s2) var(--s3) 0; font: var(--small); }

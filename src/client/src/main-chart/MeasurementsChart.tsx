@@ -22,6 +22,7 @@ import {
   YAxis,
 } from "recharts";
 import { dateTimeBoundary, formatDateInput, formatTimeInput, type Eye, type Measurement, type MeasurementView, type SessionAggregation } from "../analysis";
+import { MaterialSymbol } from "../MaterialSymbol";
 import { eventPalette, periodPalette as rangePalette } from "../periodPalette";
 import { EyeToggleGroup, ToggleButtonGroup } from "../shared";
 import { clipDomain, daylightBackground, intersectDomains, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
@@ -155,7 +156,7 @@ function ChartShortcuts() {
       onClick={() => setOpen((current) => !current)}
     >
       <span>Shortcuts</span>
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
+      <MaterialSymbol name="expand_more" />
     </button>
     {open && <div className="chart-shortcuts__menu" role="dialog" aria-label="Chart shortcuts">
       <dl>
@@ -833,7 +834,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                   : onDraftEventLabel(event.target.value)}
               /> : <span className="chart-annotation-label__text">{label.text}</span>}
               {label.focusId && <span className="chart-annotation-label__edit" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.12a1 1 0 0 0 0-1.41l-2.43-2.43a1 1 0 0 0-1.41 0l-1.9 1.9 3.75 3.75 1.99-1.81Z" /></svg>
+                <MaterialSymbol name="edit" />
               </span>}
             </div>
           ))}

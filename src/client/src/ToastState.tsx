@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { MaterialSymbol } from "./MaterialSymbol";
 
 export type ToastTone = "error" | "warning" | "info";
 
@@ -48,7 +49,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         role={toast.tone === "error" ? "alert" : "status"}
       >
         <span>{toast.message}</span>
-        <button type="button" aria-label="Dismiss notification" onClick={() => dismissToast(toast.id)}>×</button>
+        <button type="button" aria-label="Dismiss notification" onClick={() => dismissToast(toast.id)}><MaterialSymbol name="close" /></button>
       </div>)}
     </div>
   </Context.Provider>;

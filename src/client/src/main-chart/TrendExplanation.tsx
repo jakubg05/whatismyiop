@@ -1,3 +1,5 @@
+import { MaterialSymbol } from "../MaterialSymbol";
+
 export function TrendExplanation({ onOpenSessions, expanded = false }: { onOpenSessions: () => void; expanded?: boolean }) {
   const body = <div className="trend-explanation__body">
         <p>
@@ -35,7 +37,7 @@ export function TrendExplanation({ onOpenSessions, expanded = false }: { onOpenS
     <details className="trend-explanation">
       <summary>
         <span>How are trends calculated?</span>
-        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="m4.5 2.5 3.5 3.5-3.5 3.5" /></svg>
+        <MaterialSymbol name="chevron_right" />
       </summary>
       {body}
     </details>
