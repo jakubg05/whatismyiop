@@ -1,4 +1,5 @@
 import { dateTimeBoundary, formatDateInput, formatTimeInput } from "../analysis";
+import type { TimeDomain } from "./chartNavigation";
 
 export type EditableRange = {
   label: string;
@@ -15,6 +16,10 @@ export function rangeTimeDomain(range: EditableRange, presentTime: number): [num
     ? presentTime
     : dateTimeBoundary(range.end, range.endTime, true);
   return start === null || end === null ? null : [start, end];
+}
+
+export function timeIsInRanges(time: number, ranges: readonly TimeDomain[]): boolean {
+  return ranges.some(([start, end]) => time >= start && time <= end);
 }
 
 export function normalizeRangeEdges(range: EditableRange, presentTime: number): EditableRange {
