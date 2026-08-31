@@ -10,6 +10,8 @@ export type HeatmapTooltipPosition = {
   side: "left" | "right";
 };
 
+type PlotInsets = { left: number; right: number; top: number; bottom: number };
+
 export function tetherHorizontalOverlay(
   anchorX: number,
   overlayWidth: number,
@@ -55,4 +57,25 @@ export function positionHeatmapTooltip(
     anchorOffset: Math.max(anchorInset, Math.min(overlayHeight - anchorInset, anchorY - top)),
     side,
   };
+}
+
+export function positionHeatmapTooltipAtDataPoint(
+  time: number,
+  hour: number,
+  domain: readonly [number, number],
+  overlayWidth: number,
+  overlayHeight: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  plot: PlotInsets,
+): HeatmapTooltipPosition {
+  const plotWidth = Math.max(1, viewportWidth - plot.left - plot.right);
+  const plotHeight = Math.max(1, viewportHeight - plot.top - plot.bottom);
+  const anchorX = (time - domain[0]) / Math.max(1, domain[1] - domain[0]) * plotWidth;
+  const anchorY = hour / 24 * plotHeight;
+  const position = positionHeatmapTooltip(anchorX, anchorY, overlayWidth, overlayHeight, plotWidth, plotHeight);
+
+  if (anchorX < 0) return { ...position, left: anchorX + 14, side: "right" };
+  if (anchorX > plotWidth) return { ...position, left: anchorX - 14 - overlayWidth, side: "left" };
+  return position;
 }

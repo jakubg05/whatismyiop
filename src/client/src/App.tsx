@@ -634,6 +634,8 @@ export default function App() {
             onDelete={deleteDraft}
             onCancel={cancelDraft}
             onOpenSessionInfo={openSessionInfo}
+            onOpenTrendInfo={openTrendInfo}
+            onOpenHeatmapInfo={openHeatmapInfo}
           />
       </div>
     </main>

@@ -1,5 +1,14 @@
-import lowess from "@stdlib/stats-lowess";
-import { dateBoundary, dateTimeBoundary, formatDateInput, type Eye } from "./analysis";
+import {
+  coalesceMeasurementSessions,
+  dateBoundary,
+  dateTimeBoundary,
+  formatDateInput,
+  type Eye,
+  type Measurement,
+  type MeasurementView,
+  type SessionAggregation,
+} from "./analysis";
+import { fitCalendarValues, interpolateSorted } from "./trendSmoothing";
 
 export const DIURNAL_BIN_LABELS = Array.from({ length: 8 }, (_, bin) => {
   const start = String(bin * 3);
@@ -35,13 +44,14 @@ export type DiurnalHeatmapReading = {
   iop: number;
 };
 
-function interpolate(xs: number[], ys: number[], target: number): number {
-  let right = xs.findIndex((value) => value >= target);
-  if (right < 0) return ys.at(-1)!;
-  if (right === 0) return ys[0];
-  const left = right - 1;
-  const ratio = (target - xs[left]) / Math.max(Number.EPSILON, xs[right] - xs[left]);
-  return ys[left] + (ys[right] - ys[left]) * ratio;
+export function heatmapReadingsForView(
+  measurements: readonly Measurement[],
+  view: MeasurementView,
+  aggregation: SessionAggregation,
+): readonly DiurnalHeatmapReading[] {
+  return view === "raw"
+    ? measurements
+    : coalesceMeasurementSessions([...measurements], aggregation);
 }
 
 function trendAtSamples(observations: Array<{ time: number; value: number }>, samples: number[]): Array<number | null> {
@@ -50,13 +60,9 @@ function trendAtSamples(observations: Array<{ time: number; value: number }>, sa
   const origin = observations[0].time;
   const xs = observations.map((item) => (item.time - origin) / DAY_MS);
   const ys = observations.map((item) => item.value);
-  const fitted = observations.length < 3 ? ys : lowess(xs, ys, {
-    f: Math.min(1, (Math.max(3, Math.ceil(observations.length * 0.45)) + 0.5) / observations.length),
-    nsteps: 3,
-    delta: Math.max(Number.EPSILON, (xs.at(-1)! - xs[0]) * 0.01),
-    sorted: true,
-  }).y;
-  return samples.map((time) => interpolate(xs, fitted, (time - origin) / DAY_MS));
+  const timeSpanDays = Math.max(Number.EPSILON, xs.at(-1)! - xs[0]);
+  const fitted = observations.length < 3 ? ys : fitCalendarValues(xs, ys, timeSpanDays).fitted;
+  return samples.map((time) => interpolateSorted(xs, fitted, (time - origin) / DAY_MS));
 }
 
 export function buildDiurnalHeatmapData(

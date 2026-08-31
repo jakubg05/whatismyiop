@@ -15,6 +15,8 @@ export function ChartEditor({
   onDelete,
   onCancel,
   onOpenSessionInfo,
+  onOpenTrendInfo,
+  onOpenHeatmapInfo,
 }: {
   mode: ChartMode;
   draftRangeLabel: string;
@@ -26,6 +28,8 @@ export function ChartEditor({
   onDelete: () => void;
   onCancel: () => void;
   onOpenSessionInfo: () => void;
+  onOpenTrendInfo: () => void;
+  onOpenHeatmapInfo: () => void;
 }) {
   return (
     <aside className={`editor-drawer editor-drawer--${mode ?? "closed"}`} aria-hidden={!mode}>
@@ -39,10 +43,10 @@ export function ChartEditor({
                 : mode === "heatmap"
                   ? "How heatmaps work?"
                   : (mode === "range" ? draftRangeLabel : draftEventLabel).trim() || "Untitled"}</span>
-            {(mode === "range" || mode === "event") && <small
+            {(mode === "range" || mode === "event") && labelError && <small
               id="annotation-name-guidance"
-              className={labelError ? "editor-drawer__name-guidance--warning" : undefined}
-            >{labelError ?? `Name this ${mode === "range" ? "period" : "event"} on the chart. No spaces; use - or _.`}</small>}
+              className="editor-drawer__name-guidance--warning"
+            >{labelError}</small>}
           </div>
           <div className="editor-drawer__actions">
             {isEditing && <button type="button" className="editor-drawer__delete" onClick={onDelete}>Delete</button>}
@@ -55,7 +59,7 @@ export function ChartEditor({
         {mode === "range" && <form id="range-editor-form" onSubmit={(event) => { event.preventDefault(); onSaveRange(); }} />}
         {mode === "event" && <form id="event-editor-form" onSubmit={(event) => { event.preventDefault(); onSaveEvent(); }} />}
         {mode === "trend" && <TrendExplanation expanded onOpenSessions={onOpenSessionInfo} />}
-        {mode === "sessions" && <SessionExplanation />}
+        {mode === "sessions" && <SessionExplanation onOpenTrendInfo={onOpenTrendInfo} onOpenHeatmapInfo={onOpenHeatmapInfo} />}
         {mode === "heatmap" && <HeatmapExplanation />}
       </div>
     </aside>

@@ -1,10 +1,25 @@
 import { describe, expect, it } from "vitest";
-import type { Eye, SessionPoint } from "./analysis";
-import { buildDiurnalHeatmapData, DIURNAL_BIN_LABELS } from "./diurnalHeatmapData";
+import type { Eye, Measurement, SessionPoint } from "./analysis";
+import { buildDiurnalHeatmapData, DIURNAL_BIN_LABELS, heatmapReadingsForView } from "./diurnalHeatmapData";
 
 function session(timestamp: string, eye: Eye, iop: number, id: number): SessionPoint {
   const time = Date.parse(`${timestamp}Z`);
   return { sessionId: id, sessionStart: time, sessionEnd: time, time, eye, iop, measurements: [] };
+}
+
+function reading(timestamp: string, iop: number, sourceRow: number): Measurement {
+  const time = Date.parse(`${timestamp}Z`);
+  return {
+    sourceRow,
+    timestampText: timestamp,
+    time,
+    eye: "OD",
+    iop,
+    quality: "Good",
+    qualityRaw: "",
+    comment: "",
+    position: "Sitting",
+  };
 }
 
 describe("diurnal heatmap data", () => {
@@ -39,6 +54,40 @@ describe("diurnal heatmap data", () => {
     expect(data.z[0][0]).toBe(18);
     expect(data.z[1][0]).toBe(18);
     expect(data.lowSupport.every((row) => row[0] === true)).toBe(true);
+  });
+
+  it("uses raw readings or aggregated sessions from the active measurement view", () => {
+    const measurements = [
+      reading("2026-01-01T01:00:00", 10, 1),
+      reading("2026-01-01T01:01:00", 10, 2),
+      reading("2026-01-01T01:02:00", 40, 3),
+    ];
+    const range = { start: "2026-01-01", startTime: "00:00" };
+    const raw = buildDiurnalHeatmapData(
+      heatmapReadingsForView(measurements, "raw", "median"),
+      "OD",
+      range,
+      "2026-01-01",
+      "23:59",
+    );
+    const medianSessions = buildDiurnalHeatmapData(
+      heatmapReadingsForView(measurements, "sessions", "median"),
+      "OD",
+      range,
+      "2026-01-01",
+      "23:59",
+    );
+    const averageSessions = buildDiurnalHeatmapData(
+      heatmapReadingsForView(measurements, "sessions", "average"),
+      "OD",
+      range,
+      "2026-01-01",
+      "23:59",
+    );
+
+    expect(raw.z[0][0]).toBe(20);
+    expect(medianSessions.z[0][0]).toBe(10);
+    expect(averageSessions.z[0][0]).toBe(20);
   });
 
   it("combines only the currently selected eyes", () => {

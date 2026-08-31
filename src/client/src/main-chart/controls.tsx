@@ -9,7 +9,6 @@ import {
 } from "react";
 import type { Eye, MeasurementView, SessionAggregation } from "../analysis";
 import { DateInput, Toggle } from "../shared/ui";
-import type { TrendMode } from "./trend";
 
 export const ChartDateTag = forwardRef<HTMLDivElement, {
   value: string;
@@ -489,25 +488,21 @@ export function HeatmapControl({
 
 export function TrendControl({
   visible,
-  mode,
   eyes,
   onToggleVisible,
-  onModeChange,
   onToggleEye,
   onOpenExplanation,
 }: {
   visible: boolean;
-  mode: Exclude<TrendMode, "off">;
   eyes: Record<Eye, boolean>;
   onToggleVisible: () => void;
-  onModeChange: (mode: Exclude<TrendMode, "off">) => void;
   onToggleEye: (eye: Eye) => void;
   onOpenExplanation: () => void;
 }) {
 
   return <ChartPopoverControl
     label="Trend"
-    value={visible ? mode === "adjusted" ? "Adjusted" : "Observed" : "Off"}
+    value={visible ? "On" : "Off"}
     menuLabel="Trend settings"
     className="trend-control"
   >
@@ -517,15 +512,6 @@ export function TrendControl({
           <span>Show trend</span>
           <Toggle className="chart-control__toggle" label="Show trend" checked={visible} onChange={onToggleVisible} />
         </div>
-      </div>
-      <div className="chart-control__section" role="group" aria-label="Trend type" aria-disabled={!visible}>
-          {(["adjusted", "observed"] as const).map((option) => <ChartControlOption
-            key={option}
-            label={option === "adjusted" ? "Adjusted" : "Observed"}
-            checked={mode === option}
-            disabled={!visible}
-            onClick={() => onModeChange(option)}
-          />)}
       </div>
       <div className="chart-control__section" role="group" aria-label="Eyes shown in trend" aria-disabled={!visible}>
           {(["OS", "OD"] as Eye[]).map((option) => <ChartControlOption

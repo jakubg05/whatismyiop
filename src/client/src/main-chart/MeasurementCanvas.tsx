@@ -17,7 +17,8 @@ import {
 import { panDomain, type TimeDomain } from "./chartNavigation";
 import { TargetLineOverlay } from "./controls";
 import { CHART_PLOT_LEFT, CHART_PLOT_RIGHT } from "./format";
-import { buildTrendSeries, interpolateTrend, interpolateTrendEstimate, splitTrendSegment, trendEstimatesForDomain, type EyeTrend, type TrendEstimate, type TrendMode } from "./trend";
+import { timeIsInRanges } from "./range";
+import { buildTrendSeries, interpolateTrend, interpolateTrendEstimate, splitTrendSegment, trendEstimatesForDomain, type EyeTrend, type TrendEstimate } from "./trend";
 import { tetherHorizontalOverlay } from "./tooltipPosition";
 
 type MeasurementPoint =
@@ -37,7 +38,7 @@ type Props = {
   measurements: Measurement[];
   showRawReadings: boolean;
   sessionAggregation: SessionAggregation;
-  trendMode: TrendMode;
+  showTrend: boolean;
   visibleEyes: Record<Eye, boolean>;
   visibleTrendEyes: Record<Eye, boolean>;
   domainStart: number;
@@ -48,7 +49,7 @@ type Props = {
   onAnnotationEnd: (time: number, ratio: number, clientX: number) => void;
   onPlotHoverTimeChange: (time: number | null) => void;
   dimMeasurements: boolean;
-  emphasizedRange: TimeDomain | null;
+  emphasizedRanges: readonly TimeDomain[];
   yMin: number;
   yMax: number;
   targetValue?: number;
@@ -59,7 +60,7 @@ type AnnotationDrag = { pointerId: number };
 type NavigationModifier = "annotate" | "zoom" | null;
 type MeasurementVisibility = {
   dimMeasurements: boolean;
-  emphasizedRange: TimeDomain | null;
+  emphasizedRanges: readonly TimeDomain[];
   focusedId: string | null;
   focusedSessionId: number | null;
 };
@@ -84,13 +85,17 @@ function formatIop(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
-function TrendTooltipContent({ point, mode }: { point: TrendPoint; mode: TrendMode }) {
+function TrendTooltipContent({ point }: { point: TrendPoint }) {
   const previous = interpolateTrend(point.trend.estimates, point.time - 30 * 86_400_000);
   const change = previous === null ? null : point.iop - previous;
   const estimate = interpolateTrendEstimate(point.trend.estimates, point.time);
+  const usesRawReadings = point.trend.view === "raw";
+  const sourceLabel = usesRawReadings
+    ? "Raw readings"
+    : `${point.trend.aggregation === "median" ? "Median" : "Average"} sessions`;
   return <>
     <div className="measurement-canvas-tooltip__eyebrow">
-      <span>{mode === "adjusted" ? "Adjusted" : "Observed"}</span>
+      <span>Trend</span>
       <span>{formatFullTime(point.time)}</span>
     </div>
     <div className="measurement-canvas-tooltip__trend-primary">
@@ -103,12 +108,17 @@ function TrendTooltipContent({ point, mode }: { point: TrendPoint; mode: TrendMo
         <dd>{estimate.lower.toFixed(1)}–{estimate.upper.toFixed(1)}<span className="measurement-canvas-tooltip__unit">mmHg</span></dd>
       </div>}
       <div>
-        <dt>{change === null ? "Sessions" : "30d change"}</dt>
-        <dd>{change === null
-          ? point.trend.sessionCount
-          : <>{change >= 0 ? "+" : ""}{change.toFixed(1)}<span className="measurement-canvas-tooltip__unit">mmHg</span></>}
-        </dd>
+        <dt>Source</dt>
+        <dd>{sourceLabel}</dd>
       </div>
+      <div>
+        <dt>{usesRawReadings ? "Readings" : "Sessions"}</dt>
+        <dd>{point.trend.observationCount}</dd>
+      </div>
+      {change !== null && <div>
+        <dt>30d change</dt>
+        <dd>{change >= 0 ? "+" : ""}{change.toFixed(1)}<span className="measurement-canvas-tooltip__unit">mmHg</span></dd>
+      </div>}
     </dl>
   </>;
 }
@@ -151,7 +161,7 @@ function lowerBound<T extends { time: number }>(measurements: T[], time: number)
 }
 
 function visibilityAlpha(
-  { dimMeasurements, emphasizedRange, focusedId, focusedSessionId }: MeasurementVisibility,
+  { dimMeasurements, emphasizedRanges, focusedId, focusedSessionId }: MeasurementVisibility,
   time: number,
   pointId: string,
   pointSessionId: number | null,
@@ -163,7 +173,7 @@ function visibilityAlpha(
       : baseAlpha * DIMMED_ALPHA_FACTOR;
   }
   return baseAlpha * (!dimMeasurements
-    || (emphasizedRange !== null && time >= emphasizedRange[0] && time <= emphasizedRange[1])
+    || timeIsInRanges(time, emphasizedRanges)
     ? 1
     : DIMMED_ALPHA_FACTOR);
 }
@@ -172,7 +182,7 @@ export function MeasurementCanvas({
   measurements,
   showRawReadings,
   sessionAggregation,
-  trendMode,
+  showTrend,
   visibleEyes,
   visibleTrendEyes,
   domainStart,
@@ -183,7 +193,7 @@ export function MeasurementCanvas({
   onAnnotationEnd,
   onPlotHoverTimeChange,
   dimMeasurements,
-  emphasizedRange,
+  emphasizedRanges,
   yMin,
   yMax,
   targetValue,
@@ -218,8 +228,10 @@ export function MeasurementCanvas({
     [sessionPoints, visibleEyes],
   );
   const trendSeries = useMemo(
-    () => buildTrendSeries(measurements, sessionAggregation, trendMode).filter((series) => visibleTrendEyes[series.eye]),
-    [measurements, sessionAggregation, trendMode, visibleTrendEyes],
+    () => showTrend
+      ? buildTrendSeries(measurements, showRawReadings ? "raw" : "sessions", sessionAggregation).filter((series) => visibleTrendEyes[series.eye])
+      : [],
+    [measurements, sessionAggregation, showRawReadings, showTrend, visibleTrendEyes],
   );
   const pairedSessionIds = useMemo(() => {
     const eyeCounts = new Map<number, number>();
@@ -300,7 +312,7 @@ export function MeasurementCanvas({
   useEffect(() => {
     setHovered(null);
     setSelectedPoint(null);
-  }, [measurements, sessionAggregation, showRawReadings, trendMode, visibleEyes, visibleTrendEyes]);
+  }, [measurements, sessionAggregation, showRawReadings, showTrend, visibleEyes, visibleTrendEyes]);
 
   useEffect(() => {
     function updateModifier(event: KeyboardEvent) {
@@ -428,7 +440,7 @@ export function MeasurementCanvas({
         for (let index = 1; index < visible.length; index += 1) {
           const left = visible[index - 1];
           const right = visible[index];
-          for (const [segmentLeft, segmentRight] of splitTrendSegment(left, right, emphasizedRange ?? [])) {
+          for (const [segmentLeft, segmentRight] of splitTrendSegment(left, right, emphasizedRanges.flat())) {
             const midpoint = segmentLeft.time + (segmentRight.time - segmentLeft.time) / 2;
             const trendId = `trend:${series.eye}`;
             if (showCertaintyBand) {
@@ -515,12 +527,12 @@ export function MeasurementCanvas({
       observer.disconnect();
       if (viewFrame !== null) window.cancelAnimationFrame(viewFrame);
     };
-  }, [chartPoints, domainEnd, domainStart, emphasizedRange, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, trendSeries, yMax, yMin]);
+  }, [chartPoints, domainEnd, domainStart, emphasizedRanges, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, trendSeries, yMax, yMin]);
 
   useEffect(() => {
     if (visibilityFrame.current !== null) window.cancelAnimationFrame(visibilityFrame.current);
     const fromAlpha = visibilityAlphaAt.current;
-    const target = { dimMeasurements, emphasizedRange, focusedId: focusedPointId, focusedSessionId };
+    const target = { dimMeasurements, emphasizedRanges, focusedId: focusedPointId, focusedSessionId };
     const targetAlpha = (time: number, pointId: string, pointSessionId: number | null, baseAlpha: number) =>
       visibilityAlpha(target, time, pointId, pointSessionId, baseAlpha);
     const startedAt = performance.now();
@@ -545,7 +557,7 @@ export function MeasurementCanvas({
       if (visibilityFrame.current !== null) window.cancelAnimationFrame(visibilityFrame.current);
       visibilityFrame.current = null;
     };
-  }, [dimMeasurements, emphasizedRange, focusedPointId, focusedSessionId]);
+  }, [dimMeasurements, emphasizedRanges, focusedPointId, focusedSessionId]);
 
   function chartGeometry(canvas: HTMLCanvasElement) {
     const bounds = canvas.getBoundingClientRect();
@@ -808,7 +820,7 @@ export function MeasurementCanvas({
           } as CSSProperties}
         >
         {focusedPoint.point.kind === "trend"
-          ? <TrendTooltipContent point={focusedPoint.point} mode={trendMode} />
+          ? <TrendTooltipContent point={focusedPoint.point} />
           : focusedPoint.point.kind === "session" ? <>
           <div className="measurement-canvas-tooltip__eyebrow">
             <span>{sessionAggregation}</span>

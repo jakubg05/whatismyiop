@@ -1,23 +1,25 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { interpolateInferno } from "d3-scale-chromatic";
 import { ResponsiveContainer, Scatter, ScatterChart, XAxis, YAxis } from "recharts";
-import { formatDateInput, type Eye, type Measurement } from "../analysis";
-import { buildDiurnalHeatmapData, DIURNAL_BIN_WINDOWS } from "../diurnalHeatmapData";
+import { formatDateInput, type Eye, type Measurement, type MeasurementView, type SessionAggregation } from "../analysis";
+import { buildDiurnalHeatmapData, DIURNAL_BIN_WINDOWS, heatmapReadingsForView } from "../diurnalHeatmapData";
 import { navigateWheelDomain, panDomain, zoomDomain, type TimeDomain } from "./chartNavigation";
 import { CHART_PLOT_LEFT, CHART_PLOT_RIGHT, formatChartTime } from "./format";
 import { heatmapBracket, heatmapColorPosition, heatmapValueAt, heatmapValueFromBracket, sharedHeatmapColorDomain } from "./heatmapInterpolation";
 import { MEASUREMENT_PLOT as MAIN_CHART_PLOT } from "./MeasurementCanvas";
-import { positionHeatmapTooltip } from "./tooltipPosition";
+import { positionHeatmapTooltipAtDataPoint } from "./tooltipPosition";
 
 const HOUR_TICKS = Array.from({ length: 9 }, (_, index) => index * 3);
 const DAY_MS = 86_400_000;
 const MEASUREMENT_PLOT = { ...MAIN_CHART_PLOT, top: 0 } as const;
 const TOOLTIP_WIDTH = 224;
-const TOOLTIP_HEIGHT = 110;
+const TOOLTIP_HEIGHT = 132;
 const DRAG_THRESHOLD = 4;
 
 type Props = {
   measurements: readonly Measurement[];
+  measurementView: MeasurementView;
+  sessionAggregation: SessionAggregation;
   visibleEyes: Record<Eye, boolean>;
   domain: TimeDomain;
   fullDomain: TimeDomain;
@@ -27,7 +29,7 @@ type Props = {
   onDomainChange: (domain: TimeDomain) => void;
 };
 
-type Hover = { left: number; top: number; time: number; bin: number; value: number | null; side: "left" | "right"; anchorOffset: number };
+type Hover = { time: number; hour: number; bin: number; value: number | null };
 type Drag = { pointerId: number; x: number; y: number; domain: TimeDomain; moved: boolean };
 
 function colorLookup(): Array<readonly [number, number, number]> {
@@ -65,9 +67,10 @@ function TimeOfDayTick({ x = 0, y = 0, payload }: { x?: number; y?: number; payl
   >{hourLabel(payload.value)}</text>;
 }
 
-export function DiurnalHeatmapCanvas({ measurements, visibleEyes, domain, fullDomain, timeTicks, closing, showUncertainRegions, onDomainChange }: Props) {
+export function DiurnalHeatmapCanvas({ measurements, measurementView, sessionAggregation, visibleEyes, domain, fullDomain, timeTicks, closing, showUncertainRegions, onDomainChange }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const uncertaintyCanvas = useRef<HTMLCanvasElement>(null);
   const rasterCanvas = useRef<HTMLCanvasElement | null>(null);
   const rasterImage = useRef<ImageData | null>(null);
   const drag = useRef<Drag | null>(null);
@@ -81,22 +84,26 @@ export function DiurnalHeatmapCanvas({ measurements, visibleEyes, domain, fullDo
   const [pinned, setPinned] = useState(false);
   const [dragging, setDragging] = useState(false);
   const eyes = useMemo(() => (["OD", "OS"] as Eye[]).filter((eye) => visibleEyes[eye]), [visibleEyes]);
+  const trendInputs = useMemo(
+    () => heatmapReadingsForView(measurements, measurementView, sessionAggregation),
+    [measurementView, measurements, sessionAggregation],
+  );
   const data = useMemo(() => buildDiurnalHeatmapData(
-    measurements,
+    trendInputs,
     eyes,
     { start: formatDateInput(fullDomain[0]), startTime: "00:00" },
     formatDateInput(fullDomain[1]),
     "23:59",
     fullDomain[1],
-  ), [eyes, fullDomain, measurements]);
+  ), [eyes, fullDomain, trendInputs]);
   const scaleData = useMemo(() => (["OD", "OS"] as Eye[]).map((eye) => buildDiurnalHeatmapData(
-    measurements,
+    trendInputs,
     eye,
     { start: formatDateInput(fullDomain[0]), startTime: "00:00" },
     formatDateInput(fullDomain[1]),
     "23:59",
     fullDomain[1],
-  )), [fullDomain, measurements]);
+  )), [fullDomain, trendInputs]);
   const axisAnchors = useMemo(() => [
     { time: domain[0], hour: 0 },
     { time: domain[1], hour: 24 },
@@ -104,6 +111,23 @@ export function DiurnalHeatmapCanvas({ measurements, visibleEyes, domain, fullDo
   const dates = data.times;
   const selectedEye = eyes[0];
   const colorDomain = useMemo(() => sharedHeatmapColorDomain(scaleData), [scaleData]);
+  const positionedHover = useMemo(() => {
+    if (!hover || size.width <= 0 || size.height <= 0) return null;
+    const position = positionHeatmapTooltipAtDataPoint(
+      hover.time,
+      hover.hour,
+      domain,
+      TOOLTIP_WIDTH,
+      TOOLTIP_HEIGHT,
+      size.width,
+      size.height,
+      MEASUREMENT_PLOT,
+    );
+    return {
+      ...hover,
+      ...position,
+    };
+  }, [domain, hover, size]);
   domainRef.current = domain;
 
   useEffect(() => {
@@ -176,8 +200,22 @@ export function DiurnalHeatmapCanvas({ measurements, visibleEyes, domain, fullDo
     rasterContext.putImageData(image, 0, 0);
     context.imageSmoothingEnabled = true;
     context.drawImage(raster, MEASUREMENT_PLOT.left, MEASUREMENT_PLOT.top, plotWidth, plotHeight);
+  }, [colorDomain, data, dates, domain, eyes.length, fullDomain, size]);
 
-    if (!showUncertainRegions) return;
+  useEffect(() => {
+    const target = uncertaintyCanvas.current;
+    if (!target || size.width <= 0 || size.height <= 0) return;
+    const ratio = window.devicePixelRatio || 1;
+    target.width = Math.round(size.width * ratio);
+    target.height = Math.round(size.height * ratio);
+    const context = target.getContext("2d");
+    if (!context) return;
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, size.width, size.height);
+
+    const plotWidth = Math.max(1, size.width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
+    const plotHeight = Math.max(1, size.height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom);
+    if (dates.length === 0 || eyes.length === 0) return;
     const boundaries = dates.map((time, index) => index === 0
       ? time - ((dates[1] ?? time + DAY_MS) - time) / 2
       : (dates[index - 1] + time) / 2);
@@ -218,7 +256,7 @@ export function DiurnalHeatmapCanvas({ measurements, visibleEyes, domain, fullDo
       context.stroke();
     }
     context.restore();
-  }, [colorDomain, data, dates, domain, eyes.length, fullDomain, showUncertainRegions, size]);
+  }, [data, dates, domain, eyes.length, fullDomain, size]);
 
   useEffect(() => {
     const element = root.current;
@@ -285,15 +323,11 @@ export function DiurnalHeatmapCanvas({ measurements, visibleEyes, domain, fullDo
     const time = domain[0] + (x - MEASUREMENT_PLOT.left) / plotWidth * (domain[1] - domain[0]);
     const hour = (y - MEASUREMENT_PLOT.top) / plotHeight * 24;
     const bin = Math.min(7, Math.floor(hour / 3));
-    const tooltip = positionHeatmapTooltip(x, y, TOOLTIP_WIDTH, TOOLTIP_HEIGHT, size.width, size.height);
     setHover({
-      left: tooltip.left,
-      top: tooltip.top,
       time,
+      hour,
       bin,
       value: time < fullDomain[0] || time > fullDomain[1] ? null : heatmapValueAt(data, dates, time, hour),
-      side: tooltip.side,
-      anchorOffset: tooltip.anchorOffset,
     });
     return true;
   }
@@ -392,6 +426,11 @@ export function DiurnalHeatmapCanvas({ measurements, visibleEyes, domain, fullDo
       onDoubleClick={resetDomain}
       onKeyDown={handleKeyDown}
     />
+    <canvas
+      ref={uncertaintyCanvas}
+      className={`history-heatmap__uncertainty${showUncertainRegions ? " history-heatmap__uncertainty--visible" : ""}`}
+      aria-hidden="true"
+    />
     <ResponsiveContainer width="100%" height="100%">
       <ScatterChart margin={{ top: MEASUREMENT_PLOT.top, right: CHART_PLOT_RIGHT, bottom: 10, left: 0 }}>
         <XAxis type="number" dataKey="time" domain={domain} allowDataOverflow ticks={timeTicks} interval={0} tickFormatter={formatChartTime} tick={{ fill: "var(--muted)", fontSize: 12 }} />
@@ -411,26 +450,32 @@ export function DiurnalHeatmapCanvas({ measurements, visibleEyes, domain, fullDo
         <Scatter data={axisAnchors} fill="transparent" isAnimationActive={false} />
       </ScatterChart>
     </ResponsiveContainer>
-    {hover && <div
-      className={`history-heatmap__tooltip history-heatmap__tooltip--${hover.side}`}
-      style={{ left: hover.left, top: hover.top, "--heatmap-tooltip-notch-top": `${hover.anchorOffset}px` } as CSSProperties}
+    <div
+      className="history-heatmap__tooltip-viewport"
+      style={{ inset: `${MEASUREMENT_PLOT.top}px ${MEASUREMENT_PLOT.right}px ${MEASUREMENT_PLOT.bottom}px ${MEASUREMENT_PLOT.left}px` }}
     >
-      <div className="history-heatmap__tooltip-eyebrow">
-        <span className="history-heatmap__tooltip-eye">
-          {selectedEye && <span className={`dot dot--${selectedEye.toLowerCase()}`} aria-hidden="true" />}
-          {eyeLabel(selectedEye)}
-        </span>
-        <span>{formatChartTime(hover.time)}</span>
-      </div>
-      <div className="history-heatmap__tooltip-primary">
-        {hover.value === null
-          ? <span className="history-heatmap__tooltip-empty">No trend</span>
-          : <><strong>{hover.value.toFixed(1)}</strong><span>mmHg</span></>}
-      </div>
-      <dl className="history-heatmap__tooltip-rows">
-        <div><dt>Time</dt><dd>{DIURNAL_BIN_WINDOWS[hover.bin]}</dd></div>
-      </dl>
-    </div>}
+      {positionedHover && <div
+        className={`history-heatmap__tooltip history-heatmap__tooltip--${positionedHover.side}`}
+        style={{ left: positionedHover.left, top: positionedHover.top, "--heatmap-tooltip-notch-top": `${positionedHover.anchorOffset}px` } as CSSProperties}
+      >
+        <div className="history-heatmap__tooltip-eyebrow">
+          <span className="history-heatmap__tooltip-eye">
+            {selectedEye && <span className={`dot dot--${selectedEye.toLowerCase()}`} aria-hidden="true" />}
+            {eyeLabel(selectedEye)}
+          </span>
+          <span>{formatChartTime(positionedHover.time)}</span>
+        </div>
+        <div className="history-heatmap__tooltip-primary">
+          {positionedHover.value === null
+            ? <span className="history-heatmap__tooltip-empty">No trend</span>
+            : <><strong>{positionedHover.value.toFixed(1)}</strong><span>mmHg</span></>}
+        </div>
+        <dl className="history-heatmap__tooltip-rows">
+          <div><dt>Time</dt><dd>{DIURNAL_BIN_WINDOWS[positionedHover.bin]}</dd></div>
+          <div><dt>Source</dt><dd>{measurementView === "raw" ? "Raw readings" : `${sessionAggregation === "median" ? "Median" : "Average"} sessions`}</dd></div>
+        </dl>
+      </div>}
+    </div>
     </div>
     <div className="history-heatmap__legend" role="img" aria-label={`Mean IOP color scale from ${colorDomain[0].toFixed(1)} to ${colorDomain[1].toFixed(1)} millimeters of mercury for the currently included readings across the full date history`}>
       <span className="history-heatmap__legend-label">Mean IOP</span>
