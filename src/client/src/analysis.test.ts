@@ -18,6 +18,14 @@ describe("measurement import", () => {
     expect(result.measurements.filter((item) => item.eye === "OS")).toHaveLength(3);
   });
 
+  it("accepts a header-only CSV", () => {
+    const emptyResult = parseMeasurementsCsv("Date / Time;IOP (OD);IOP (OS)\n");
+
+    expect(emptyResult.measurements).toEqual([]);
+    expect(emptyResult.sourceRows).toBe(0);
+    expect(emptyResult.rejectedRows).toBe(0);
+  });
+
   it("preserves the exact chronological boundaries", () => {
     expect(result.measurements[0].timestampText).toBe("2023-01-18T17:02:25");
     expect(result.measurements.at(-1)?.timestampText).toBe("2026-08-25T22:28:38");
