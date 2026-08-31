@@ -84,6 +84,21 @@
 .site-footer .ui-button--secondary:hover, .site-footer .ui-button--secondary:focus-visible { border-color: #e8e8e8; background: #e8e8e8; }
 .site-footer .ui-button--quiet { color: #a8a8a8; }
 .site-footer .ui-button--quiet:hover, .site-footer .ui-button--quiet:focus-visible { background: rgb(255 255 255 / 8%); color: #f3f3f3; }
+.clear-data-dialog { width: min(28rem, calc(100vw - 2rem)); padding: 0; border: 1px solid var(--editor-divider); border-radius: .875rem; background: var(--editor-canvas); color: var(--editor-ink); box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 38%); color-scheme: dark; }
+.clear-data-dialog::backdrop { background: rgb(0 0 0 / 64%); }
+.clear-data-dialog__form { padding: var(--s5); display: grid; gap: var(--s4); }
+.clear-data-dialog__copy { display: grid; gap: var(--s2); }
+.site-footer .clear-data-dialog h2 { color: var(--editor-ink); font-size: 1.25rem; font-weight: 400; }
+.site-footer .clear-data-dialog p { max-width: none; color: var(--editor-muted); font-size: .8125rem; line-height: 1.55; }
+.clear-data-dialog label { color: var(--editor-ink); font-size: .8125rem; }
+.clear-data-dialog input { width: 100%; height: 2.5rem; padding: 0 var(--s3); border: 0; border-radius: var(--radius); outline: 0; background: var(--editor-surface); color: var(--editor-ink); }
+.clear-data-dialog input:focus { background: var(--editor-surface); box-shadow: none; }
+.clear-data-dialog__actions { display: flex; justify-content: flex-end; gap: var(--s2); }
+.site-footer .clear-data-dialog .ui-button--secondary { border-color: transparent; background: var(--editor-button); color: var(--editor-ink); }
+.site-footer .clear-data-dialog .ui-button--secondary:hover, .site-footer .clear-data-dialog .ui-button--secondary:focus-visible { border-color: transparent; background: var(--editor-input); color: var(--editor-ink); }
+.site-footer .clear-data-dialog .ui-button--danger { border-color: #fff; background: #fff; color: #0d0d0d; }
+.site-footer .clear-data-dialog .ui-button--danger:hover, .site-footer .clear-data-dialog .ui-button--danger:focus-visible { border-color: #e8e8e8; background: #e8e8e8; color: #0d0d0d; }
+.site-footer .clear-data-dialog .ui-button--danger:disabled { border: 0; outline: 0; background: var(--editor-button); color: var(--editor-muted); opacity: .45; cursor: not-allowed; }
 .site-footer__bottom { grid-column: 1 / -1; padding-top: var(--s4); border-top: 1px solid rgb(255 255 255 / 12%); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s3) var(--s6); color: #777; font: var(--small); }
 .site-footer__legal { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); }
 .site-footer__legal a { color: #a8a8a8; text-decoration: none; }
