@@ -4,6 +4,7 @@ import {
   MAX_COMPARISON_DAYS,
   NOW_COMPARISON_EVENT_ID,
   binDiurnalSessions,
+  diurnalYAxisScale,
   canonicalizeComparisonExpression,
   comparisonCompletionContext,
   comparisonLabelError,
@@ -199,7 +200,7 @@ describe("comparison expression grammar", () => {
 
 describe("comparison labels", () => {
   it("enforces grammar, reserved words, and cross-type uniqueness", () => {
-    expect(comparisonLabelError("With space", "period", catalog)).not.toBeNull();
+    expect(comparisonLabelError("With space", "period", catalog)).toBe("Names cannot contain spaces. Use hyphens or underscores instead.");
     expect(comparisonLabelError("_startsWrong", "period", catalog)).not.toBeNull();
     expect(comparisonLabelError("baseline", "period", catalog)).not.toBeNull();
     expect(comparisonLabelError("Xalatan", "period", catalog)).not.toBeNull();
@@ -263,6 +264,39 @@ describe("comparison segment boundaries", () => {
 });
 
 describe("diurnal aggregation", () => {
+  it("builds a readable axis that includes every whisker endpoint", () => {
+    const scale = diurnalYAxisScale([
+      { bin: 0, minuteOfDay: 90, mean: 20, sd: 3, count: 4, periodLabel: "Before", eye: "OD" },
+      { bin: 1, minuteOfDay: 270, mean: 30, sd: 4, count: 4, periodLabel: "After", eye: "OS" },
+    ]);
+    expect(scale).toEqual({
+      domain: [15, 36],
+      ticks: [15, 18, 21, 24, 27, 30, 33, 36],
+    });
+  });
+
+  it("uses a stable fallback axis when no comparison points exist", () => {
+    expect(diurnalYAxisScale([])).toEqual({
+      domain: [10, 35],
+      ticks: [10, 15, 20, 25, 30, 35],
+    });
+  });
+
+  it("expands the diurnal axis to keep an enabled target visible", () => {
+    const scale = diurnalYAxisScale([
+      { bin: 0, minuteOfDay: 90, mean: 20, sd: 1, count: 4, periodLabel: "Before", eye: "OD" },
+    ], 36);
+    expect(scale.domain[0]).toBeLessThan(20);
+    expect(scale.domain[1]).toBeGreaterThan(36);
+    expect(scale.ticks).toContain(36);
+  });
+
+  it("caps an out-of-range target before generating axis ticks", () => {
+    const scale = diurnalYAxisScale([], 1_000_000);
+    expect(scale.domain).toEqual([10, 105]);
+    expect(scale.ticks).toHaveLength(20);
+  });
+
   it("weights each session once and excludes sessions straddling a boundary", () => {
     const reading = (minute: number, iop: number): Measurement => ({
       sourceRow: minute + iop,
@@ -281,6 +315,11 @@ describe("diurnal aggregation", () => {
     ]);
     expect(binDiurnalSessions(sessions, "OD", { label: "Period", start: "2026-05-01", startTime: "00:00" }, "2026-05-01", "23:59")[0])
       .toMatchObject({ mean: 20, count: 2 });
+    expect(binDiurnalSessions([
+      reading(0, 30), reading(1, 30), reading(2, 30), reading(3, 30), reading(4, 30), reading(5, 30),
+      reading(30, 10),
+    ], "OD", { label: "Raw", start: "2026-05-01", startTime: "00:00" }, "2026-05-01", "23:59")[0])
+      .toMatchObject({ mean: 190 / 7, count: 7 });
 
     const straddling = [{
       sessionId: 0,

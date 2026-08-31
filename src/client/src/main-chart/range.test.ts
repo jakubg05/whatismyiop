@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveRangeEdge, normalizeRangeEdges, rangeTimeDomain, type EditableRange } from "./range";
+import { moveRangeEdge, normalizeRangeEdges, rangeTimeDomain, timeIsInRanges, unemphasizedRangesWithin, type EditableRange } from "./range";
 
 const base: EditableRange = {
   label: "Treatment",
@@ -49,5 +49,25 @@ describe("range edge ordering", () => {
     const crossed = moveRangeEdge(base, "start", Date.UTC(2026, 0, 25, 12), present);
     const crossedBack = moveRangeEdge(crossed, "end", Date.UTC(2026, 0, 15, 9), present);
     expect(crossedBack).toMatchObject({ start: "2026-01-15", startTime: "09:00", end: "2026-01-20", endTime: "18:00", openEnded: false });
+  });
+});
+
+describe("range emphasis", () => {
+  const ranges = [[10, 20], [40, 50]] as const;
+
+  it("includes both boundaries of every emphasized range", () => {
+    expect([10, 20, 40, 50].every((time) => timeIsInRanges(time, ranges))).toBe(true);
+  });
+
+  it("excludes times between and outside emphasized ranges", () => {
+    expect([9, 21, 39, 51].every((time) => !timeIsInRanges(time, ranges))).toBe(true);
+  });
+
+  it("returns the visible gaps around multiple emphasized ranges", () => {
+    expect(unemphasizedRangesWithin([0, 60], ranges)).toEqual([[0, 10], [20, 40], [50, 60]]);
+  });
+
+  it("clips and merges overlapping emphasized ranges before finding gaps", () => {
+    expect(unemphasizedRangesWithin([10, 50], [[0, 15], [14, 30], [45, 60]])).toEqual([[30, 45]]);
   });
 });

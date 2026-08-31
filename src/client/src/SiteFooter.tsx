@@ -1,5 +1,8 @@
 import { Link } from "@tanstack/react-router";
+import { useRef, useState } from "react";
 import { Button } from "./shared";
+
+const CLEAR_DATA_CONFIRMATION = "confirm";
 
 type SiteFooterProps = {
   variant?: "full" | "compact";
@@ -17,6 +20,19 @@ export function SiteFooter({
   onClearData,
 }: SiteFooterProps) {
   const hasLocalData = variant === "full" && Boolean(fileName);
+  const clearDialog = useRef<HTMLDialogElement>(null);
+  const [clearConfirmation, setClearConfirmation] = useState("");
+  const clearConfirmed = clearConfirmation.trim().toLowerCase() === CLEAR_DATA_CONFIRMATION;
+
+  function closeClearDialog() {
+    clearDialog.current?.close();
+  }
+
+  function confirmClearData() {
+    if (!clearConfirmed || !onClearData) return;
+    onClearData();
+    closeClearDialog();
+  }
 
   return (
     <footer className={`site-footer site-footer--${variant}`}>
@@ -34,21 +50,59 @@ export function SiteFooter({
         </section>
 
         {variant === "full" && <section className="site-footer__privacy">
-          <h2>Private by design</h2>
-          <p>Your CSV is processed and stored in this browser. The app does not send its contents to us, and no account or tracking profile is required.</p>
+          <h2>Stored in your browser</h2>
+          <p>Your CSV, periods, and events stay in this browser. WhatIsMyIOP does not upload them or require an account.</p>
         </section>}
 
         {hasLocalData && <section className="site-footer__data">
           <h2>Your local data</h2>
           <div className="site-footer__file">
             <strong>{fileName}</strong>
-            <span>{measurementCount.toLocaleString()} records stored locally</span>
+            <span>{measurementCount > 0 ? `${measurementCount.toLocaleString()} measurements stored locally` : "Treatment history stored locally"}</span>
           </div>
           <div className="site-footer__actions">
-            {onChooseFile && <Button variant="secondary" onClick={onChooseFile}>Choose another CSV</Button>}
-            {onClearData && <Button variant="quiet" className="clear-button" onClick={onClearData}>Clear data</Button>}
+            {onChooseFile && <Button variant="secondary" onClick={onChooseFile}>Update measurements</Button>}
+            {onClearData && <Button
+              variant="quiet"
+              className="clear-button"
+              onClick={() => clearDialog.current?.showModal()}
+            >Clear data</Button>}
           </div>
         </section>}
+
+        {onClearData && <dialog
+          ref={clearDialog}
+          className="clear-data-dialog"
+          aria-labelledby="clear-data-dialog-title"
+          aria-describedby="clear-data-dialog-description"
+          onClose={() => {
+            setClearConfirmation("");
+          }}
+        >
+          <form className="clear-data-dialog__form" onSubmit={(event) => {
+            event.preventDefault();
+            confirmClearData();
+          }}>
+            <div className="clear-data-dialog__copy">
+              <h2 id="clear-data-dialog-title">Clear all local data</h2>
+              <p id="clear-data-dialog-description">This permanently removes your measurements, periods, and events from this browser.</p>
+            </div>
+            <label htmlFor="clear-data-confirmation">Type <strong>{CLEAR_DATA_CONFIRMATION}</strong> to confirm</label>
+            <input
+              id="clear-data-confirmation"
+              type="text"
+              value={clearConfirmation}
+              autoComplete="off"
+              spellCheck={false}
+              autoFocus
+              onChange={(event) => setClearConfirmation(event.target.value)}
+            />
+            <div className="clear-data-dialog__actions">
+              <Button type="button" variant="secondary" onClick={closeClearDialog}>Cancel</Button>
+              <Button type="submit" variant="danger" disabled={!clearConfirmed}>Clear all data</Button>
+            </div>
+          </form>
+        </dialog>}
 
         <div className="site-footer__bottom">
           <nav className="site-footer__legal" aria-label="Legal information">

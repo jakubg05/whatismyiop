@@ -59,9 +59,10 @@ describe("trend estimates", () => {
     expect(trendEstimatesForDomain(estimates, 400, 500)).toEqual([]);
   });
 
-  it("requires enough independent sessions", () => {
-    const trend = buildTrendSeries(Array.from({ length: 7 }, (_, index) => reading(index, 12, "OD", 18)), "median", "adjusted");
-    expect(trend).toEqual([]);
+  it("requires enough values in the active measurement view", () => {
+    const measurements = Array.from({ length: 7 }, (_, index) => reading(index, 12, "OD", 18));
+    expect(buildTrendSeries(measurements, "sessions", "median")).toEqual([]);
+    expect(buildTrendSeries(measurements, "raw", "median")).toEqual([]);
   });
 
   it("uses one aggregate value per session", () => {
@@ -69,35 +70,33 @@ describe("trend estimates", () => {
       reading(index, 12, "OD", 15 + index),
       { ...reading(index, 12, "OD", 17 + index), sourceRow: 500 + index, time: index * day + 12 * 60 * 60 * 1000 + 60_000 },
     ]).flat();
-    const trend = buildTrendSeries(measurements, "median", "observed");
-    expect(trend[0].sessionCount).toBe(10);
+    const trend = buildTrendSeries(measurements, "sessions", "median");
+    expect(trend[0].observationCount).toBe(10);
+    expect(trend[0].view).toBe("sessions");
     expect(trend[0].estimates.at(-1)!.iop).toBeGreaterThan(trend[0].estimates[0].iop);
+  });
+
+  it("uses every included reading in Raw view", () => {
+    const measurements = Array.from({ length: 10 }, (_, index) => [
+      reading(index, 12, "OD", 15 + index),
+      { ...reading(index, 12, "OD", 18 + index), sourceRow: 500 + index, time: index * day + 12 * 60 * 60 * 1000 + 60_000 },
+    ]).flat();
+
+    const rawTrend = buildTrendSeries(measurements, "raw", "median")[0];
+    expect(rawTrend.observationCount).toBe(20);
+    expect(rawTrend.view).toBe("raw");
   });
 
   it("preserves a linear series and returns finite LOWESS uncertainty estimates", () => {
     const measurements = Array.from({ length: 20 }, (_, index) => reading(index, 12, "OD", 18 + index * 0.05));
-    const estimates = buildTrendSeries(measurements, "median", "observed")[0].estimates;
+    const estimates = buildTrendSeries(measurements, "sessions", "median")[0].estimates;
 
     expect(estimates[0].iop).toBeCloseTo(18);
     expect(estimates.at(-1)!.iop).toBeCloseTo(18.95);
     expect(estimates.every((estimate) => Number.isFinite(estimate.lower) && Number.isFinite(estimate.upper))).toBe(true);
   });
 
-  it("separates a changing measurement schedule from a stable adjusted trend", () => {
-    const measurements = Array.from({ length: 20 }, (_, index) => {
-      const hour = index < 10 ? 8 : 20;
-      const diurnalEffect = hour === 8 ? 3 : -3;
-      return reading(index, hour, "OD", 18 + diurnalEffect);
-    });
-    const observed = buildTrendSeries(measurements, "median", "observed")[0].estimates;
-    const adjusted = buildTrendSeries(measurements, "median", "adjusted")[0].estimates;
-    const observedChange = observed.at(-1)!.iop - observed[0].iop;
-    const adjustedChange = adjusted.at(-1)!.iop - adjusted[0].iop;
-    expect(observedChange).toBeLessThan(-4);
-    expect(Math.abs(adjustedChange)).toBeLessThan(Math.abs(observedChange));
-  });
-
-  it("does not use measurement position in the adjusted trend", () => {
+  it("does not use measurement position in the trend", () => {
     const measurements = Array.from({ length: 20 }, (_, index) => reading(
       index,
       12,
@@ -107,8 +106,8 @@ describe("trend estimates", () => {
     ));
     const withoutPositions = measurements.map((measurement) => ({ ...measurement, position: "" }));
 
-    const withPositionTrend = buildTrendSeries(measurements, "median", "adjusted")[0].estimates;
-    const withoutPositionTrend = buildTrendSeries(withoutPositions, "median", "adjusted")[0].estimates;
+    const withPositionTrend = buildTrendSeries(measurements, "sessions", "median")[0].estimates;
+    const withoutPositionTrend = buildTrendSeries(withoutPositions, "sessions", "median")[0].estimates;
 
     expect(withPositionTrend).toEqual(withoutPositionTrend);
   });

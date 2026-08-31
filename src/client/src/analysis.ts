@@ -3,6 +3,7 @@ import Papa from "papaparse";
 export type Eye = "OD" | "OS";
 export type Quality = "Excellent" | "Good" | "Satisfactory" | string;
 export type SessionAggregation = "median" | "average";
+export type MeasurementView = "sessions" | "raw";
 
 export type Measurement = {
   sourceRow: number;

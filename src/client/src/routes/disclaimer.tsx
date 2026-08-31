@@ -23,8 +23,8 @@ function MedicalDisclaimer() {
 
       <section>
         <h2>What the charts mean</h2>
-        <p>Charts reproduce or summarise the data in the imported file. Sessions combine nearby measurements. Observed trends statistically smooth session values. Adjusted trends also estimate and remove a repeatable time-of-day pattern before displaying a common reference.</p>
-        <p>A smoothed or adjusted value is not a new physical measurement. An uncertainty band describes agreement in the statistical fit; it is not a normal range, safety boundary, prediction, diagnosis, or probability that a condition is present.</p>
+        <p>Charts reproduce or summarise the data in the imported file. Sessions combine nearby measurements. Trends statistically smooth raw readings or session values, depending on the selected view.</p>
+        <p>A smoothed value is not a new physical measurement. An uncertainty band describes agreement in the statistical fit; it is not a normal range, safety boundary, prediction, diagnosis, or probability that a condition is present.</p>
       </section>
 
       <section>

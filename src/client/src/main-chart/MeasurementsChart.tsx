@@ -8,6 +8,7 @@ import {
   useState,
   type Dispatch,
   type CSSProperties,
+  type FocusEvent,
   type PointerEvent as ReactPointerEvent,
   type SetStateAction,
 } from "react";
@@ -20,16 +21,19 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { dateTimeBoundary, formatDateInput, formatTimeInput, type Eye, type Measurement, type SessionAggregation } from "../analysis";
+import { dateTimeBoundary, formatDateInput, formatTimeInput, type Eye, type Measurement, type MeasurementView, type SessionAggregation } from "../analysis";
+import { MaterialSymbol } from "../MaterialSymbol";
 import { eventPalette, periodPalette as rangePalette } from "../periodPalette";
+import { EyeToggleGroup, ToggleButtonGroup } from "../shared";
 import { clipDomain, daylightBackground, intersectDomains, navigateWheelDomain, type TimeDomain } from "./chartNavigation";
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
+import { DiurnalHeatmapCanvas } from "./DiurnalHeatmapCanvas";
 import { moveRangeEdge, rangeTimeDomain, type EditableRange } from "./range";
-import { type TrendMode } from "./trend";
-import { ChartDateTag, ChartSelect, ChartToggle } from "./controls";
-import { formatChartTime } from "./format";
+import { ChartDateTag, ChartSelect, HeatmapControl, MeasurementViewControl, TargetControl, TrendControl } from "./controls";
+import { type ChartDimming, type ChartDimmingFocus } from "./dimming";
+import { chartTimeTicks, CHART_PLOT_LEFT, CHART_PLOT_RIGHT, formatChartTime } from "./format";
 
-export type ChartMode = "range" | "event" | "trend" | "sessions" | null;
+export type ChartMode = "range" | "event" | "trend" | "sessions" | "heatmap" | null;
 type PositionFilter = "all" | "sitting" | "laying";
 
 export type DraftRange = EditableRange;
@@ -63,10 +67,9 @@ type Props = {
   measurements: Measurement[];
   visibleEyes: Record<Eye, boolean>;
   onToggleEye: (eye: Eye) => void;
-  trendMode: TrendMode;
-  visibleTrendEyes: Record<Eye, boolean>;
-  onOpenTrendSettings: () => void;
+  onOpenTrendInfo: () => void;
   onOpenSessionInfo: () => void;
+  onOpenHeatmapInfo: () => void;
   ranges: ChartRange[];
   events: ChartEvent[];
   comparisonRanges: ChartRange[];
@@ -81,6 +84,7 @@ type Props = {
   onCancelEdit: () => void;
   draftRange: DraftRange;
   draftRangeLabel: string;
+  draftLabelError: string | null;
   setDraftRange: Dispatch<SetStateAction<DraftRange>>;
   draftEventLabel: string;
   onDraftEventLabel: (label: string) => void;
@@ -88,8 +92,14 @@ type Props = {
   onDraftEventTime: (time: number) => void;
   today: string;
   presentTime: number;
+  domain: TimeDomain;
+  onDomainChange: (domain: TimeDomain) => void;
   fullDomain: TimeDomain;
   yDomain: TimeDomain;
+  targetEnabled: boolean;
+  targetValue: number;
+  onTargetEnabledChange: (enabled: boolean) => void;
+  onTargetValueChange: (value: number) => void;
 };
 
 function eyeLabel(eye: Eye): string {
@@ -113,14 +123,60 @@ function alignDateTagToPlot(tag: HTMLElement | null, ratio: number) {
   tag?.classList.toggle("selection-handle__date-control--right", ratio > 0.8);
 }
 
+function ChartShortcuts() {
+  const root = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    function closeOutside(event: PointerEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  function closeOnBlur(event: FocusEvent<HTMLDivElement>) {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false);
+  }
+
+  return <div ref={root} className="chart-shortcuts" onBlur={closeOnBlur}>
+    <button
+      className="chart-shortcuts__trigger"
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      onClick={() => setOpen((current) => !current)}
+    >
+      <span>Shortcuts</span>
+      <MaterialSymbol name="expand_more" />
+    </button>
+    {open && <div className="chart-shortcuts__menu" role="dialog" aria-label="Chart shortcuts">
+      <dl>
+        <div className="chart-shortcuts__primary"><dt><kbd>Ctrl</kbd> + click</dt><dd>Add an event</dd></div>
+        <div className="chart-shortcuts__primary"><dt><kbd>Ctrl</kbd> + drag</dt><dd>Add a period</dd></div>
+        <div><dt>Drag</dt><dd>Pan the chart</dd></div>
+        <div><dt><kbd>Ctrl</kbd> + scroll</dt><dd>Pan the chart</dd></div>
+        <div><dt><kbd>Shift</kbd> + scroll</dt><dd>Zoom the chart</dd></div>
+      </dl>
+    </div>}
+  </div>;
+}
+
 export const MeasurementsChart = memo(function MeasurementsChart({
   measurements,
   visibleEyes,
   onToggleEye,
-  trendMode,
-  visibleTrendEyes,
-  onOpenTrendSettings,
+  onOpenTrendInfo,
   onOpenSessionInfo,
+  onOpenHeatmapInfo,
   ranges,
   events,
   comparisonRanges,
@@ -135,6 +191,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   onCancelEdit,
   draftRange,
   draftRangeLabel,
+  draftLabelError,
   setDraftRange,
   draftEventLabel,
   onDraftEventLabel,
@@ -142,8 +199,14 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   onDraftEventTime,
   today,
   presentTime,
+  domain,
+  onDomainChange,
   fullDomain,
   yDomain,
+  targetEnabled,
+  targetValue,
+  onTargetEnabledChange,
+  onTargetValueChange,
 }: Props) {
   const chart = useRef<HTMLDivElement>(null);
   const focusedRangeLabel = useRef<HTMLDivElement>(null);
@@ -153,7 +216,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const dragRef = useRef<AnnotationDrag | null>(null);
   const handleDrag = useRef<HandleDrag | null>(null);
   const draftRangeRef = useRef(draftRange);
-  const [domain, setDomain] = useState<TimeDomain>(fullDomain);
   const domainRef = useRef(domain);
   const pendingDomain = useRef<TimeDomain | null>(null);
   const wheelFrame = useRef<number | null>(null);
@@ -162,12 +224,20 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [hoveredAnnotation, setHoveredAnnotation] = useState<string | null>(null);
   const [hoveredRegionRangeIds, setHoveredRegionRangeIds] = useState<string[]>([]);
   const [draggedRangeFocus, setDraggedRangeFocus] = useState<TimeDomain | null>(null);
-  const [measurementView, setMeasurementView] = useState<"sessions" | "raw">("sessions");
+  const [measurementView, setMeasurementView] = useState<MeasurementView>("sessions");
   const [sessionAggregation, setSessionAggregation] = useState<SessionAggregation>("median");
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("all");
   const [qualityFilter, setQualityFilter] = useState("all");
   const [showPeriods, setShowPeriods] = useState(true);
   const [showEvents, setShowEvents] = useState(true);
+  const [showTrend, setShowTrend] = useState(true);
+  const [visibleTrendEyes, setVisibleTrendEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [renderHeatmap, setRenderHeatmap] = useState(false);
+  const [heatmapClosing, setHeatmapClosing] = useState(false);
+  const [heatmapEye, setHeatmapEye] = useState<Eye>("OS");
+  const [showUncertainRegions, setShowUncertainRegions] = useState(true);
+  const [measurementDimmingFocus, setMeasurementDimmingFocus] = useState<ChartDimmingFocus | null>(null);
   const [periodHandleEdges, setPeriodHandleEdges] = useState<readonly [RangeEdge, RangeEdge]>(["start", "end"]);
   const annotationEditorOpen = mode === "range" || mode === "event";
   const annotationPreviewActive = annotationPreview !== null;
@@ -186,7 +256,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       ? []
       : comparisonMode ? [] : events;
   const [domainStart, domainEnd] = domain;
-  const [fullDomainStart, fullDomainEnd] = fullDomain;
   const pressureDomain = useMemo(() => {
     const lower = Math.floor(yDomain[0] / 5) * 5;
     const upper = Math.ceil(yDomain[1] / 5) * 5;
@@ -207,6 +276,14 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       && (qualityFilter === "all" || measurement.quality === qualityFilter)),
     [measurements, positionFilter, qualityFilter],
   );
+  const heatmapEyes = useMemo<Record<Eye, boolean>>(
+    () => ({ OD: heatmapEye === "OD", OS: heatmapEye === "OS" }),
+    [heatmapEye],
+  );
+  const timeTicks = useMemo(
+    () => chartTimeTicks(domain, Math.max(1, chartWidth - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right)),
+    [chartWidth, domain],
+  );
   const daylight = useMemo(
     () => daylightBackground(domain),
     [domain],
@@ -215,12 +292,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   if (!handleDrag.current || handleDrag.current.kind === "event") draftRangeRef.current = draftRange;
 
   domainRef.current = domain;
-
-  useEffect(() => {
-    domainRef.current = fullDomain;
-    pendingDomain.current = null;
-    setDomain(fullDomain);
-  }, [fullDomainStart, fullDomainEnd, measurements]);
 
   const focusAnnotationLabelInput = useCallback((input: HTMLInputElement | null) => {
     if (!input) return;
@@ -231,6 +302,21 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   useEffect(() => {
     if (qualityFilter !== "all" && !qualityOptions.includes(qualityFilter)) setQualityFilter("all");
   }, [qualityFilter, qualityOptions]);
+
+  useEffect(() => {
+    if (showHeatmap) {
+      setRenderHeatmap(true);
+      setHeatmapClosing(false);
+      return;
+    }
+    if (!renderHeatmap) return;
+    setHeatmapClosing(true);
+    const timeout = window.setTimeout(() => {
+      setRenderHeatmap(false);
+      setHeatmapClosing(false);
+    }, 280);
+    return () => window.clearTimeout(timeout);
+  }, [renderHeatmap, showHeatmap]);
 
   useEffect(() => {
     setHoveredAnnotation((current) => {
@@ -312,7 +398,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       if (wheelFrame.current === null) {
         wheelFrame.current = window.requestAnimationFrame(() => {
           wheelFrame.current = null;
-          if (pendingDomain.current) setDomain(pendingDomain.current);
+          if (pendingDomain.current) onDomainChange(pendingDomain.current);
           pendingDomain.current = null;
         });
       }
@@ -323,7 +409,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       element.removeEventListener("wheel", handleWheel, { capture: true });
       if (wheelFrame.current !== null) window.cancelAnimationFrame(wheelFrame.current);
     };
-  }, []);
+  }, [onDomainChange]);
 
   useEffect(() => {
     const element = chart.current;
@@ -342,9 +428,26 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     if (mode === null) setFocusedAnnotation(null);
   }, [mode]);
 
+  useEffect(() => {
+    if (!draftLabelError) return;
+    const input = chart.current?.querySelector<HTMLInputElement>('.chart-annotation-label__input[aria-invalid="true"]');
+    input?.focus();
+    input?.select();
+  }, [draftLabelError]);
+
   function changeDomain(next: TimeDomain) {
     domainRef.current = next;
-    setDomain(next);
+    onDomainChange(next);
+  }
+
+  function toggleTrendEye(eye: Eye) {
+    const otherEye = eye === "OD" ? "OS" : "OD";
+    if (visibleTrendEyes[eye] && !visibleTrendEyes[otherEye]) {
+      setVisibleTrendEyes({ OD: true, OS: true });
+      setShowTrend(false);
+      return;
+    }
+    setVisibleTrendEyes((current) => ({ ...current, [eye]: !current[eye] }));
   }
 
   function ratioForTime(time: number): number {
@@ -360,7 +463,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   function startAnnotation(time: number, clientX: number) {
-    if (mode || measurements.length === 0) return;
+    if (mode) return;
     if (comparisonMode) {
       onComparisonBlocked();
       dragRef.current = null;
@@ -530,10 +633,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       }
     }
     if (!annotationDisplayMode && mode === "range" && visibleDraftRange) {
-      labels.push({ id: "draft-range", kind: "range", text: draftRangeLabel.trim() || "Period", time: visibleDraftRange[0], endTime: visibleDraftRange[1], color: rangePalette(ranges.length).stroke, draft: true });
+      labels.push({ id: "draft-range", kind: "range", text: draftRangeLabel.trim() || "Period name", time: visibleDraftRange[0], endTime: visibleDraftRange[1], color: rangePalette(ranges.length).stroke, draft: true });
     }
     if (!annotationDisplayMode && mode === "event" && draftEventTime !== null && draftEventTime >= domainStart && draftEventTime <= domainEnd) {
-      labels.push({ id: "draft-event", kind: "event", text: draftEventLabel.trim() || "Event", time: draftEventTime, color: eventPalette(events.length), draft: true });
+      labels.push({ id: "draft-event", kind: "event", text: draftEventLabel.trim() || "Event name", time: draftEventTime, color: eventPalette(events.length), draft: true });
     }
 
     const plotWidth = Math.max(1, chartWidth - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
@@ -586,16 +689,34 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     const rangeDomain = rangeTimeDomain(range, presentTime);
     return rangeDomain ? [rangeDomain] : [];
   }));
-  const emphasizedRange = draggedRangeFocus
+  const transientEmphasizedRange = draggedRangeFocus
     ?? (mode === "range"
       ? rangeTimeDomain(draftRange, presentTime)
       : activeRange
         ? rangeTimeDomain(activeRange, presentTime)
         : hoveredRegionConjunction);
+  const emphasizedRanges = useMemo(() => {
+    if (transientEmphasizedRange) return [transientEmphasizedRange];
+    if (!comparisonMode) return [];
+    return comparisonRanges.flatMap((range) => {
+      const rangeDomain = rangeTimeDomain(range, presentTime);
+      return rangeDomain ? [rangeDomain] : [];
+    });
+  }, [comparisonMode, comparisonRanges, presentTime, transientEmphasizedRange]);
   const dimMeasurements = mode === "range"
     || mode === "event"
     || activeAnnotation?.startsWith("event:") === true
-    || emphasizedRange !== null;
+    || emphasizedRanges.length > 0;
+  const dimming = useMemo<ChartDimming>(() => ({
+    dimOutsideEmphasizedRanges: dimMeasurements,
+    emphasizedRanges,
+    focus: measurementDimmingFocus,
+  }), [dimMeasurements, emphasizedRanges, measurementDimmingFocus]);
+  const handleDimmingFocusChange = useCallback((focus: ChartDimmingFocus | null) => {
+    setMeasurementDimmingFocus((current) => current?.id === focus?.id && current?.sessionId === focus?.sessionId
+      ? current
+      : focus);
+  }, []);
 
   function focusAnnotation(label: AnnotationLabel) {
     if (!label.focusId) return;
@@ -662,14 +783,15 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   return (
-    <section className={`panel chart-panel${measurements.length === 0 ? " chart-panel--empty" : ""}`}>
-      <div ref={chart} className="chart-wrap" style={{ marginTop: `${annotationLaneCount * 22}px` }}>
+    <section className="panel chart-panel">
+      <div className={`chart-composite${renderHeatmap && measurements.length > 0 ? " chart-composite--heatmap" : ""}`} style={{ marginTop: `${annotationLaneCount * 22}px` }}>
+      <div ref={chart} className="chart-wrap">
         <div className="chart-annotation-labels" style={{ height: `${annotationLaneCount * 22}px` }}>
           {annotationLabels.map((label) => (
             <div
               key={label.id}
               ref={label.kind === "range" && label.focusId === focusedAnnotation ? focusedRangeLabel : undefined}
-              className={`chart-annotation-label chart-annotation-label--${label.kind}${label.fullWidth ? " chart-annotation-label--range-wide" : ""}${label.draft ? " chart-annotation-label--draft" : ""}${annotationIsMuted(label.focusId) ? " chart-annotation-label--muted" : ""}`}
+              className={`chart-annotation-label chart-annotation-label--${label.kind}${label.fullWidth ? " chart-annotation-label--range-wide" : ""}${label.draft ? " chart-annotation-label--draft" : ""}${draftLabelError && (label.draft || label.focusId === focusedAnnotation) ? " chart-annotation-label--warning" : ""}${annotationIsMuted(label.focusId) ? " chart-annotation-label--muted" : ""}`}
               role={label.focusId ? "button" : undefined}
               tabIndex={label.focusId ? 0 : undefined}
               onClick={() => label.focusId && focusAnnotation(label)}
@@ -698,10 +820,12 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                 type="text"
                 name={`${label.kind}-graph-label`}
                 aria-label={`${label.kind === "range" ? "Period" : "Event"} label`}
+                aria-invalid={draftLabelError && (label.draft || label.focusId === focusedAnnotation) ? true : undefined}
+                aria-describedby="annotation-name-guidance"
                 autoComplete="off"
                 data-1p-ignore
                 data-lpignore="true"
-                placeholder={label.kind === "range" ? "Period" : "Event"}
+                placeholder={label.kind === "range" ? "Period name" : "Event name"}
                 value={label.draft ? label.kind === "range" ? draftRangeLabel : draftEventLabel : label.text}
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => event.stopPropagation()}
@@ -710,7 +834,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                   : onDraftEventLabel(event.target.value)}
               /> : <span className="chart-annotation-label__text">{label.text}</span>}
               {label.focusId && <span className="chart-annotation-label__edit" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25Zm17.71-10.12a1 1 0 0 0 0-1.41l-2.43-2.43a1 1 0 0 0-1.41 0l-1.9 1.9 3.75 3.75 1.99-1.81Z" /></svg>
+                <MaterialSymbol name="edit" />
               </span>}
             </div>
           ))}
@@ -732,10 +856,21 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           />)}
         </div>}
         <ResponsiveContainer width="100%" height="100%">
-          <ScatterChart margin={{ top: 12, right: 20, bottom: 10, left: 0 }}>
+          <ScatterChart margin={{ top: 12, right: CHART_PLOT_RIGHT, bottom: 10, left: 0 }}>
             <CartesianGrid stroke="rgb(0 0 0 / 10%)" vertical={false} />
-            <XAxis type="number" dataKey="time" domain={domain} allowDataOverflow tickFormatter={formatChartTime} tick={{ fill: "var(--muted)", fontSize: 12 }} minTickGap={48} />
-            <YAxis width={52} type="number" dataKey="iop" domain={pressureDomain} ticks={pressureTicks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
+            <XAxis
+              type="number"
+              dataKey="time"
+              domain={domain}
+              allowDataOverflow
+              ticks={timeTicks}
+              interval={0}
+              height={30}
+              tickFormatter={formatChartTime}
+              tick={renderHeatmap ? false : { fill: "var(--muted)", fontSize: 12 }}
+              tickLine={!renderHeatmap}
+            />
+            <YAxis width={CHART_PLOT_LEFT} type="number" dataKey="iop" domain={pressureDomain} ticks={renderHeatmap ? pressureTicks.slice(1) : pressureTicks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
             {visibleRanges.map((range) => {
               const index = annotationPreview?.kind === "range" && annotationPreview.value.id === range.id
                 ? annotationPreview.paletteIndex
@@ -769,7 +904,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           measurements={filteredMeasurements}
           showRawReadings={measurementView === "raw"}
           sessionAggregation={sessionAggregation}
-          trendMode={trendMode}
+          showTrend={showTrend}
           visibleEyes={visibleEyes}
           visibleTrendEyes={visibleTrendEyes}
           domainStart={domainStart}
@@ -779,15 +914,12 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           onAnnotationMove={moveAnnotation}
           onAnnotationEnd={finishAnnotation}
           onPlotHoverTimeChange={handlePlotHoverTimeChange}
-          dimMeasurements={dimMeasurements}
-          emphasizedRange={emphasizedRange}
+          dimming={dimming}
+          onDimmingFocusChange={handleDimmingFocusChange}
           yMin={pressureDomain[0]}
           yMax={pressureDomain[1]}
+          targetValue={targetEnabled ? targetValue : undefined}
         />
-        {measurements.length === 0 && <div className="chart-empty-message" aria-hidden="true">
-          <span>Your measurements will appear here</span>
-          <small>Showing the last 30 days</small>
-        </div>}
         <div
           ref={plotOverlayRef}
           className="chart-selection-layer"
@@ -851,8 +983,22 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           /></div>}
         </div>
       </div>
-      <div className="chart-toolbar">
-        <p className="chart-interaction-hint"><kbd>Ctrl</kbd> + click to add an event · <kbd>Ctrl</kbd> + drag to add a period</p>
+      {renderHeatmap && measurements.length > 0 && <DiurnalHeatmapCanvas
+        measurements={filteredMeasurements}
+        measurementView={measurementView}
+        sessionAggregation={sessionAggregation}
+        visibleEyes={heatmapEyes}
+        domain={domain}
+        fullDomain={fullDomain}
+        timeTicks={timeTicks}
+        closing={heatmapClosing}
+        showUncertainRegions={showUncertainRegions}
+        dimming={dimming}
+        onDomainChange={changeDomain}
+      />}
+      </div>
+      <div className="chart-toolbar" role="group" aria-label="History chart controls">
+        <ChartShortcuts />
         <div className="chart-filters" role="group" aria-label="Measurement filters">
           <ChartSelect
             className="chart-filter chart-filter--position"
@@ -876,38 +1022,54 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             onChange={setQualityFilter}
           />
         </div>
-        <div className="measurement-view-control" role="group" aria-label="Measurement view">
-          <ChartSelect
-            className={`measurement-view-control__sessions${measurementView === "sessions" ? " measurement-view-control__sessions--active" : ""}`}
-            label="Sessions"
-            value={sessionAggregation}
-            options={[
-              { value: "median", label: "Median" },
-              { value: "average", label: "Average" },
-            ]}
-            action={{ label: "How sessions work?", onSelect: onOpenSessionInfo }}
-            pressed={measurementView === "sessions"}
-            onTrigger={() => setMeasurementView("sessions")}
-            onChange={(aggregation) => {
-              setSessionAggregation(aggregation);
-              setMeasurementView("sessions");
-            }}
-          />
-          <button className="measurement-view-control__raw" type="button" aria-pressed={measurementView === "raw"} onClick={() => setMeasurementView("raw")}>Raw</button>
-        </div>
-        <button className="chart-settings-trigger" type="button" aria-pressed={mode === "trend"} onClick={onOpenTrendSettings}>
-          <span>Trend</span>
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 4 4 4-4 4" /></svg>
-        </button>
-        <div className="annotation-toggles" role="group" aria-label="Annotation visibility">
-          <ChartToggle label="Periods" checked={showPeriods} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowPeriods((current) => !current)} />
-          <ChartToggle label="Events" checked={showEvents} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowEvents((current) => !current)} />
-        </div>
-        <div className="eye-toggles">
-          {(["OD", "OS"] as Eye[]).map((eye) => (
-            <ChartToggle key={eye} label={eyeLabel(eye)} colorClass={`dot--${eye.toLowerCase()}`} checked={visibleEyes[eye]} onChange={() => onToggleEye(eye)} />
-          ))}
-        </div>
+        <MeasurementViewControl
+          label="History chart measurement view"
+          view={measurementView}
+          aggregation={sessionAggregation}
+          onViewChange={setMeasurementView}
+          onAggregationChange={setSessionAggregation}
+          onOpenExplanation={onOpenSessionInfo}
+        />
+        <TargetControl
+          enabled={targetEnabled}
+          value={targetValue}
+          onEnabledChange={onTargetEnabledChange}
+          onValueChange={onTargetValueChange}
+        />
+        <TrendControl
+          visible={showTrend}
+          eyes={visibleTrendEyes}
+          onToggleVisible={() => setShowTrend((current) => !current)}
+          onToggleEye={toggleTrendEye}
+          onOpenExplanation={onOpenTrendInfo}
+        />
+        <HeatmapControl
+          visible={showHeatmap}
+          eye={heatmapEye}
+          uncertainRegions={showUncertainRegions}
+          onToggleVisible={() => setShowHeatmap((current) => !current)}
+          onEyeChange={setHeatmapEye}
+          onToggleUncertainRegions={() => setShowUncertainRegions((current) => !current)}
+          onOpenExplanation={onOpenHeatmapInfo}
+        />
+        <ToggleButtonGroup
+          className="annotation-toggles"
+          label="Annotation visibility"
+          options={[
+            { value: "periods", label: "Periods", checked: showPeriods, ariaDisabled: comparisonMode },
+            { value: "events", label: "Events", checked: showEvents, ariaDisabled: comparisonMode },
+          ]}
+          onChange={(value) => {
+            if (comparisonMode) {
+              onComparisonBlocked();
+            } else if (value === "periods") {
+              setShowPeriods((current) => !current);
+            } else {
+              setShowEvents((current) => !current);
+            }
+          }}
+        />
+        <EyeToggleGroup mode="multiple" label="Measurement eyes" value={visibleEyes} onChange={onToggleEye} />
       </div>
     </section>
   );

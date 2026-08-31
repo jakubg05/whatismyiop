@@ -23,6 +23,7 @@ import {
   type ComparisonCatalog,
   type ComparisonCompletion,
 } from "./comparison";
+import { MaterialSymbol, materialSymbolPath, type MaterialSymbolName } from "./MaterialSymbol";
 import { eventPalette, periodPalette } from "./periodPalette";
 
 type Explanation = { visible: boolean; left: number; message: string };
@@ -39,13 +40,6 @@ const defaultValueCompletionSection: CompletionSection = {
   },
 };
 const catalogChanged = StateEffect.define<void>();
-const materialSymbolPaths = {
-  arrowRange: "m233-440 75 75q11 12 11.5 28.5T308-308q-12 12-28 12t-28-12L108-452q-6-6-8.5-13T97-480q0-8 2.5-15t8.5-13l144-144q12-12 28-12t28 12q12 12 12 28.5T308-595l-75 75h494l-75-75q-11-12-11.5-28.5T652-652q12-12 28-12t28 12l144 144q6 6 8.5 13t2.5 15q0 8-2.5 15t-8.5 13L708-308q-12 12-28 12t-28-12q-12-12-12-28.5t12-28.5l75-75H233Z",
-  pinHistory: "M560-420 440-540v-180h80v147l96 97-56 56ZM160-559h80q0 36 9.5 69.5T279-427q28 42 64 77t71 71q18 19 33.5 38t31.5 39q14-20 30.5-39t33.5-38q35-36 71.5-70.5T680-427q20-29 30-63t10-69q0-100-70.5-170.5T479-800q-51 0-97.5 21T302-720h58v80H160v-200h80v69q45-53 107.5-81T479-880q134 0 227.5 93.5T800-559q0 48-14 93t-40 84q-36 54-83 98t-89 92q-16 19-29.5 38T520-114l-7 14q-5 10-14 15t-19 5q-11 0-20-5.5T446-100l-7-14q-11-21-24-40.5T386-192q-42-50-90-92.5T213-382q-28-38-40.5-83.5T160-559Z",
-  lineEndSquare: "M520-340h280v-280H520v280Zm-40 80q-17 0-28.5-11.5T440-300v-140H120q-17 0-28.5-11.5T80-480q0-17 11.5-28.5T120-520h320v-140q0-17 11.5-28.5T480-700h360q17 0 28.5 11.5T880-660v360q0 17-11.5 28.5T840-260H480Zm180-220Z",
-  lineStartSquare: "M160-340h280v-280H160v280Zm-40 80q-17 0-28.5-11.5T80-300v-360q0-17 11.5-28.5T120-700h360q17 0 28.5 11.5T520-660v140h320q17 0 28.5 11.5T880-480q0 17-11.5 28.5T840-440H520v140q0 17-11.5 28.5T480-260H120Zm180-220Z",
-  addCircle: "M440-440v120q0 17 11.5 28.5T480-280q17 0 28.5-11.5T520-320v-120h120q17 0 28.5-11.5T680-480q0-17-11.5-28.5T640-520H520v-120q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640v120H320q-17 0-28.5 11.5T280-480q0 17 11.5 28.5T320-440h120Zm40 360q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z",
-} as const;
 
 function materialCompletionIcon(completion: Completion): Node | null {
   if ((completion.type === "period" || completion.type === "event") && completion.label !== "now") {
@@ -54,16 +48,16 @@ function materialCompletionIcon(completion: Completion): Node | null {
     marker.style.backgroundColor = (completion as ComparisonVisualCompletion).comparisonColor ?? "currentColor";
     return marker;
   }
-  const icon = completion.label === "now"
-    ? "pinHistory"
+  const icon: MaterialSymbolName | null = completion.label === "now"
+    ? "pin_history"
     : completion.label === "range:"
-      ? "arrowRange"
+      ? "arrow_range"
       : completion.label === "before:"
-        ? "lineStartSquare"
+        ? "line_start_square"
         : completion.label === "after:"
-          ? "lineEndSquare"
+          ? "line_end_square"
           : completion.type === "delimiter"
-            ? "addCircle"
+            ? "add_circle"
             : null;
   if (!icon) return null;
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -72,7 +66,7 @@ function materialCompletionIcon(completion: Completion): Node | null {
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("focusable", "false");
   const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  path.setAttribute("d", materialSymbolPaths[icon]);
+  path.setAttribute("d", materialSymbolPath(icon));
   svg.append(path);
   return svg;
 }
@@ -121,7 +115,7 @@ function fuzzyMatch(candidate: string, query: string): boolean {
 
 function noMatchMessage(expected: ReturnType<typeof comparisonCompletionContext>["expected"]): string {
   if (expected === "duration") return "Expected a whole-day duration such as 14d";
-  if (expected === "target-value") return "No matching period or annotation";
+  if (expected === "target-value") return "No matching period or event";
   if (expected === "and") return "Expected AND";
   if (expected === "direction") return "Expected before: or after:";
   if (expected === "maximum") return "Six comparison segments are already shown";
@@ -132,7 +126,7 @@ function expectedStateLabel(expected: ReturnType<typeof comparisonCompletionCont
   if (expected === "segment-start") return "comparison keyword or saved period";
   if (expected === "duration") return "whole-day duration";
   if (expected === "direction") return "before or after";
-  if (expected === "target-value") return "period or annotation name";
+  if (expected === "target-value") return "period or event name";
   if (expected === "and") return "AND";
   return "six-segment limit";
 }
@@ -508,7 +502,7 @@ export function ComparisonExpressionEditor({
   return (
     <div ref={composer} className={`comparison-composer${needsMoreSpace ? " comparison-composer--open" : ""}`}>
       <div className="comparison-expression">
-        <svg className="comparison-expression__search-icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3 3" /></svg>
+        <MaterialSymbol className="comparison-expression__search-icon" name="search" />
         <div ref={host} className="comparison-expression__editor" />
         {!active && <span className="comparison-expression__placeholder" aria-hidden="true">Compare segments</span>}
         {value && <button
@@ -525,7 +519,7 @@ export function ComparisonExpressionEditor({
             view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "" }, selection: { anchor: 0 }, annotations: Transaction.userEvent.of("delete") });
             closeCompletion(view);
           }}
-        >×</button>}
+        ><MaterialSymbol name="close" /></button>}
       </div>
       {explanation.visible && <div className="comparison-expression__explanation" style={{ left: explanation.left }} role="status">
         <div className="comparison-expression__message">{explanation.message}</div>

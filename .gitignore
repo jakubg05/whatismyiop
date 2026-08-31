@@ -4,3 +4,4 @@ dist/
 .vite/
 .wrangler/
 *.log
+.playwright-cli/
