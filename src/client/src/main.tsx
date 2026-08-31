@@ -2,7 +2,6 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import "@fontsource-variable/inter";
-import "katex/dist/katex.min.css";
 import { routeTree } from "./routeTree.gen";
 import "./styles.css";
 

@@ -6,7 +6,7 @@ The app can:
 
 - show raw readings or group nearby readings into sessions
 - calculate median and average session values
-- draw observed and time-of-day-adjusted trends for either eye
+- draw trends from raw readings or session values for either eye
 - plot pressure by date and time of day as a heatmap
 - mark treatment periods and events
 - compare saved periods with short comparison expressions

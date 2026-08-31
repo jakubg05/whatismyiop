@@ -9,8 +9,12 @@ export function HeatmapExplanation() {
       <h3>How to read it</h3>
       <p>
         Each horizontal band starts with a three-hour part of the day. The chart averages the selected
-        eye&apos;s readings for each date and time band, smooths those daily values across the calendar, and
-        blends between adjacent bands. Position and Quality filters determine which readings are included.
+        eye&apos;s values for each date and time band, smooths those daily values across the calendar with the
+        same robust smoother used by the main trend, and blends between adjacent bands.
+      </p>
+      <p>
+        Raw uses every included reading. Sessions uses one median or average value per eye per session.
+        Position and Quality filters determine which values are included.
       </p>
       <p>
         Color represents estimated mean pressure. One shared scale is calculated from both eyes across the

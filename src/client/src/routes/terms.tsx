@@ -18,7 +18,7 @@ function Terms() {
 
       <section>
         <h2>What the website does</h2>
-        <p>The website organises and visualises measurement records that you provide. It can group nearby readings, calculate summaries, and display observed or time-of-day-adjusted statistical trends. The detailed limitations in the <Link to="/disclaimer">medical disclaimer</Link> form part of these terms.</p>
+        <p>The website organises and visualises measurement records that you provide. It can group nearby readings, calculate summaries, and display statistical trends. The detailed limitations in the <Link to="/disclaimer">medical disclaimer</Link> form part of these terms.</p>
       </section>
 
       <section>
