@@ -16,7 +16,7 @@
 .ui-chart-select__menu-action { margin-top: var(--s1); padding: var(--s2) .625rem var(--s1); }
 .ui-chart-select__menu .ui-chart-select__menu-link { width: auto; min-height: 1.5rem; padding: 0; display: inline-flex; align-items: center; gap: .375rem; color: rgb(255 255 255 / 52%); text-decoration: none; text-underline-offset: .15em; }
 .ui-chart-select__menu .ui-chart-select__menu-link:hover, .ui-chart-select__menu .ui-chart-select__menu-link:focus-visible { background: transparent; color: rgb(255 255 255 / 72%); text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 55%, transparent); }
-.measurement-view-control { border: 1px solid var(--line); border-radius: var(--radius); display: flex; align-items: stretch; background: var(--canvas); }
+.measurement-view-control { min-height: var(--control-sm); border: 1px solid var(--line); border-radius: var(--radius); display: flex; align-items: stretch; background: var(--canvas); }
 .measurement-view-control button { border: 0; outline: 0; background: transparent; color: var(--muted); font-family: var(--font); cursor: pointer; }
 .measurement-view-control .ui-chart-select__menu button { color: #e5e7eb; }
 .measurement-view-control .ui-chart-select__menu button[aria-checked="true"], .measurement-view-control .ui-chart-select__menu button:hover, .measurement-view-control .ui-chart-select__menu button:focus-visible { color: #fff; }
@@ -27,12 +27,18 @@
 .measurement-view-control__sessions--active, .measurement-view-control__raw[aria-pressed="true"] { background: var(--surface); color: var(--ink); }
 .measurement-view-control__sessions:not(.measurement-view-control__sessions--active), .measurement-view-control__raw[aria-pressed="false"] { background: var(--hover); color: var(--subtle); }
 .measurement-view-control__raw { min-width: 3.25rem; padding: 0 var(--s2); border-left: 1px solid var(--line) !important; border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 !important; font-size: .75rem; font-weight: 500; }
-.eye-toggles, .annotation-toggles { border: 1px solid var(--line); border-radius: var(--radius); display: flex; align-items: stretch; background: var(--canvas); }
 .chart-control__menu { right: -1px; left: auto; min-width: 13.75rem; padding: var(--s1); }
 .chart-control__section { display: grid; }
 .chart-control__section + .chart-control__section { margin-top: var(--s1); padding-top: var(--s1); }
 .chart-control__section[aria-disabled="true"] { opacity: .42; }
 .chart-control__row { min-height: 2.25rem; padding: 0 .625rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s4); color: #e5e7eb; font-size: .75rem; line-height: 1.25; }
+.target-control .chart-control__menu { min-width: 9.25rem; }
+.chart-control__target-value { padding: var(--s1) .625rem var(--s2); place-items: center; }
+.chart-control__target-input-group { width: max-content; margin: 0 auto; display: inline-flex; align-items: center; gap: .375rem; color: rgb(255 255 255 / 52%); font-size: .6875rem; }
+.chart-control__target-input { width: 3.25rem; height: auto; padding: 0; border: 0; border-radius: 0; outline: 0; display: block; appearance: textfield; background: transparent; color: #fff; font: var(--small); text-align: right; }
+.chart-control__target-input::-webkit-inner-spin-button, .chart-control__target-input::-webkit-outer-spin-button { margin: 0; appearance: none; }
+.chart-control__target-input:focus { background: transparent; }
+.chart-control__target-input:disabled { color: inherit; cursor: default; }
 .chart-control__option-copy { min-width: 0; display: flex; align-items: center; gap: var(--s2); }
 .chart-control__option-copy .dot { flex: 0 0 auto; width: .5rem; height: .5rem; }
 .chart-control__menu button:disabled { cursor: not-allowed; }
@@ -42,12 +48,6 @@
 .ui-chart-select__menu .chart-control__toggle:hover, .ui-chart-select__menu .chart-control__toggle:focus-visible { background: transparent; }
 .chart-control__toggle:focus-visible { outline-color: rgb(255 255 255 / 70%); }
 .chart-settings-trigger { min-width: 4rem; min-height: var(--control-sm); padding: 0 var(--s3); border: 1px solid var(--line); border-radius: var(--radius); display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); background: var(--canvas); color: var(--muted); font: var(--small); font-weight: 500; } .chart-settings-trigger:hover, .chart-settings-trigger:focus-visible, .chart-settings-trigger[aria-pressed="true"] { outline: 0; background: var(--hover); color: var(--ink); } .chart-settings-trigger svg { width: .75rem; height: .75rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; }
-.ui-chart-toggle { min-width: 3.75rem; height: auto; padding: 0 var(--s2); border: 0; border-radius: 0; display: inline-flex; align-items: center; justify-content: center; gap: var(--s2); color: var(--muted); font: var(--small); font-weight: 500; cursor: pointer; background: transparent; }
-.ui-chart-toggle:first-child { border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px); }
-.ui-chart-toggle:last-child { border-left: 1px solid var(--line); border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0; }
-.ui-chart-toggle:hover { color: var(--ink); } .ui-chart-toggle input { position: absolute; width: 1px; height: 1px; opacity: 0; } .ui-chart-toggle:has(input:checked) { background: var(--surface); color: var(--ink); } .ui-chart-toggle:not(:has(input:checked)) .dot { opacity: .3; }
-.ui-chart-toggle:not(:has(input:checked)) { background: var(--hover); color: var(--subtle); }
-.ui-chart-toggle--disabled { color: var(--subtle); cursor: not-allowed; opacity: .62; }
 
 .chart-wrap { position: relative; width: 100%; height: var(--chart-height); user-select: none; }
 .chart-composite { position: relative; width: 100%; }
@@ -97,6 +97,11 @@
 .chart-wrap .recharts-wrapper { cursor: default; } .chart-wrap .recharts-reference-area, .chart-wrap .recharts-reference-line { transition: fill-opacity 220ms var(--ease), stroke-opacity 220ms var(--ease), opacity 220ms var(--ease); }
 .measurement-canvas-layer { position: absolute; z-index: 2; inset: 0; overflow: hidden; pointer-events: none; }
 .measurement-canvas { position: relative; z-index: 2; display: block; width: 100%; height: 100%; pointer-events: auto; cursor: default; touch-action: auto; }
+.target-line-overlay { position: absolute; z-index: 3; pointer-events: none; }
+.target-line-overlay--history { inset: 12px 20px 40px 52px; }
+.target-line-overlay--diurnal { inset: 16px 20px 20px 52px; }
+.target-line-overlay__rule { position: absolute; top: var(--target-line-position); right: 0; left: 0; height: 3px; transform: translateY(-50%); background: var(--target); box-shadow: 0 1px 1px rgb(255 255 255 / 32%); }
+.target-line-overlay__rule span { position: absolute; right: 0; bottom: .3rem; padding: .0625rem .25rem; border-radius: .1875rem; background: rgb(255 255 255 / 88%); color: var(--target); font-size: .6875rem; font-weight: 500; line-height: 1.25; }
 .measurement-canvas--annotate-ready { cursor: crosshair; } .measurement-canvas--zoom-ready { cursor: zoom-in; } .measurement-canvas--navigating { cursor: grabbing; }
 .measurement-canvas-tooltip-viewport { position: absolute; z-index: 4; inset: 12px 20px 40px 52px; overflow: hidden; pointer-events: none; }
 .measurement-canvas-tooltip { position: absolute; z-index: 4; width: 14rem; padding: var(--s3); border: 1px solid rgb(255 255 255 / 7%); border-radius: .875rem; display: grid; gap: var(--s2); background: #2b2b2b; color: #f3f3f3; font: var(--small); pointer-events: none; }
