@@ -992,6 +992,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         timeTicks={timeTicks}
         closing={heatmapClosing}
         showUncertainRegions={showUncertainRegions}
+        dimming={dimming}
         onDomainChange={changeDomain}
       />}
       </div>

@@ -4,6 +4,7 @@ import { ResponsiveContainer, Scatter, ScatterChart, XAxis, YAxis } from "rechar
 import { formatDateInput, type Eye, type Measurement, type MeasurementView, type SessionAggregation } from "../analysis";
 import { buildDiurnalHeatmapData, DIURNAL_BIN_WINDOWS, heatmapReadingsForView } from "../diurnalHeatmapData";
 import { navigateWheelDomain, panDomain, zoomDomain, type TimeDomain } from "./chartNavigation";
+import { DIMMED_ALPHA_FACTOR, dimmedTimeRanges, type ChartDimming } from "./dimming";
 import { CHART_PLOT_LEFT, CHART_PLOT_RIGHT, formatChartTime } from "./format";
 import { heatmapBracket, heatmapColorPosition, heatmapValueAt, heatmapValueFromBracket, sharedHeatmapColorDomain } from "./heatmapInterpolation";
 import { MEASUREMENT_PLOT as MAIN_CHART_PLOT } from "./MeasurementCanvas";
@@ -26,6 +27,7 @@ type Props = {
   timeTicks: number[];
   closing: boolean;
   showUncertainRegions: boolean;
+  dimming: ChartDimming;
   onDomainChange: (domain: TimeDomain) => void;
 };
 
@@ -67,10 +69,11 @@ function TimeOfDayTick({ x = 0, y = 0, payload }: { x?: number; y?: number; payl
   >{hourLabel(payload.value)}</text>;
 }
 
-export function DiurnalHeatmapCanvas({ measurements, measurementView, sessionAggregation, visibleEyes, domain, fullDomain, timeTicks, closing, showUncertainRegions, onDomainChange }: Props) {
+export function DiurnalHeatmapCanvas({ measurements, measurementView, sessionAggregation, visibleEyes, domain, fullDomain, timeTicks, closing, showUncertainRegions, dimming, onDomainChange }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const uncertaintyCanvas = useRef<HTMLCanvasElement>(null);
+  const dimmingCanvas = useRef<HTMLCanvasElement>(null);
   const rasterCanvas = useRef<HTMLCanvasElement | null>(null);
   const rasterImage = useRef<ImageData | null>(null);
   const drag = useRef<Drag | null>(null);
@@ -259,6 +262,28 @@ export function DiurnalHeatmapCanvas({ measurements, measurementView, sessionAgg
   }, [data, dates, domain, eyes.length, fullDomain, size]);
 
   useEffect(() => {
+    const target = dimmingCanvas.current;
+    if (!target || size.width <= 0 || size.height <= 0) return;
+    const ratio = window.devicePixelRatio || 1;
+    target.width = Math.round(size.width * ratio);
+    target.height = Math.round(size.height * ratio);
+    const context = target.getContext("2d");
+    if (!context) return;
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, size.width, size.height);
+
+    const plotWidth = Math.max(1, size.width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
+    const plotHeight = Math.max(1, size.height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom);
+    const domainSpan = Math.max(1, domain[1] - domain[0]);
+    context.fillStyle = `rgba(255, 255, 255, ${1 - DIMMED_ALPHA_FACTOR})`;
+    for (const [start, end] of dimmedTimeRanges(dimming, domain)) {
+      const x = MEASUREMENT_PLOT.left + (start - domain[0]) / domainSpan * plotWidth;
+      const width = (end - start) / domainSpan * plotWidth;
+      context.fillRect(x, MEASUREMENT_PLOT.top, width, plotHeight);
+    }
+  }, [dimming, domain, size]);
+
+  useEffect(() => {
     const element = root.current;
     if (!element) return;
     function handleWheel(event: WheelEvent) {
@@ -429,6 +454,11 @@ export function DiurnalHeatmapCanvas({ measurements, measurementView, sessionAgg
     <canvas
       ref={uncertaintyCanvas}
       className={`history-heatmap__uncertainty${showUncertainRegions ? " history-heatmap__uncertainty--visible" : ""}`}
+      aria-hidden="true"
+    />
+    <canvas
+      ref={dimmingCanvas}
+      className={`history-heatmap__dimming${dimmedTimeRanges(dimming, domain).length > 0 ? " history-heatmap__dimming--visible" : ""}`}
       aria-hidden="true"
     />
     <ResponsiveContainer width="100%" height="100%">
