@@ -19,16 +19,16 @@
 .import-dropzone__outline { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; color: var(--drop-outline); pointer-events: none; }
 .import-dropzone__outline rect { fill: none; stroke: currentColor; stroke-width: 1.75; stroke-dasharray: 11 9; stroke-linecap: round; }
 .import-dropzone:focus-within, .import-dropzone--dragging { --drop-outline: hsl(0 0% 60%); background: hsl(0 0% 96.5%); box-shadow: inset 0 0 0 1px rgb(0 0 0 / 3%); }
-.import-dropzone .ui-button--primary { min-height: 3.3rem; padding-inline: 1.2rem; border-color: #2b2b2b; display: inline-flex; align-items: center; justify-content: center; gap: .6rem; background: #2b2b2b; color: #fff; font-size: .975rem; }
+.import-dropzone .ui-button--primary { min-height: 3.3rem; padding-inline: 1.2rem; border-color: var(--cta); display: inline-flex; align-items: center; justify-content: center; gap: .6rem; background: var(--cta); color: #fff; font-size: .975rem; }
 .import-dropzone .ui-button--primary svg { width: 1.35rem; height: 1.35rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.import-dropzone .ui-button--primary:hover, .import-dropzone .ui-button--primary:focus-visible { border-color: #414141; background: #414141; color: #fff; }
+.import-dropzone .ui-button--primary:hover, .import-dropzone .ui-button--primary:focus-visible { border-color: var(--cta-hover); background: var(--cta-hover); color: #fff; }
 .import-actions { position: relative; width: 16.8rem; filter: drop-shadow(0 .9rem 1.5rem rgb(0 0 0 / 14%)); }
 .import-actions__split { width: 100%; display: flex; }
 .import-dropzone .import-actions__choose { min-width: 0; padding-inline: .9rem; flex: 1 1 auto; border-radius: .6rem 0 0 .6rem; }
 .import-dropzone .import-actions__choose > svg { opacity: .68; }
-.import-dropzone .import-actions__toggle { width: 3.6rem; min-height: 3.3rem; border: 1px solid #2b2b2b; border-left-color: rgb(255 255 255 / 18%); border-radius: 0 .6rem .6rem 0; display: grid; flex: 0 0 auto; place-items: center; background: #2b2b2b; color: #fff; cursor: default; }
-.import-dropzone .import-actions--open .import-actions__choose { border-color: #2b2b2b; background: #2b2b2b; }
-.import-dropzone .import-actions--open .import-actions__choose:hover, .import-dropzone .import-actions--open .import-actions__choose:focus-visible { border-color: #414141; background: #414141; }
+.import-dropzone .import-actions__toggle { width: 3.6rem; min-height: 3.3rem; border: 1px solid var(--cta); border-left-color: rgb(255 255 255 / 18%); border-radius: 0 .6rem .6rem 0; display: grid; flex: 0 0 auto; place-items: center; background: var(--cta); color: #fff; cursor: default; }
+.import-dropzone .import-actions--open .import-actions__choose { border-color: var(--cta); background: var(--cta); }
+.import-dropzone .import-actions--open .import-actions__choose:hover, .import-dropzone .import-actions--open .import-actions__choose:focus-visible { border-color: var(--cta-hover); background: var(--cta-hover); }
 .import-dropzone .import-actions--open .import-actions__choose { border-radius: .6rem 0 0; }
 .import-dropzone .import-actions--open .import-actions__toggle { border-radius: 0 .6rem 0 0; }
 .import-dropzone .import-actions__toggle svg { width: 1.2rem; height: 1.2rem; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; transition: transform var(--fast) var(--ease); }
