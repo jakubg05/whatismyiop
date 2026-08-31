@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moveRangeEdge, normalizeRangeEdges, rangeTimeDomain, timeIsInRanges, type EditableRange } from "./range";
+import { moveRangeEdge, normalizeRangeEdges, rangeTimeDomain, timeIsInRanges, unemphasizedRangesWithin, type EditableRange } from "./range";
 
 const base: EditableRange = {
   label: "Treatment",
@@ -61,5 +61,13 @@ describe("range emphasis", () => {
 
   it("excludes times between and outside emphasized ranges", () => {
     expect([9, 21, 39, 51].every((time) => !timeIsInRanges(time, ranges))).toBe(true);
+  });
+
+  it("returns the visible gaps around multiple emphasized ranges", () => {
+    expect(unemphasizedRangesWithin([0, 60], ranges)).toEqual([[0, 10], [20, 40], [50, 60]]);
+  });
+
+  it("clips and merges overlapping emphasized ranges before finding gaps", () => {
+    expect(unemphasizedRangesWithin([10, 50], [[0, 15], [14, 30], [45, 60]])).toEqual([[30, 45]]);
   });
 });

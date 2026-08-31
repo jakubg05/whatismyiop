@@ -29,6 +29,7 @@ import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
 import { DiurnalHeatmapCanvas } from "./DiurnalHeatmapCanvas";
 import { moveRangeEdge, rangeTimeDomain, type EditableRange } from "./range";
 import { ChartDateTag, ChartSelect, HeatmapControl, MeasurementViewControl, TargetControl, TrendControl } from "./controls";
+import { type ChartDimming, type ChartDimmingFocus } from "./dimming";
 import { chartTimeTicks, CHART_PLOT_LEFT, CHART_PLOT_RIGHT, formatChartTime } from "./format";
 
 export type ChartMode = "range" | "event" | "trend" | "sessions" | "heatmap" | null;
@@ -235,6 +236,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [heatmapClosing, setHeatmapClosing] = useState(false);
   const [heatmapEye, setHeatmapEye] = useState<Eye>("OS");
   const [showUncertainRegions, setShowUncertainRegions] = useState(true);
+  const [measurementDimmingFocus, setMeasurementDimmingFocus] = useState<ChartDimmingFocus | null>(null);
   const [periodHandleEdges, setPeriodHandleEdges] = useState<readonly [RangeEdge, RangeEdge]>(["start", "end"]);
   const annotationEditorOpen = mode === "range" || mode === "event";
   const annotationPreviewActive = annotationPreview !== null;
@@ -704,6 +706,16 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     || mode === "event"
     || activeAnnotation?.startsWith("event:") === true
     || emphasizedRanges.length > 0;
+  const dimming = useMemo<ChartDimming>(() => ({
+    dimOutsideEmphasizedRanges: dimMeasurements,
+    emphasizedRanges,
+    focus: measurementDimmingFocus,
+  }), [dimMeasurements, emphasizedRanges, measurementDimmingFocus]);
+  const handleDimmingFocusChange = useCallback((focus: ChartDimmingFocus | null) => {
+    setMeasurementDimmingFocus((current) => current?.id === focus?.id && current?.sessionId === focus?.sessionId
+      ? current
+      : focus);
+  }, []);
 
   function focusAnnotation(label: AnnotationLabel) {
     if (!label.focusId) return;
@@ -901,8 +913,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           onAnnotationMove={moveAnnotation}
           onAnnotationEnd={finishAnnotation}
           onPlotHoverTimeChange={handlePlotHoverTimeChange}
-          dimMeasurements={dimMeasurements}
-          emphasizedRanges={emphasizedRanges}
+          dimming={dimming}
+          onDimmingFocusChange={handleDimmingFocusChange}
           yMin={pressureDomain[0]}
           yMax={pressureDomain[1]}
           targetValue={targetEnabled ? targetValue : undefined}

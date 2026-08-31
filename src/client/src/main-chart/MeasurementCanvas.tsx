@@ -16,8 +16,8 @@ import {
 } from "../analysis";
 import { panDomain, type TimeDomain } from "./chartNavigation";
 import { TargetLineOverlay } from "./controls";
+import { chartVisibilityAlpha, type ChartDimming, type ChartDimmingFocus } from "./dimming";
 import { CHART_PLOT_LEFT, CHART_PLOT_RIGHT } from "./format";
-import { timeIsInRanges } from "./range";
 import { buildTrendSeries, interpolateTrend, interpolateTrendEstimate, splitTrendSegment, trendEstimatesForDomain, type EyeTrend, type TrendEstimate } from "./trend";
 import { tetherHorizontalOverlay } from "./tooltipPosition";
 
@@ -48,8 +48,8 @@ type Props = {
   onAnnotationMove: (time: number, clientX: number) => void;
   onAnnotationEnd: (time: number, ratio: number, clientX: number) => void;
   onPlotHoverTimeChange: (time: number | null) => void;
-  dimMeasurements: boolean;
-  emphasizedRanges: readonly TimeDomain[];
+  dimming: ChartDimming;
+  onDimmingFocusChange: (focus: ChartDimmingFocus | null) => void;
   yMin: number;
   yMax: number;
   targetValue?: number;
@@ -58,20 +58,12 @@ type Props = {
 type Drag = { pointerId: number; x: number; domain: TimeDomain; moved: boolean; point: HoveredPoint | null };
 type AnnotationDrag = { pointerId: number };
 type NavigationModifier = "annotate" | "zoom" | null;
-type MeasurementVisibility = {
-  dimMeasurements: boolean;
-  emphasizedRanges: readonly TimeDomain[];
-  focusedId: string | null;
-  focusedSessionId: number | null;
-};
-
 const COLORS = { OD: "#a63d74", OS: "#3f7d4e" } as const;
 export const MEASUREMENT_PLOT = { left: CHART_PLOT_LEFT, right: CHART_PLOT_RIGHT, top: 12, bottom: 40 } as const;
 const HIT_RADIUS = 12;
 const RAW_RADIUS = 2;
 const SESSION_RADIUS = 4;
 const COLLIDING_SESSION_GAP = 2;
-const DIMMED_ALPHA_FACTOR = 0.18;
 const TOOLTIP_WIDTH = 224;
 const TOOLTIP_HEIGHT = 184;
 const TOOLTIP_GAP = 24;
@@ -160,24 +152,6 @@ function lowerBound<T extends { time: number }>(measurements: T[], time: number)
   return low;
 }
 
-function visibilityAlpha(
-  { dimMeasurements, emphasizedRanges, focusedId, focusedSessionId }: MeasurementVisibility,
-  time: number,
-  pointId: string,
-  pointSessionId: number | null,
-  baseAlpha: number,
-): number {
-  if (focusedId !== null) {
-    return focusedId === pointId || (focusedSessionId !== null && focusedSessionId === pointSessionId)
-      ? 1
-      : baseAlpha * DIMMED_ALPHA_FACTOR;
-  }
-  return baseAlpha * (!dimMeasurements
-    || timeIsInRanges(time, emphasizedRanges)
-    ? 1
-    : DIMMED_ALPHA_FACTOR);
-}
-
 export function MeasurementCanvas({
   measurements,
   showRawReadings,
@@ -192,8 +166,8 @@ export function MeasurementCanvas({
   onAnnotationMove,
   onAnnotationEnd,
   onPlotHoverTimeChange,
-  dimMeasurements,
-  emphasizedRanges,
+  dimming,
+  onDimmingFocusChange,
   yMin,
   yMax,
   targetValue,
@@ -277,6 +251,12 @@ export function MeasurementCanvas({
     [focusedSession, sessionPoints],
   );
   currentDomain.current = [domainStart, domainEnd];
+
+  useEffect(() => {
+    onDimmingFocusChange(focusedPointId === null
+      ? null
+      : { id: focusedPointId, sessionId: focusedSessionId });
+  }, [focusedPointId, focusedSessionId, onDimmingFocusChange]);
 
   function sessionCollisionOffset(
     point: Pick<SessionPoint, "sessionId" | "eye">,
@@ -440,7 +420,7 @@ export function MeasurementCanvas({
         for (let index = 1; index < visible.length; index += 1) {
           const left = visible[index - 1];
           const right = visible[index];
-          for (const [segmentLeft, segmentRight] of splitTrendSegment(left, right, emphasizedRanges.flat())) {
+          for (const [segmentLeft, segmentRight] of splitTrendSegment(left, right, dimming.emphasizedRanges.flat())) {
             const midpoint = segmentLeft.time + (segmentRight.time - segmentLeft.time) / 2;
             const trendId = `trend:${series.eye}`;
             if (showCertaintyBand) {
@@ -527,14 +507,13 @@ export function MeasurementCanvas({
       observer.disconnect();
       if (viewFrame !== null) window.cancelAnimationFrame(viewFrame);
     };
-  }, [chartPoints, domainEnd, domainStart, emphasizedRanges, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, trendSeries, yMax, yMin]);
+  }, [chartPoints, dimming.emphasizedRanges, domainEnd, domainStart, focusTarget, focusedPoint, focusedSession, focusedSessionPoints, pairedSessionIds, selectedPoint, selectionPulse, sessionPointBySourceRow, showRawReadings, trendSeries, yMax, yMin]);
 
   useEffect(() => {
     if (visibilityFrame.current !== null) window.cancelAnimationFrame(visibilityFrame.current);
     const fromAlpha = visibilityAlphaAt.current;
-    const target = { dimMeasurements, emphasizedRanges, focusedId: focusedPointId, focusedSessionId };
     const targetAlpha = (time: number, pointId: string, pointSessionId: number | null, baseAlpha: number) =>
-      visibilityAlpha(target, time, pointId, pointSessionId, baseAlpha);
+      chartVisibilityAlpha(dimming, time, pointId, pointSessionId, baseAlpha);
     const startedAt = performance.now();
 
     function animate(now: number) {
@@ -557,7 +536,7 @@ export function MeasurementCanvas({
       if (visibilityFrame.current !== null) window.cancelAnimationFrame(visibilityFrame.current);
       visibilityFrame.current = null;
     };
-  }, [dimMeasurements, emphasizedRanges, focusedPointId, focusedSessionId]);
+  }, [dimming]);
 
   function chartGeometry(canvas: HTMLCanvasElement) {
     const bounds = canvas.getBoundingClientRect();
