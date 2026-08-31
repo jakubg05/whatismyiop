@@ -81,6 +81,7 @@ type Props = {
   onCancelEdit: () => void;
   draftRange: DraftRange;
   draftRangeLabel: string;
+  draftLabelError: string | null;
   setDraftRange: Dispatch<SetStateAction<DraftRange>>;
   draftEventLabel: string;
   onDraftEventLabel: (label: string) => void;
@@ -136,6 +137,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   onCancelEdit,
   draftRange,
   draftRangeLabel,
+  draftLabelError,
   setDraftRange,
   draftEventLabel,
   onDraftEventLabel,
@@ -369,6 +371,13 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     if (mode === null) setFocusedAnnotation(null);
   }, [mode]);
 
+  useEffect(() => {
+    if (!draftLabelError) return;
+    const input = chart.current?.querySelector<HTMLInputElement>('.chart-annotation-label__input[aria-invalid="true"]');
+    input?.focus();
+    input?.select();
+  }, [draftLabelError]);
+
   function changeDomain(next: TimeDomain) {
     domainRef.current = next;
     onDomainChange(next);
@@ -397,7 +406,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   function startAnnotation(time: number, clientX: number) {
-    if (mode || measurements.length === 0) return;
+    if (mode) return;
     if (comparisonMode) {
       onComparisonBlocked();
       dragRef.current = null;
@@ -567,10 +576,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       }
     }
     if (!annotationDisplayMode && mode === "range" && visibleDraftRange) {
-      labels.push({ id: "draft-range", kind: "range", text: draftRangeLabel.trim() || "Period", time: visibleDraftRange[0], endTime: visibleDraftRange[1], color: rangePalette(ranges.length).stroke, draft: true });
+      labels.push({ id: "draft-range", kind: "range", text: draftRangeLabel.trim() || "Period name", time: visibleDraftRange[0], endTime: visibleDraftRange[1], color: rangePalette(ranges.length).stroke, draft: true });
     }
     if (!annotationDisplayMode && mode === "event" && draftEventTime !== null && draftEventTime >= domainStart && draftEventTime <= domainEnd) {
-      labels.push({ id: "draft-event", kind: "event", text: draftEventLabel.trim() || "Event", time: draftEventTime, color: eventPalette(events.length), draft: true });
+      labels.push({ id: "draft-event", kind: "event", text: draftEventLabel.trim() || "Event name", time: draftEventTime, color: eventPalette(events.length), draft: true });
     }
 
     const plotWidth = Math.max(1, chartWidth - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
@@ -699,7 +708,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   }
 
   return (
-    <section className={`panel chart-panel${measurements.length === 0 ? " chart-panel--empty" : ""}`}>
+    <section className="panel chart-panel">
       <div className={`chart-composite${renderHeatmap && measurements.length > 0 ? " chart-composite--heatmap" : ""}`} style={{ marginTop: `${annotationLaneCount * 22}px` }}>
       <div ref={chart} className="chart-wrap">
         <div className="chart-annotation-labels" style={{ height: `${annotationLaneCount * 22}px` }}>
@@ -707,7 +716,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             <div
               key={label.id}
               ref={label.kind === "range" && label.focusId === focusedAnnotation ? focusedRangeLabel : undefined}
-              className={`chart-annotation-label chart-annotation-label--${label.kind}${label.fullWidth ? " chart-annotation-label--range-wide" : ""}${label.draft ? " chart-annotation-label--draft" : ""}${annotationIsMuted(label.focusId) ? " chart-annotation-label--muted" : ""}`}
+              className={`chart-annotation-label chart-annotation-label--${label.kind}${label.fullWidth ? " chart-annotation-label--range-wide" : ""}${label.draft ? " chart-annotation-label--draft" : ""}${draftLabelError && (label.draft || label.focusId === focusedAnnotation) ? " chart-annotation-label--warning" : ""}${annotationIsMuted(label.focusId) ? " chart-annotation-label--muted" : ""}`}
               role={label.focusId ? "button" : undefined}
               tabIndex={label.focusId ? 0 : undefined}
               onClick={() => label.focusId && focusAnnotation(label)}
@@ -736,10 +745,12 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                 type="text"
                 name={`${label.kind}-graph-label`}
                 aria-label={`${label.kind === "range" ? "Period" : "Event"} label`}
+                aria-invalid={draftLabelError && (label.draft || label.focusId === focusedAnnotation) ? true : undefined}
+                aria-describedby="annotation-name-guidance"
                 autoComplete="off"
                 data-1p-ignore
                 data-lpignore="true"
-                placeholder={label.kind === "range" ? "Period" : "Event"}
+                placeholder={label.kind === "range" ? "Period name" : "Event name"}
                 value={label.draft ? label.kind === "range" ? draftRangeLabel : draftEventLabel : label.text}
                 onClick={(event) => event.stopPropagation()}
                 onKeyDown={(event) => event.stopPropagation()}
@@ -833,10 +844,6 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           yMin={pressureDomain[0]}
           yMax={pressureDomain[1]}
         />
-        {measurements.length === 0 && <div className="chart-empty-message" aria-hidden="true">
-          <span>Your measurements will appear here</span>
-          <small>Showing the last 30 days</small>
-        </div>}
         <div
           ref={plotOverlayRef}
           className="chart-selection-layer"
@@ -913,7 +920,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       </div>
       <div className="chart-toolbar">
         <p className="chart-interaction-hint"><kbd>Ctrl</kbd> + click to add an event · <kbd>Ctrl</kbd> + drag to add a period</p>
-        {measurements.length > 0 && <><div className="chart-filters" role="group" aria-label="Measurement filters">
+        <div className="chart-filters" role="group" aria-label="Measurement filters">
           <ChartSelect
             className="chart-filter chart-filter--position"
             label="Position"
@@ -976,16 +983,15 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           onToggleUncertainRegions={() => setShowUncertainRegions((current) => !current)}
           onOpenExplanation={onOpenHeatmapInfo}
         />
-        </>}
         <div className="annotation-toggles" role="group" aria-label="Annotation visibility">
           <ChartToggle label="Periods" checked={showPeriods} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowPeriods((current) => !current)} />
           <ChartToggle label="Events" checked={showEvents} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowEvents((current) => !current)} />
         </div>
-        {measurements.length > 0 && <div className="eye-toggles" role="group" aria-label="Measurement eyes">
+        <div className="eye-toggles" role="group" aria-label="Measurement eyes">
           {(["OS", "OD"] as Eye[]).map((eye) => (
             <ChartToggle key={eye} label={eyeLabel(eye)} colorClass={`dot--${eye.toLowerCase()}`} checked={visibleEyes[eye]} onChange={() => onToggleEye(eye)} />
           ))}
-        </div>}
+        </div>
       </div>
     </section>
   );

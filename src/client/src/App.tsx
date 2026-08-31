@@ -24,6 +24,7 @@ import { ImportActions } from "./ImportActions";
 import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartAnnotationPreview, type ChartMode, type DraftRange, type TimeDomain } from "./main-chart";
 import { periodPalette } from "./periodPalette";
 import { SiteFooter } from "./SiteFooter";
+import { useToast } from "./ToastState";
 import { TopNavigation } from "./TopNavigation";
 
 type SavedRange = DraftRange & { id: string };
@@ -58,10 +59,10 @@ export default function App() {
   const fileInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const { expression, setExpression, clearExpression } = useComparisonExpression();
+  const { showToast } = useToast();
   const [data, setData] = useState<ParseResult | null>(null);
   const [fileName, setFileName] = useState("");
   const [rawCsv, setRawCsv] = useState("");
-  const [error, setError] = useState("");
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [visibleEyes, setVisibleEyes] = useState<Record<Eye, boolean>>({ OD: true, OS: true });
   const [diurnalEye, setDiurnalEye] = useState<Eye>("OD");
@@ -70,11 +71,9 @@ export default function App() {
   const [ranges, setRanges] = useState<SavedRange[]>([]);
   const [events, setEvents] = useState<SavedEvent[]>([]);
   const [comparisonValuePreview, setComparisonValuePreview] = useState<ComparisonValuePreview | null>(null);
-  const [toasts, setToasts] = useState<Array<{ id: string; message: string }>>([]);
-  const toastIds = useRef(new Set<string>());
-  const [toastDismissalCount, setToastDismissalCount] = useState(0);
   const [draftRange, setDraftRange] = useState<DraftRange>(emptyDraftRange);
   const [draftEvent, setDraftEvent] = useState({ label: "", date: "", clock: "" });
+  const [draftLabelError, setDraftLabelError] = useState<{ kind: "range" | "event"; message: string } | null>(null);
   const [editingRangeId, setEditingRangeId] = useState<string | null>(null);
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const chartDraftRange = draftRange;
@@ -176,9 +175,9 @@ export default function App() {
         endTime: range.openEnded ? "" : typeof range.endTime === "string" ? range.endTime : "23:59",
       })));
     } catch {
-      setError("Saved browser data could not be restored.");
+      showToast("Saved browser data could not be restored.", "error");
     }
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     if (!rawCsv || !data) return;
@@ -186,16 +185,14 @@ export default function App() {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
-      setError("The browser could not save this data locally.");
+      showToast("The browser could not save this data locally.", "error");
     }
-  }, [data, events, fileName, ranges, rawCsv]);
+  }, [data, events, fileName, ranges, rawCsv, showToast]);
 
   async function loadFile(file: File) {
-    setError("");
     try {
       const csvText = await file.text();
       const result = parseMeasurementsCsv(csvText);
-      if (result.measurements.length === 0) throw new Error("The file contains no valid measurements.");
       setRawCsv(csvText);
       setData(result);
       setFileName(file.name);
@@ -208,7 +205,7 @@ export default function App() {
       setEditingEventId(null);
       setMode(null);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not read this CSV file.");
+      showToast(reason instanceof Error ? reason.message : "Could not read this CSV file.", "warning");
     }
   }
 
@@ -223,7 +220,7 @@ export default function App() {
     setEditingRangeId(null);
     setEditingEventId(null);
     setMode(null);
-    setError("");
+    setDraftLabelError(null);
   }
 
   function continueWithoutMeasurements() {
@@ -234,24 +231,34 @@ export default function App() {
     setEditingRangeId(null);
     setEditingEventId(null);
     setMode(null);
-    setError("");
+    setDraftLabelError(null);
   }
 
   function addRange() {
     const orderedRange = normalizeRangeEdges(draftRange, now);
     const effectiveEnd = orderedRange.openEnded ? today : orderedRange.end;
     const effectiveEndTime = orderedRange.openEnded ? currentTime : orderedRange.endTime;
-    if (!orderedRange.label.trim() || !orderedRange.start || !effectiveEnd) return;
+    const label = orderedRange.label.trim();
+    if (!label) {
+      const message = "Enter a period name in the label on the chart.";
+      setDraftLabelError({ kind: "range", message });
+      showToast(message, "warning");
+      return;
+    }
+    if (!orderedRange.start || !effectiveEnd) {
+      showToast("Choose a start and end date for the period.", "warning");
+      return;
+    }
     const startBoundary = dateTimeBoundary(orderedRange.start, orderedRange.startTime);
     const endBoundary = dateTimeBoundary(effectiveEnd, effectiveEndTime, true);
     if (startBoundary === null || endBoundary === null || startBoundary > endBoundary) {
-      setError("Range start must be before its end.");
+      showToast("The period start must be before its end.", "warning");
       return;
     }
-    const label = orderedRange.label;
     const labelError = comparisonLabelError(label, "period", comparisonCatalog, editingRangeId ?? undefined);
     if (labelError) {
-      setError(labelError);
+      setDraftLabelError({ kind: "range", message: labelError });
+      showToast(labelError, "warning");
       return;
     }
     const saved = {
@@ -268,8 +275,8 @@ export default function App() {
     }
     setEditingRangeId(null);
     setDraftRange(emptyDraftRange());
+    setDraftLabelError(null);
     setMode(null);
-    setError("");
   }
 
   function eventTimestamp(source = draftEvent): number | null {
@@ -278,11 +285,21 @@ export default function App() {
 
   function addEvent() {
     const time = eventTimestamp();
-    if (!draftEvent.label.trim() || time === null) return;
-    const label = draftEvent.label;
+    const label = draftEvent.label.trim();
+    if (!label) {
+      const message = "Enter an event name in the label on the chart.";
+      setDraftLabelError({ kind: "event", message });
+      showToast(message, "warning");
+      return;
+    }
+    if (time === null) {
+      showToast("Choose a date and time for the event.", "warning");
+      return;
+    }
     const labelError = comparisonLabelError(label, "event", comparisonCatalog, editingEventId ?? undefined);
     if (labelError) {
-      setError(labelError);
+      setDraftLabelError({ kind: "event", message: labelError });
+      showToast(labelError, "warning");
       return;
     }
     if (editingEventId) {
@@ -293,6 +310,7 @@ export default function App() {
     }
     setEditingEventId(null);
     setDraftEvent({ label: "", date: "", clock: "" });
+    setDraftLabelError(null);
     setMode(null);
   }
 
@@ -302,7 +320,7 @@ export default function App() {
     setDraftEvent({ label: "", date: "", clock: "" });
     setEditingRangeId(null);
     setEditingEventId(null);
-    setError("");
+    setDraftLabelError(null);
   }, []);
 
   function deleteDraft() {
@@ -354,6 +372,7 @@ export default function App() {
     setMode("range");
     setEditingRangeId(null);
     setEditingEventId(null);
+    setDraftLabelError(null);
   }, []);
 
   const selectEvent = useCallback((time: number) => {
@@ -363,6 +382,7 @@ export default function App() {
     setMode("event");
     setEditingRangeId(null);
     setEditingEventId(null);
+    setDraftLabelError(null);
   }, [setDraftEventTime]);
 
   const editRange = useCallback((range: SavedRange) => {
@@ -370,6 +390,7 @@ export default function App() {
     setDraftEvent({ label: "", date: "", clock: "" });
     setEditingRangeId(range.id);
     setEditingEventId(null);
+    setDraftLabelError(null);
     setMode("range");
   }, []);
 
@@ -382,6 +403,7 @@ export default function App() {
     setDraftRange(emptyDraftRange());
     setEditingEventId(event.id);
     setEditingRangeId(null);
+    setDraftLabelError(null);
     setMode("event");
   }, []);
 
@@ -394,7 +416,7 @@ export default function App() {
     setDraftEvent({ label: "", date: "", clock: "" });
     setEditingRangeId(null);
     setEditingEventId(null);
-    setError("");
+    setDraftLabelError(null);
   }, []);
   const openSessionInfo = useCallback(() => {
     setMode("sessions");
@@ -402,7 +424,7 @@ export default function App() {
     setDraftEvent({ label: "", date: "", clock: "" });
     setEditingRangeId(null);
     setEditingEventId(null);
-    setError("");
+    setDraftLabelError(null);
   }, []);
   const openHeatmapInfo = useCallback(() => {
     setMode("heatmap");
@@ -410,21 +432,15 @@ export default function App() {
     setDraftEvent({ label: "", date: "", clock: "" });
     setEditingRangeId(null);
     setEditingEventId(null);
-    setError("");
+    setDraftLabelError(null);
   }, []);
   const chartYDomain = useMemo(() => [minimumIop, maximumIop] as [number, number], [maximumIop, minimumIop]);
-  const dismissToast = useCallback((id: string) => {
-    if (!toastIds.current.delete(id)) return;
-    setToasts((current) => current.filter((toast) => toast.id !== id));
-    setToastDismissalCount((count) => count + 1);
-  }, []);
+  const activeDraftLabelError = (mode === "range" || mode === "event") && draftLabelError?.kind === mode
+    ? draftLabelError.message
+    : null;
   const showComparisonBlockedToast = useCallback(() => {
-    const id = crypto.randomUUID();
-    const message = "Clear the search expressions before creating or editing periods and events.";
-    toastIds.current.add(id);
-    setToasts((current) => [...current, { id, message }]);
-    window.setTimeout(() => dismissToast(id), 5_000);
-  }, [dismissToast]);
+    showToast("Clear the search expressions before creating or editing periods and events.", "warning");
+  }, [showToast]);
 
   return (
     <main>
@@ -434,15 +450,6 @@ export default function App() {
         const file = event.target.files?.[0];
         if (file) void loadFile(file);
       }} />
-
-      {error && <div className="error-banner">{error}</div>}
-      <div className="toast-stack" aria-label="Notifications">
-        {toasts.map((toast) => <div key={toast.id} className="warning-toast" role="status">
-          <span>{toast.message}</span>
-          <button type="button" aria-label="Dismiss notification" onClick={() => dismissToast(toast.id)}>×</button>
-        </div>)}
-      </div>
-      <span className="visually-hidden" aria-live="polite">{toastDismissalCount > 0 && <span key={toastDismissalCount}>Notification dismissed.</span>}</span>
 
       <div className={`analysis-shell ${mode ? "analysis-shell--editor-open" : ""}`}>
           <div className="analysis-main">
@@ -524,9 +531,16 @@ export default function App() {
             onCancelEdit={cancelDraft}
             draftRange={chartDraftRange}
             draftRangeLabel={draftRange.label}
-            setDraftRange={setDraftRange}
+            draftLabelError={activeDraftLabelError}
+            setDraftRange={(value) => {
+              setDraftLabelError(null);
+              setDraftRange(value);
+            }}
             draftEventLabel={draftEvent.label}
-            onDraftEventLabel={(label) => setDraftEvent((value) => ({ ...value, label }))}
+            onDraftEventLabel={(label) => {
+              setDraftLabelError(null);
+              setDraftEvent((value) => ({ ...value, label }));
+            }}
             draftEventTime={eventTimestamp(chartDraftEvent)}
             onDraftEventTime={setDraftEventTime}
             today={today}
@@ -567,6 +581,7 @@ export default function App() {
             mode={mode}
             draftRangeLabel={draftRange.label}
             draftEventLabel={draftEvent.label}
+            labelError={activeDraftLabelError}
             isEditing={Boolean(editingRangeId || editingEventId)}
             onSaveRange={addRange}
             onSaveEvent={addEvent}

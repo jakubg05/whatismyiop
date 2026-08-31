@@ -8,6 +8,7 @@ export function ChartEditor({
   mode,
   draftRangeLabel,
   draftEventLabel,
+  labelError,
   isEditing,
   onSaveRange,
   onSaveEvent,
@@ -18,6 +19,7 @@ export function ChartEditor({
   mode: ChartMode;
   draftRangeLabel: string;
   draftEventLabel: string;
+  labelError: string | null;
   isEditing: boolean;
   onSaveRange: () => void;
   onSaveEvent: () => void;
@@ -29,13 +31,19 @@ export function ChartEditor({
     <aside className={`editor-drawer editor-drawer--${mode ?? "closed"}`} aria-hidden={!mode}>
       <div className="editor-drawer__inner">
         {mode && <div className="editor-drawer__toolbar">
-          <span>{mode === "trend"
-            ? "How trends work?"
-            : mode === "sessions"
-              ? "How sessions work?"
-              : mode === "heatmap"
-                ? "How heatmaps work?"
-                : (mode === "range" ? draftRangeLabel : draftEventLabel).trim() || "Untitled"}</span>
+          <div className="editor-drawer__heading">
+            <span>{mode === "trend"
+              ? "How trends work?"
+              : mode === "sessions"
+                ? "How sessions work?"
+                : mode === "heatmap"
+                  ? "How heatmaps work?"
+                  : (mode === "range" ? draftRangeLabel : draftEventLabel).trim() || "Untitled"}</span>
+            {(mode === "range" || mode === "event") && <small
+              id="annotation-name-guidance"
+              className={labelError ? "editor-drawer__name-guidance--warning" : undefined}
+            >{labelError ?? `Name this ${mode === "range" ? "period" : "event"} on the chart. No spaces; use - or _.`}</small>}
+          </div>
           <div className="editor-drawer__actions">
             {isEditing && <button type="button" className="editor-drawer__delete" onClick={onDelete}>Delete</button>}
             {(mode === "range" || mode === "event") && <Button type="submit" form={`${mode}-editor-form`} variant="editorPrimary" className="draft-action">Save</Button>}
