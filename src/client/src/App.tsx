@@ -1,17 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import {
-  CartesianGrid,
-  ErrorBar,
-  ReferenceArea,
-  ResponsiveContainer,
-  Scatter,
-  ScatterChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import {
   formatDateInput,
   formatTimeInput,
   coalesceMeasurementSessions,
@@ -29,13 +18,13 @@ import {
   parseComparisonExpression,
   resolveComparisonSegments,
   type ComparisonCatalog,
-  type DiurnalPoint,
 } from "./comparison";
+import { DiurnalChart } from "./DiurnalChart";
+import { ImportActions } from "./ImportActions";
 import { ChartEditor, MeasurementsChart, normalizeRangeEdges, type ChartAnnotationPreview, type ChartMode, type DraftRange, type TimeDomain } from "./main-chart";
 import { periodPalette } from "./periodPalette";
 import { SiteFooter } from "./SiteFooter";
 import { TopNavigation } from "./TopNavigation";
-import { Button, SegmentedControl } from "./shared";
 
 type SavedRange = DraftRange & { id: string };
 
@@ -54,42 +43,15 @@ type PersistedState = {
 };
 
 const STORAGE_KEY = "whatismyiop:v1";
+const EMPTY_MEASUREMENTS_CSV = "Date / Time;IOP (OD);IOP (OS)\n";
 
 function emptyDraftRange(): DraftRange {
   return { label: "", start: "", startTime: "00:00", end: "", endTime: "23:59", openEnded: false };
 }
 
-function eyeLabel(eye: Eye): string {
-  return eye === "OD" ? "Right eye" : "Left eye";
-}
-
-function diurnalBinLabel(bin: number): string {
-  const startHour = bin * 3;
-  const endHour = startHour + 2;
-  return `${String(startHour).padStart(2, "0")}:00–${String(endHour).padStart(2, "0")}:59`;
-}
-
 function wallClockTimestamp(time = Date.now()): number {
   const date = new Date(time);
   return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
-}
-
-function diurnalTickLabel(value: number): string {
-  return `${String(Math.floor(value / 60)).padStart(2, "0")}:00`;
-}
-
-function DiurnalTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: DiurnalPoint }> }) {
-  if (!active || !payload?.length) return null;
-  const point = payload[0].payload;
-  return (
-    <div className="diurnal-tooltip">
-      <strong>{point.periodLabel} · {eyeLabel(point.eye)}</strong>
-      <span>{diurnalBinLabel(point.bin)}</span>
-      <span>Mean: {point.mean.toFixed(1)} mmHg</span>
-      <span>SD: {point.sd.toFixed(1)} mmHg</span>
-      <span>Sessions: {point.count}</span>
-    </div>
-  );
 }
 
 export default function App() {
@@ -118,6 +80,7 @@ export default function App() {
   const chartDraftRange = draftRange;
   const chartDraftEvent = useDeferredValue(draftEvent);
 
+  const workspaceActive = data !== null;
   const measurements = data?.measurements ?? [];
   const measurementSessions = useMemo(() => coalesceMeasurementSessions(measurements), [measurements]);
   const fullDomainStart = measurements[0]?.time ?? now - 30 * 86_400_000;
@@ -171,8 +134,6 @@ export default function App() {
       data: binDiurnalSessions(measurementSessions, diurnalEye, range, effectiveEnd, effectiveEndTime, range.openEnded ? now : undefined),
     };
   }), [comparisonRanges, currentTime, diurnalEye, measurementSessions, now, today]);
-  const diurnalPoints = useMemo(() => diurnalSeries.flatMap((series) => series.data), [diurnalSeries]);
-
   useEffect(() => {
     const timer = window.setInterval(() => setNow(wallClockTimestamp()), 60_000);
     return () => window.clearInterval(timer);
@@ -198,7 +159,6 @@ export default function App() {
       const state = JSON.parse(saved) as PersistedState;
       if (state.version !== 1 || typeof state.csvText !== "string" || typeof state.fileName !== "string" || !Array.isArray(state.ranges) || !Array.isArray(state.events)) return;
       const result = parseMeasurementsCsv(state.csvText);
-      if (result.measurements.length === 0) return;
       setRawCsv(state.csvText);
       setFileName(state.fileName);
       setData(result);
@@ -239,8 +199,10 @@ export default function App() {
       setRawCsv(csvText);
       setData(result);
       setFileName(file.name);
-      setRanges([]);
-      setEvents([]);
+      if (data?.measurements.length !== 0) {
+        setRanges([]);
+        setEvents([]);
+      }
       clearExpression();
       setEditingRangeId(null);
       setEditingEventId(null);
@@ -257,6 +219,17 @@ export default function App() {
     setFileName("");
     setRanges([]);
     setEvents([]);
+    clearExpression();
+    setEditingRangeId(null);
+    setEditingEventId(null);
+    setMode(null);
+    setError("");
+  }
+
+  function continueWithoutMeasurements() {
+    setRawCsv(EMPTY_MEASUREMENTS_CSV);
+    setData(parseMeasurementsCsv(EMPTY_MEASUREMENTS_CSV));
+    setFileName("Treatment history");
     clearExpression();
     setEditingRangeId(null);
     setEditingEventId(null);
@@ -475,10 +448,9 @@ export default function App() {
           <div className="analysis-main">
           <TopNavigation />
 
-          {!data && <section
+          {!workspaceActive && <section
             className={`import-dropzone${isDraggingFile ? " import-dropzone--dragging" : ""}`}
             aria-label="Import IOP measurements"
-            onClick={() => fileInput.current?.click()}
             onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -494,17 +466,10 @@ export default function App() {
                 vectorEffect="non-scaling-stroke"
               />
             </svg>
-            <div className="import-dropzone__copy">
-              <h1>Make sense of your home IOP measurements</h1>
-              <p>Explore trends, compare periods, and prepare a clearer view to discuss with your eye-care professional.</p>
-            </div>
-            <Button variant="primary" onClick={(event) => {
-              event.stopPropagation();
-              fileInput.current?.click();
-            }}>
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" /></svg>
-              <span>Choose CSV export</span>
-            </Button>
+            <ImportActions
+              onChooseFile={() => fileInput.current?.click()}
+              onContinueWithoutMeasurements={continueWithoutMeasurements}
+            />
             <div className="import-dropzone__facts" aria-label="Import details">
               <span>Currently supports iCare HOME2 CSV exports</span>
               <span aria-hidden="true">·</span>
@@ -513,18 +478,23 @@ export default function App() {
                 target="_blank"
                 rel="noreferrer"
                 aria-label="View source on GitHub"
-                onClick={(event) => event.stopPropagation()}
               >
                 <svg className="import-dropzone__github" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.75a9.5 9.5 0 0 0-3 18.51c.48.09.65-.2.65-.46v-1.67c-2.67.58-3.23-1.13-3.23-1.13-.44-1.1-1.07-1.4-1.07-1.4-.87-.6.07-.58.07-.58.96.07 1.47.99 1.47.99.86 1.47 2.25 1.05 2.8.8.09-.62.34-1.05.61-1.29-2.13-.24-4.37-1.07-4.37-4.7 0-1.04.37-1.89.99-2.55-.1-.24-.43-1.21.09-2.52 0 0 .8-.26 2.61.97A9.1 9.1 0 0 1 12 7.42a9 9 0 0 1 2.38.32c1.81-1.23 2.61-.97 2.61-.97.52 1.31.19 2.28.09 2.52.62.66.99 1.51.99 2.55 0 3.64-2.24 4.45-4.38 4.69.35.3.65.88.65 1.77v2.5c0 .26.18.56.66.46A9.5 9.5 0 0 0 12 2.75Z" /></svg>
                 <span>Source on GitHub</span>
               </a>
             </div>
             <p className="import-dropzone__notice">
-              Your file is saved in this browser until you clear it. This tool does not diagnose conditions or recommend treatment. <Link to="/policy" onClick={(event) => event.stopPropagation()}>Privacy</Link> · <Link to="/disclaimer" onClick={(event) => event.stopPropagation()}>Medical disclaimer</Link>
+              Your file is saved in this browser until you clear it. This tool does not diagnose conditions or recommend treatment. <Link to="/policy">Privacy</Link> · <Link to="/disclaimer">Medical disclaimer</Link>
             </p>
           </section>}
 
-          {data && <div className="comparison-overlay">
+          {!workspaceActive && <section className="import-explainer" aria-labelledby="import-explainer-title">
+            <h2 id="import-explainer-title">What this tool does</h2>
+            <p>A home tonometer CSV contains many readings that are hard to follow in a spreadsheet. This tool puts them on a chart as individual readings or groups them into sessions. You can filter by body position and measurement quality, add a trend line, and use the heatmap to see pressure patterns and which times of day have fewer measurements.</p>
+            <p>Periods let you show ongoing treatments on the chart, while events mark one-time changes or procedures. Use them to compare parts of your history or see what happened before and after a change. If you change eye-care professionals, you have a chronological record of treatment alongside the pressure history.</p>
+          </section>}
+
+          {workspaceActive && <div className="comparison-overlay">
             <ComparisonExpressionEditor
               catalog={comparisonCatalog}
               value={expression}
@@ -569,53 +539,18 @@ export default function App() {
 
           <section className="comparison-workspace">
             <section className="diurnal-section">
-              {diurnalPoints.length > 0 ? <>
-                <div className="diurnal-chart">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ScatterChart data={diurnalPoints} margin={{ top: 16, right: 20, bottom: 20, left: 0 }}>
-                      <CartesianGrid stroke="var(--line)" vertical={false} />
-                      {Array.from({ length: 8 }, (_, bin) => bin % 2 === 1 && (
-                        <ReferenceArea key={bin} x1={bin * 180} x2={(bin + 1) * 180} fill="#e8ecee" fillOpacity={0.72} stroke="none" />
-                      ))}
-                      <XAxis
-                        type="number"
-                        dataKey="minuteOfDay"
-                        domain={[0, 1440]}
-                        ticks={Array.from({ length: 8 }, (_, bin) => bin * 180 + 90)}
-                        tickFormatter={diurnalTickLabel}
-                        minTickGap={18}
-                        tick={{ fill: "var(--muted)", fontSize: 11 }}
-                      />
-                      <YAxis width={52} type="number" dataKey="mean" domain={["dataMin - 2", "dataMax + 2"]} allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
-                      <Tooltip content={<DiurnalTooltip />} />
-                      {diurnalSeries.map((series) => (
-                        <Scatter key={series.id} name={series.name} data={series.data} fill={series.color} line={{ stroke: series.color, strokeWidth: 2 }} shape="circle">
-                          <ErrorBar dataKey="sd" width={8} stroke={series.color} strokeWidth={1.5} direction="y" />
-                        </Scatter>
-                      ))}
-                    </ScatterChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="diurnal-series-status" aria-label="Comparison segments">
-                  {diurnalSeries.map((series) => <div key={series.id} className="diurnal-series-status__item">
-                    <span className="diurnal-series-status__swatch" style={{ backgroundColor: series.color }} aria-hidden="true" />
-                    <span className="diurnal-series-status__label" title={series.name}>{series.name}</span>
-                    {series.data.length === 0 && <em>No readings</em>}
-                  </div>)}
-                </div>
-                <footer className="diurnal-controls">
-                  <SegmentedControl label="Eye shown in diurnal chart" value={diurnalEye} options={["OS", "OD"] as const} optionLabel={(eye) => eye === "OD" ? "Right" : "Left"} onChange={setDiurnalEye} />
-                </footer>
-              </> : <div className={`diurnal-empty${data && !comparisonMode ? " diurnal-empty--unselected" : ""}`}>
-                <span>
-                  {!data ? "Import measurements to view diurnal patterns." : comparisonMode ? "No readings" : "Add a comparison segment to view diurnal patterns."}
-                </span>
-                <small>{!data
-                  ? "The diurnal chart will summarize readings by time of day."
-                  : comparisonMode
-                  ? `No ${diurnalEye === "OD" ? "right" : "left"}-eye sessions fall inside the active comparison segments.`
-                  : "You can create comparison segments using the search box at the top of the screen."}</small>
-              </div>}
+              <DiurnalChart
+                series={diurnalSeries}
+                eye={diurnalEye}
+                onEyeChange={setDiurnalEye}
+                inactive={!workspaceActive ? {
+                  title: "Import measurements to view diurnal patterns.",
+                  description: "The diurnal chart will summarize readings by time of day.",
+                } : !comparisonMode ? {
+                  title: "Add a comparison segment to view diurnal patterns.",
+                  description: "You can create comparison segments using the search box at the top of the screen.",
+                } : undefined}
+              />
             </section>
           </section>
 

@@ -913,7 +913,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       </div>
       <div className="chart-toolbar">
         <p className="chart-interaction-hint"><kbd>Ctrl</kbd> + click to add an event · <kbd>Ctrl</kbd> + drag to add a period</p>
-        <div className="chart-filters" role="group" aria-label="Measurement filters">
+        {measurements.length > 0 && <><div className="chart-filters" role="group" aria-label="Measurement filters">
           <ChartSelect
             className="chart-filter chart-filter--position"
             label="Position"
@@ -976,15 +976,16 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           onToggleUncertainRegions={() => setShowUncertainRegions((current) => !current)}
           onOpenExplanation={onOpenHeatmapInfo}
         />
+        </>}
         <div className="annotation-toggles" role="group" aria-label="Annotation visibility">
           <ChartToggle label="Periods" checked={showPeriods} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowPeriods((current) => !current)} />
           <ChartToggle label="Events" checked={showEvents} ariaDisabled={comparisonMode} onChange={() => comparisonMode ? onComparisonBlocked() : setShowEvents((current) => !current)} />
         </div>
-        <div className="eye-toggles" role="group" aria-label="Measurement eyes">
+        {measurements.length > 0 && <div className="eye-toggles" role="group" aria-label="Measurement eyes">
           {(["OS", "OD"] as Eye[]).map((eye) => (
             <ChartToggle key={eye} label={eyeLabel(eye)} colorClass={`dot--${eye.toLowerCase()}`} checked={visibleEyes[eye]} onChange={() => onToggleEye(eye)} />
           ))}
-        </div>
+        </div>}
       </div>
     </section>
   );
