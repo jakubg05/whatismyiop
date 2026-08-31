@@ -6,7 +6,7 @@ export function TrendExplanation({ onOpenSessions, expanded = false }: { onOpenS
           A trend is a smoothed summary of your session pressures, calculated separately for each eye. It is not a forecast and it does not invent readings beyond the dates you measured.
         </p>
         <p>
-          Trends begin with one value per eye per session. The grouping rules and the Median or Average choice described in <button className="trend-explanation__session-link" type="button" onClick={onOpenSessions}>how sessions work?</button> are applied before the calculation described here.
+          Trends begin with one value per eye per session. The grouping rules and the Median or Average choice described in <button className="trend-explanation__session-link" type="button" onClick={onOpenSessions}>how sessions work?</button> are applied first. Position and Quality filters also determine which readings are included.
         </p>
 
         <h3>A local curve, not one forced line</h3>
@@ -20,14 +20,14 @@ export function TrendExplanation({ onOpenSessions, expanded = false }: { onOpenS
 
         <h3>Observed and adjusted</h3>
         <p>
-          Observed smooths the session values exactly as recorded. It can therefore move if your measurement schedule changes—for example, from mostly mornings to mostly evenings.
+          Observed smooths the included session values without a time-of-day adjustment. It can therefore move if your measurement schedule changes, for example, from mostly mornings to mostly evenings.
         </p>
         <p>
           Adjusted separates long-term change from a repeatable time-of-day pattern, then shows every date on the same noon reference. This helps prevent a change from mostly morning sessions to mostly evening sessions from looking like a real long-term shift.
         </p>
         <Math block>{String.raw`y_i=T(t_i)+D(\text{time of day}_i)+\varepsilon_i`}</Math>
         <p>
-          The time-of-day pattern is learned only from your own sessions. The adjustment does not use posture, a population “normal,” or data from other people, and it never changes the imported measurements.
+          The time-of-day pattern is learned only from your included sessions. The adjustment does not model posture or quality, use a population &quot;normal,&quot; or use data from other people. Position and Quality filters can still change the included sessions. Nothing changes the imported measurements.
         </p>
 
         <h3>When the data are thin</h3>

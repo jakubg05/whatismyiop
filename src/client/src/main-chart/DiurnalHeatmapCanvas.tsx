@@ -432,7 +432,7 @@ export function DiurnalHeatmapCanvas({ measurements, visibleEyes, domain, fullDo
       </dl>
     </div>}
     </div>
-    <div className="history-heatmap__legend" role="img" aria-label={`Mean IOP color scale from ${colorDomain[0].toFixed(1)} to ${colorDomain[1].toFixed(1)} millimeters of mercury for the full measurement history`}>
+    <div className="history-heatmap__legend" role="img" aria-label={`Mean IOP color scale from ${colorDomain[0].toFixed(1)} to ${colorDomain[1].toFixed(1)} millimeters of mercury for the currently included readings across the full date history`}>
       <span className="history-heatmap__legend-label">Mean IOP</span>
       <div className="history-heatmap__legend-scale">
         <i aria-hidden="true" />

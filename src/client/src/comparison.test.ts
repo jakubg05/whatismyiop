@@ -199,7 +199,7 @@ describe("comparison expression grammar", () => {
 
 describe("comparison labels", () => {
   it("enforces grammar, reserved words, and cross-type uniqueness", () => {
-    expect(comparisonLabelError("With space", "period", catalog)).not.toBeNull();
+    expect(comparisonLabelError("With space", "period", catalog)).toBe("Names cannot contain spaces. Use hyphens or underscores instead.");
     expect(comparisonLabelError("_startsWrong", "period", catalog)).not.toBeNull();
     expect(comparisonLabelError("baseline", "period", catalog)).not.toBeNull();
     expect(comparisonLabelError("Xalatan", "period", catalog)).not.toBeNull();

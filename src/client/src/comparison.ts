@@ -117,6 +117,7 @@ export function comparisonLabelError(
   catalog: ComparisonCatalog,
   excludingId?: string,
 ): string | null {
+  if (/\s/u.test(label)) return "Names cannot contain spaces. Use hyphens or underscores instead.";
   if (!isValidComparisonLabel(label)) return "Labels may contain letters, numbers, hyphens, and underscores, and must begin with a letter or number.";
   const normalized = label.toLocaleLowerCase();
   if (RESERVED_LABELS.has(normalized)) return "Labels cannot use the reserved comparison words AND, range, before, after, or now.";
@@ -310,7 +311,7 @@ export function parseComparisonExpression(text: string, catalog: ComparisonCatal
 function optionMessage(expected: ComparisonExpectedState, count: number): string {
   if (expected === "maximum") return "Six comparison segments are already shown";
   if (expected === "duration") return count ? `${count} suggested durations` : "Expected a whole-day duration such as 14d";
-  if (expected === "target-value") return count ? `${count} matching periods and annotations` : "No matching period or annotation";
+  if (expected === "target-value") return count ? `${count} matching periods and events` : "No matching period or event";
   if (expected === "and") return count ? "Add another comparison segment" : "Expected AND";
   return count ? `${count} suggestions` : `Expected ${expected === "direction" ? "before: or after:" : "a comparison keyword or saved period"}`;
 }

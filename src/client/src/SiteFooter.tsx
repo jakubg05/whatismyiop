@@ -35,14 +35,14 @@ export function SiteFooter({
 
         {variant === "full" && <section className="site-footer__privacy">
           <h2>Stored in your browser</h2>
-          <p>Your CSV stays on this device. WhatIsMyIOP does not upload your measurements or require an account.</p>
+          <p>Your CSV, periods, and events stay in this browser. WhatIsMyIOP does not upload them or require an account.</p>
         </section>}
 
         {hasLocalData && <section className="site-footer__data">
           <h2>Your local data</h2>
           <div className="site-footer__file">
             <strong>{fileName}</strong>
-            <span>{measurementCount.toLocaleString()} records stored locally</span>
+            <span>{measurementCount > 0 ? `${measurementCount.toLocaleString()} measurements stored locally` : "Treatment history stored locally"}</span>
           </div>
           <div className="site-footer__actions">
             {onChooseFile && <Button variant="secondary" onClick={onChooseFile}>Choose another CSV</Button>}

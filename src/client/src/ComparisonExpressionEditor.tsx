@@ -121,7 +121,7 @@ function fuzzyMatch(candidate: string, query: string): boolean {
 
 function noMatchMessage(expected: ReturnType<typeof comparisonCompletionContext>["expected"]): string {
   if (expected === "duration") return "Expected a whole-day duration such as 14d";
-  if (expected === "target-value") return "No matching period or annotation";
+  if (expected === "target-value") return "No matching period or event";
   if (expected === "and") return "Expected AND";
   if (expected === "direction") return "Expected before: or after:";
   if (expected === "maximum") return "Six comparison segments are already shown";
@@ -132,7 +132,7 @@ function expectedStateLabel(expected: ReturnType<typeof comparisonCompletionCont
   if (expected === "segment-start") return "comparison keyword or saved period";
   if (expected === "duration") return "whole-day duration";
   if (expected === "direction") return "before or after";
-  if (expected === "target-value") return "period or annotation name";
+  if (expected === "target-value") return "period or event name";
   if (expected === "and") return "AND";
   return "six-segment limit";
 }
