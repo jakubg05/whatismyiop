@@ -1,7 +1,7 @@
 .ui-button {
   min-height: var(--control-sm);
   padding: 0 var(--s3);
-  border: 1px solid var(--line-strong);
+  border: 0.0625rem solid var(--line-strong);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--ink);
@@ -38,10 +38,10 @@
 .ui-toggle {
   display: block;
   width: 1.75rem;
-  height: 1rem;
-  padding: 0;
+  min-height: 1.75rem;
+  padding: 0.375rem 0;
   border: 0;
-  border-radius: 999px;
+  border-radius: 999rem;
   background: transparent;
   cursor: pointer;
 }
@@ -49,22 +49,22 @@
   cursor: default;
 }
 .ui-toggle:focus-visible {
-  outline: 1px solid hsl(207 100% 60%);
-  outline-offset: 2px;
+  outline: 0.0625rem solid hsl(207 100% 60%);
+  outline-offset: 0.125rem;
 }
 .publication-switch-track {
   position: relative;
   display: block;
   width: 1.75rem;
   height: 1rem;
-  border-radius: 999px;
+  border-radius: 999rem;
   background: hsl(0 0% 42%);
   transition: background-color var(--fast) var(--ease);
 }
 .publication-switch-track > span {
   position: absolute;
-  top: 2px;
-  left: 2px;
+  top: 0.125rem;
+  left: 0.125rem;
   width: 0.75rem;
   height: 0.75rem;
   border-radius: 50%;
@@ -75,7 +75,7 @@
   background: hsl(207 100% 60%);
 }
 .ui-toggle[aria-checked="true"] .publication-switch-track > span {
-  left: calc(100% - 0.75rem - 2px);
+  left: calc(100% - 0.75rem - 0.125rem);
 }
 
 .dot {
@@ -96,7 +96,7 @@
   display: flex;
   min-height: var(--control-sm);
   align-items: stretch;
-  border: 1px solid var(--line);
+  border: 0.0625rem solid var(--line);
   border-radius: var(--radius);
   background: var(--canvas);
 }
@@ -117,16 +117,18 @@
   cursor: pointer;
 }
 .ui-chart-toggle:first-child {
-  border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px);
+  border-radius: calc(var(--radius) - 0.0625rem) 0 0
+    calc(var(--radius) - 0.0625rem);
 }
 .ui-chart-toggle:last-child {
-  border-left: 1px solid var(--line);
-  border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0;
+  border-left: 0.0625rem solid var(--line);
+  border-radius: 0 calc(var(--radius) - 0.0625rem)
+    calc(var(--radius) - 0.0625rem) 0;
 }
 .ui-chart-toggle input {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  width: 0.0625rem;
+  height: 0.0625rem;
   opacity: 0;
 }
 .ui-chart-toggle:has(input:checked) {
@@ -161,9 +163,10 @@
 .measurement-canvas-tooltip {
   display: grid;
   width: 14rem;
+  max-width: calc(100vw - 2 * var(--gutter));
   padding: var(--s3);
   gap: var(--s2);
-  border: 1px solid var(--tooltip-border);
+  border: 0.0625rem solid var(--tooltip-border);
   border-radius: 0.875rem;
   background: var(--floating-surface);
   color: var(--floating-ink);
@@ -192,7 +195,7 @@
   margin: 0 calc(-1 * var(--s3));
   padding: var(--s2) var(--s3) 0;
   gap: var(--s1);
-  border-top: 1px solid var(--floating-divider);
+  border-top: 0.0625rem solid var(--floating-divider);
 }
 .diurnal-tooltip__rows div,
 .history-heatmap__tooltip-rows div,
