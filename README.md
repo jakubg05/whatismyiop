@@ -51,3 +51,7 @@ Bug reports and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.m
 WhatIsMyIOP is a charting tool, not a medical device. It does not diagnose an eye condition, determine whether a pressure is safe, or recommend treatment.
 
 WhatIsMyIOP is independent and is not affiliated with or endorsed by the manufacturer of iCare HOME2.
+
+## License
+
+WhatIsMyIOP is available under the [MIT License](LICENSE).
