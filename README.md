@@ -8,10 +8,11 @@ The app can:
 - calculate median and average session values
 - draw trends from raw readings or session values for either eye
 - plot pressure by date and time of day as a heatmap
-- mark treatment periods and events
+- mark treatment periods and annotations
 - compare saved periods with short comparison expressions
+- generate and reopen editable `.whatismyiop` reports
 
-The imported CSV stays in the browser. The app stores a local copy so the work is still there after a refresh, but it does not upload the measurement file to an application server. Use **Clear data** in the app to remove that browser copy.
+Imported files stay in the browser. The app keeps only the measurement fields it uses, along with saved periods and annotations, so the work is still there after a refresh. It discards the original CSV text and does not upload imported data to an application server. Use **Clear data** in the app to remove the browser copy.
 
 ## Run it locally
 

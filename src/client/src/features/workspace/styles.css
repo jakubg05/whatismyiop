@@ -1,0 +1,79 @@
+.app-layout {
+  min-height: 100vh;
+}
+.analysis-main {
+  min-width: 0;
+  padding: 0 var(--gutter) 3rem;
+  transition: margin-inline-end var(--medium) var(--ease);
+}
+.chronological-workspace--inactive {
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
+}
+.analysis-shell--editor-open .analysis-main {
+  margin-inline-end: var(--editor-width);
+}
+.app-topbar {
+  position: sticky;
+  z-index: 40;
+  top: 0;
+  min-height: 3.5rem;
+  margin-inline: calc(var(--gutter) * -1);
+  padding-inline: var(--gutter);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+}
+.comparison-overlay {
+  position: sticky;
+  z-index: 50;
+  top: 0;
+  height: max(
+    calc(var(--control) + var(--s6)),
+    calc((100dvh - var(--chart-height)) / 2 - 4.875rem)
+  );
+  padding-top: var(--s4);
+  pointer-events: none;
+}
+.comparison-overlay > .comparison-composer {
+  pointer-events: auto;
+}
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+.app-brand img {
+  width: 1.5rem;
+  height: 1.5rem;
+  object-fit: contain;
+}
+.app-brand strong {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.comparison-workspace {
+  max-width: 92rem;
+  margin: var(--s6) auto 0;
+  display: grid;
+  gap: var(--s5);
+}
+
+@media (max-width: 48rem) {
+  .comparison-workspace {
+    gap: var(--s4);
+  }
+}
+@media (max-width: 40rem) {
+  .analysis-shell--editor-open .analysis-main {
+    margin-inline-end: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .analysis-main {
+    transition: none;
+  }
+}

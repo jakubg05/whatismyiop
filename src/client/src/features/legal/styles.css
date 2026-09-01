@@ -1,0 +1,104 @@
+.legal-page {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: var(--canvas);
+  font-family: var(--font);
+}
+.legal-header {
+  min-height: 4rem;
+  padding: 0 var(--gutter);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  background: var(--surface);
+}
+.legal-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s3);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+.legal-brand img {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.legal-document {
+  width: min(42rem, calc(100% - 2 * clamp(1.5rem, 6vw, 5rem)));
+  margin: clamp(1.5rem, 4vw, 3rem) auto clamp(3rem, 6vw, 5rem);
+}
+.legal-document__intro {
+  padding: clamp(1.5rem, 3vw, 2.5rem) 0 1.5rem;
+  display: grid;
+  gap: var(--s3);
+}
+.legal-document__intro h1 {
+  max-width: 38rem;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+}
+.legal-document__intro p {
+  max-width: 40rem;
+  color: var(--muted);
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+.legal-document__intro small {
+  margin-top: var(--s2);
+  color: var(--subtle);
+  font: var(--small);
+}
+.legal-document__body {
+  padding: 1.5rem 0 0;
+  display: grid;
+  gap: 2rem;
+}
+.legal-document__body section {
+  display: grid;
+  gap: var(--s3);
+}
+.legal-document__body h2 {
+  font-size: 1rem;
+}
+.legal-document__body p,
+.legal-document__body li,
+.legal-document__body dd {
+  color: #50545a;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+}
+.legal-document__body ul {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  display: grid;
+  gap: var(--s2);
+}
+.legal-document__body a {
+  color: var(--ink);
+  text-underline-offset: 0.15em;
+}
+.legal-document__body code {
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+  background: var(--hover);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.75rem;
+}
+.legal-callout {
+  padding: var(--s5);
+  border: 0.0625rem solid #d8dde2;
+  border-radius: var(--radius-panel);
+  background: #f5f7f8;
+}
+
+@media (max-width: 40rem) {
+  .legal-document {
+    width: calc(100% - 3rem);
+    margin: var(--s4) auto var(--s6);
+  }
+}

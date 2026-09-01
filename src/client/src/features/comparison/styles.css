@@ -1,0 +1,362 @@
+.comparison-composer {
+  --comparison-field-height: 2.5rem;
+  --comparison-line-height: 1.25rem;
+  --comparison-menu-gap: 0.375rem;
+
+  position: relative;
+  z-index: 20;
+  width: 100%;
+  max-width: 38rem;
+  min-width: 0;
+  margin: 0 auto;
+  transition: max-width var(--medium) var(--ease);
+}
+
+.comparison-composer--open {
+  max-width: 92rem;
+}
+
+.comparison-expression {
+  height: var(--comparison-field-height);
+  padding-inline: var(--s3);
+  border: 0.0625rem solid var(--line-strong);
+  outline: 0.0625rem solid transparent;
+  outline-offset: 0;
+  border-radius: 0.5rem;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s2);
+  overflow: visible;
+  background: var(--surface);
+  color: var(--ink);
+  transition:
+    border-color var(--fast) var(--ease),
+    outline-color var(--fast) var(--ease);
+}
+
+.comparison-expression:hover {
+  border-color: #b8bec6;
+}
+
+.comparison-expression:focus-within {
+  border-color: #3478c4;
+  outline-color: #3478c4;
+}
+
+.comparison-expression__search-icon {
+  width: 1rem;
+  height: 1rem;
+  fill: var(--muted);
+}
+
+/* CodeMirror owns editing; this block only gives its one line a stable box. */
+.comparison-expression__editor {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  height: var(--comparison-line-height);
+  overflow: visible;
+}
+
+.comparison-expression__editor .cm-editor,
+.comparison-expression__editor .cm-scroller {
+  height: 100%;
+  font-family: var(--font);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: var(--comparison-line-height);
+}
+
+.comparison-expression__editor .cm-editor {
+  background: transparent;
+  color: var(--ink);
+}
+
+.comparison-expression__editor .cm-editor.cm-focused {
+  outline: 0;
+}
+
+.comparison-expression__editor .cm-scroller {
+  scrollbar-width: none;
+}
+
+.comparison-expression__editor .cm-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.comparison-expression__editor .cm-content {
+  min-height: 100%;
+  padding: 0;
+  caret-color: var(--ink);
+}
+
+.comparison-expression__editor .cm-line {
+  min-height: var(--comparison-line-height);
+  padding: 0;
+  line-height: var(--comparison-line-height);
+}
+
+.comparison-expression__placeholder {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--subtle);
+  font: 400 0.875rem/var(--comparison-line-height) var(--font);
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.comparison-expression__keyword {
+  color: var(--ink);
+  font-weight: 400;
+}
+
+.comparison-expression__value {
+  color: #286a9b;
+}
+
+.comparison-expression__and {
+  color: #72469b;
+  font-weight: 400;
+}
+
+.comparison-expression__clear {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0.45;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.comparison-expression__clear:hover,
+.comparison-expression__clear:focus-visible {
+  outline: 0;
+  background: transparent;
+  opacity: 0.72;
+}
+
+.comparison-expression__clear:active {
+  opacity: 1;
+}
+
+.comparison-expression__clear svg {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+}
+
+.comparison-expression__editor .cm-editor .cm-tooltip-autocomplete,
+.comparison-expression__explanation {
+  width: min(18rem, calc(100vw - 2 * var(--gutter)));
+  max-height: 18rem;
+  padding: var(--s1);
+  border: 0.0625rem solid var(--floating-border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--floating-surface);
+  box-shadow: var(--floating-shadow);
+  color: var(--floating-ink);
+  font-family: inherit;
+  font-size: 0.75rem;
+}
+
+/* CodeMirror anchors menus to the line; convert that to the field edge. */
+.comparison-expression__editor .cm-editor .cm-tooltip-autocomplete {
+  transform: translateY(
+    calc(
+      (var(--comparison-field-height) - var(--comparison-line-height)) / 2 +
+        var(--comparison-menu-gap)
+    )
+  );
+}
+
+.comparison-expression__editor .cm-editor .cm-tooltip-autocomplete > ul {
+  width: 100%;
+  max-height: 17.5rem;
+  font-family: inherit;
+  scrollbar-color: #666 transparent;
+}
+
+.comparison-expression__editor .cm-editor .cm-tooltip-autocomplete > ul > li {
+  min-height: 2rem;
+  padding: 0.3125rem 0.5rem;
+  border-radius: 0.5rem;
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) max-content;
+  grid-template-rows: auto;
+  align-items: center;
+  column-gap: var(--s2);
+  row-gap: 0.0625rem;
+}
+
+.comparison-expression__editor
+  .cm-editor
+  .cm-tooltip-autocomplete
+  > ul
+  > li.comparison-completion__separator {
+  display: block;
+  width: 100%;
+  min-height: 0.0625rem;
+  height: 0.0625rem;
+  margin: 0.1875rem 0;
+  padding: 0;
+  border-radius: 0;
+  background: var(--dark-active);
+  pointer-events: none;
+}
+
+.comparison-expression__editor
+  .cm-editor
+  .cm-tooltip-autocomplete
+  > ul
+  > li[aria-selected="true"] {
+  background: rgb(255 255 255 / 11%);
+  color: #fff;
+}
+
+.comparison-expression__editor
+  .cm-editor
+  .cm-tooltip-autocomplete
+  > ul
+  > li:hover {
+  background: var(--dark-hover);
+  color: #fff;
+}
+
+.comparison-expression__editor
+  .cm-editor
+  .cm-tooltip-autocomplete
+  > ul:hover
+  > li[aria-selected="true"]:not(:hover) {
+  background: transparent;
+}
+
+.comparison-expression__editor .cm-editor .comparison-completion__icon {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  vertical-align: middle;
+  fill: currentColor;
+  color: #aeb4bc;
+}
+
+.comparison-expression__editor .cm-editor .comparison-completion__marker {
+  width: 0.5rem;
+  height: 0.5rem;
+  justify-self: center;
+  border-radius: 50%;
+}
+
+.comparison-expression__editor
+  .cm-editor
+  .comparison-completion__marker--annotation {
+  border-radius: 0.0625rem;
+  transform: rotate(45deg);
+}
+
+.comparison-expression__editor
+  .cm-editor
+  li[aria-selected="true"]
+  .comparison-completion__icon {
+  color: #dce1e7;
+}
+
+.comparison-expression__editor
+  .cm-editor
+  li:hover
+  .comparison-completion__icon {
+  color: #dce1e7;
+}
+
+.comparison-expression__editor .cm-editor .cm-completionLabel {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comparison-expression__editor .cm-editor .cm-completionDetail {
+  display: none;
+}
+
+.comparison-expression__editor .cm-editor .comparison-completion__supporting {
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 0;
+  margin-left: 0.5rem;
+  overflow: hidden;
+  color: var(--floating-muted);
+  font-size: 0.625rem;
+  line-height: 0.875rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.comparison-expression__editor
+  .cm-editor
+  .cm-tooltip-autocomplete
+  > ul
+  > li:not(:has(.comparison-completion__icon))
+  .cm-completionLabel,
+.comparison-expression__editor
+  .cm-editor
+  .cm-tooltip-autocomplete
+  > ul
+  > li:not(:has(.comparison-completion__icon))
+  .comparison-completion__supporting {
+  grid-column: 1 / -1;
+}
+
+.comparison-expression__editor
+  .cm-editor
+  li[aria-selected="true"]
+  .comparison-completion__supporting,
+.comparison-expression__editor
+  .cm-editor
+  li:hover
+  .comparison-completion__supporting {
+  color: #c7c7c7;
+}
+
+.comparison-expression__explanation {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + var(--comparison-menu-gap));
+}
+
+.comparison-expression__message {
+  min-height: 2rem;
+  padding: 0.3125rem 0.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  color: #c7c7c7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .comparison-composer {
+    transition: none;
+  }
+}
