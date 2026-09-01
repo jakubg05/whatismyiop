@@ -46,7 +46,7 @@ import {
   EyeToggleGroup,
   MaterialSymbol,
   ToggleButtonGroup,
-  useDismissiblePopover,
+  useHoverPopover,
 } from "../../../../shared/ui";
 import { eventPalette, periodPalette } from "../../../annotations/palette";
 import {
@@ -97,7 +97,7 @@ const POSITION_FILTER_OPTIONS: readonly {
   value: PositionFilter;
   label: string;
 }[] = [
-  { value: "all", label: "All positions" },
+  { value: "all", label: "All" },
   { value: "sitting", label: "Sitting" },
   { value: "reclined", label: "Laying down" },
 ];
@@ -176,64 +176,61 @@ function alignDateTagToPlot(tag: HTMLElement | null, ratio: number) {
 function ChartShortcuts() {
   const root = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-
-  useDismissiblePopover(root, open, () => setOpen(false));
+  const hoverPopover = useHoverPopover(root, open, setOpen);
 
   return (
     <div
       ref={root}
       className="chart-shortcuts"
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
-          setOpen(false);
-      }}
+      {...hoverPopover}
     >
       <button
         className="chart-shortcuts__trigger"
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
       >
+        <MaterialSymbol name="keyboard_command_key" />
         <span>Shortcuts</span>
-        <MaterialSymbol name="expand_more" />
       </button>
       {open && (
-        <div
-          className="chart-shortcuts__menu"
-          role="dialog"
-          aria-label="Chart shortcuts"
-        >
-          <dl>
-            <div className="chart-shortcuts__primary">
-              <dt>
-                <kbd>Ctrl</kbd> + click
-              </dt>
-              <dd>Add an event</dd>
-            </div>
-            <div className="chart-shortcuts__primary">
-              <dt>
-                <kbd>Ctrl</kbd> + drag
-              </dt>
-              <dd>Add a period</dd>
-            </div>
-            <div>
-              <dt>Drag</dt>
-              <dd>Pan the chart</dd>
-            </div>
-            <div>
-              <dt>
-                <kbd>Ctrl</kbd> + scroll
-              </dt>
-              <dd>Pan the chart</dd>
-            </div>
-            <div>
-              <dt>
-                <kbd>Shift</kbd> + scroll
-              </dt>
-              <dd>Zoom the chart</dd>
-            </div>
-          </dl>
+        <div className="chart-shortcuts__popover">
+          <div
+            className="chart-shortcuts__menu"
+            role="dialog"
+            aria-label="Chart shortcuts"
+          >
+            <dl>
+              <div className="chart-shortcuts__primary">
+                <dt>
+                  <kbd>Ctrl</kbd> + click
+                </dt>
+                <dd>Add an event</dd>
+              </div>
+              <div className="chart-shortcuts__primary">
+                <dt>
+                  <kbd>Ctrl</kbd> + drag
+                </dt>
+                <dd>Add a period</dd>
+              </div>
+              <div>
+                <dt>Drag</dt>
+                <dd>Pan the chart</dd>
+              </div>
+              <div>
+                <dt>
+                  <kbd>Ctrl</kbd> + scroll
+                </dt>
+                <dd>Pan the chart</dd>
+              </div>
+              <div>
+                <dt>
+                  <kbd>Shift</kbd> + scroll
+                </dt>
+                <dd>Zoom the chart</dd>
+              </div>
+            </dl>
+          </div>
         </div>
       )}
     </div>
@@ -1473,7 +1470,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             label="Quality"
             value={qualityFilter}
             options={[
-              { value: "all", label: "All qualities" },
+              { value: "all", label: "All" },
               ...qualityOptions.map((quality) => ({
                 value: quality,
                 label: quality,

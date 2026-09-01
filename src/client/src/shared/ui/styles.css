@@ -123,9 +123,6 @@
   border-left: 1px solid var(--line);
   border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0;
 }
-.ui-chart-toggle:hover {
-  color: var(--ink);
-}
 .ui-chart-toggle input {
   position: absolute;
   width: 1px;
@@ -137,7 +134,7 @@
   color: var(--ink);
 }
 .ui-chart-toggle:not(:has(input:checked)) {
-  background: var(--hover);
+  background: color-mix(in srgb, var(--hover) 50%, var(--surface));
   color: var(--subtle);
 }
 .ui-chart-toggle:not(:has(input:checked)) .dot {
@@ -149,6 +146,9 @@
 }
 .ui-chart-toggle-group--single .ui-chart-toggle .dot {
   opacity: 1;
+}
+.ui-chart-toggle:not(.ui-chart-toggle--disabled):hover {
+  background: var(--hover);
 }
 .ui-chart-toggle--disabled {
   color: var(--subtle);

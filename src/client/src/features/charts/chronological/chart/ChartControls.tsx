@@ -15,7 +15,7 @@ import {
   DateInput,
   MaterialSymbol,
   Toggle,
-  useDismissiblePopover,
+  useHoverPopover,
 } from "../../../../shared/ui";
 
 export const ChartDateTag = forwardRef<
@@ -129,6 +129,7 @@ export function ChartSelect<T extends string>({
   onChange,
   onTrigger,
   pressed,
+  popoverEnabled = true,
   className = "",
 }: {
   label: string;
@@ -138,11 +139,17 @@ export function ChartSelect<T extends string>({
   onChange: (value: T) => void;
   onTrigger?: () => void;
   pressed?: boolean;
+  popoverEnabled?: boolean;
   className?: string;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  useDismissiblePopover(root, open, () => setOpen(false));
+  const hoverPopover = useHoverPopover(
+    root,
+    open,
+    setOpen,
+    popoverEnabled,
+  );
   const selectedLabel =
     options.find((option) => option.value === value)?.label ?? value;
 
@@ -150,10 +157,7 @@ export function ChartSelect<T extends string>({
     <div
       ref={root}
       className={`ui-chart-select ${className}`.trim()}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
-          setOpen(false);
-      }}
+      {...hoverPopover}
     >
       <button
         className="ui-chart-select__trigger"
@@ -163,7 +167,6 @@ export function ChartSelect<T extends string>({
         aria-expanded={open}
         onClick={() => {
           onTrigger?.();
-          setOpen((current) => !current);
         }}
       >
         <span className="ui-chart-select__label">{label}</span>
@@ -173,38 +176,39 @@ export function ChartSelect<T extends string>({
         </span>
       </button>
       {open && (
-        <div className="ui-chart-select__menu" role="menu" aria-label={label}>
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              role="menuitemradio"
-              aria-checked={value === option.value}
-              onClick={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-            >
-              <span>{option.label}</span>
-              {value === option.value && <MaterialSymbol name="check" />}
-            </button>
-          ))}
-          {action && (
-            <div className="ui-chart-select__menu-action">
+        <div className="ui-chart-select__popover">
+          <div className="ui-chart-select__menu" role="menu" aria-label={label}>
+            {options.map((option) => (
               <button
-                className="ui-chart-select__menu-link"
+                key={option.value}
                 type="button"
-                role="menuitem"
+                role="menuitemradio"
+                aria-checked={value === option.value}
                 onClick={() => {
-                  action.onSelect();
-                  setOpen(false);
+                  onChange(option.value);
                 }}
               >
-                <span>{action.label}</span>
-                <MaterialSymbol name="chevron_right" />
+                <span>{option.label}</span>
+                {value === option.value && <MaterialSymbol name="check" />}
               </button>
-            </div>
-          )}
+            ))}
+            {action && (
+              <div className="ui-chart-select__menu-action">
+                <button
+                  className="ui-chart-select__menu-link"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    action.onSelect();
+                    setOpen(false);
+                  }}
+                >
+                  <span>{action.label}</span>
+                  <MaterialSymbol name="chevron_right" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -238,6 +242,7 @@ export function MeasurementViewControl({
         ]}
         action={{ label: "How sessions work", onSelect: onOpenExplanation }}
         pressed={view === "sessions"}
+        popoverEnabled={view === "sessions"}
         onTrigger={() => onViewChange("sessions")}
         onChange={(nextAggregation) => {
           onAggregationChange(nextAggregation);
@@ -319,23 +324,19 @@ function ChartPopoverControl({
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  useDismissiblePopover(root, open, () => setOpen(false));
+  const hoverPopover = useHoverPopover(root, open, setOpen);
 
   return (
     <div
       ref={root}
       className={`ui-chart-select ${className}`.trim()}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
-          setOpen(false);
-      }}
+      {...hoverPopover}
     >
       <button
         className="ui-chart-select__trigger"
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
       >
         <span className="ui-chart-select__label">{label}</span>
         <span className="ui-chart-select__value">
@@ -344,12 +345,14 @@ function ChartPopoverControl({
         </span>
       </button>
       {open && (
-        <div
-          className="ui-chart-select__menu chart-control__menu"
-          role="dialog"
-          aria-label={menuLabel}
-        >
-          {children(() => setOpen(false))}
+        <div className="ui-chart-select__popover chart-control__popover">
+          <div
+            className="ui-chart-select__menu chart-control__menu"
+            role="dialog"
+            aria-label={menuLabel}
+          >
+            {children(() => setOpen(false))}
+          </div>
         </div>
       )}
     </div>
@@ -394,6 +397,17 @@ export function TargetControl({
     setDraft(parsed > maximumTarget ? String(maximumTarget) : nextDraft);
     onValueChange(next);
     if (!enabled) onEnabledChange(true);
+  }
+
+  function adjustValue(direction: -1 | 1) {
+    const parsed = Number(draft);
+    const current = Number.isFinite(parsed) ? parsed : value;
+    const next = Math.min(
+      maximumTarget,
+      Math.max(minimumTarget, Math.round((current + direction * 0.1) * 10) / 10),
+    );
+    setDraft(String(next));
+    onValueChange(next);
   }
 
   return (
@@ -441,6 +455,27 @@ export function TargetControl({
                   }
                 }}
               />
+              <span className="chart-control__target-stepper">
+                <button
+                  type="button"
+                  aria-label="Increase target pressure"
+                  disabled={!enabled || value >= maximumTarget}
+                  onClick={() => adjustValue(1)}
+                >
+                  <MaterialSymbol
+                    className="chart-control__target-stepper-up"
+                    name="expand_more"
+                  />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Decrease target pressure"
+                  disabled={!enabled || value <= minimumTarget}
+                  onClick={() => adjustValue(-1)}
+                >
+                  <MaterialSymbol name="expand_more" />
+                </button>
+              </span>
               <span>mmHg</span>
             </div>
           </div>
