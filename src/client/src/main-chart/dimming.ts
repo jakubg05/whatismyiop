@@ -2,6 +2,7 @@ import type { TimeDomain } from "./chartNavigation";
 import { timeIsInRanges, unemphasizedRangesWithin } from "./range";
 
 export const DIMMED_ALPHA_FACTOR = 0.18;
+export const LOW_CERTAINTY_ALPHA_FACTOR = 0.5;
 
 export type ChartDimmingFocus = {
   id: string;
@@ -37,4 +38,15 @@ export function dimmedTimeRanges(dimming: ChartDimming, domain: TimeDomain): Tim
   if (dimming.focus) return [domain];
   if (!dimming.dimOutsideEmphasizedRanges) return [];
   return unemphasizedRangesWithin(domain, dimming.emphasizedRanges);
+}
+
+export function heatmapVisibilityAlpha(
+  dimming: ChartDimming,
+  time: number,
+  lowCertainty: boolean,
+): number {
+  const dimmedByChart = dimming.focus !== null
+    || (dimming.dimOutsideEmphasizedRanges && !timeIsInRanges(time, dimming.emphasizedRanges));
+  if (dimmedByChart) return DIMMED_ALPHA_FACTOR;
+  return lowCertainty ? LOW_CERTAINTY_ALPHA_FACTOR : 1;
 }

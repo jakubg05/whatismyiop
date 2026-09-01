@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { chartVisibilityAlpha, dimmedTimeRanges, type ChartDimming } from "./dimming";
+import {
+  chartVisibilityAlpha,
+  DIMMED_ALPHA_FACTOR,
+  dimmedTimeRanges,
+  heatmapVisibilityAlpha,
+  LOW_CERTAINTY_ALPHA_FACTOR,
+  type ChartDimming,
+} from "./dimming";
 
 const rangeDimming: ChartDimming = {
   dimOutsideEmphasizedRanges: true,
@@ -21,5 +28,11 @@ describe("shared chart dimming", () => {
   it("dims the complete heatmap when focus belongs to data it cannot represent separately", () => {
     const focused = { ...rangeDimming, focus: { id: "point", sessionId: null } };
     expect(dimmedTimeRanges(focused, [0, 60])).toEqual([[0, 60]]);
+  });
+
+  it("dims low-certainty heatmap regions without stacking dimming effects", () => {
+    expect(heatmapVisibilityAlpha(rangeDimming, 30, true)).toBe(DIMMED_ALPHA_FACTOR);
+    expect(heatmapVisibilityAlpha(rangeDimming, 15, true)).toBe(LOW_CERTAINTY_ALPHA_FACTOR);
+    expect(heatmapVisibilityAlpha(rangeDimming, 15, false)).toBe(1);
   });
 });

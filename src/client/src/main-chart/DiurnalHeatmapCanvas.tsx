@@ -4,7 +4,7 @@ import { ResponsiveContainer, Scatter, ScatterChart, XAxis, YAxis } from "rechar
 import { formatDateInput, type Eye, type Measurement, type MeasurementView, type SessionAggregation } from "../analysis";
 import { buildDiurnalHeatmapData, DIURNAL_BIN_WINDOWS, heatmapReadingsForView } from "../diurnalHeatmapData";
 import { navigateWheelDomain, panDomain, zoomDomain, type TimeDomain } from "./chartNavigation";
-import { DIMMED_ALPHA_FACTOR, dimmedTimeRanges, type ChartDimming } from "./dimming";
+import { dimmedTimeRanges, heatmapVisibilityAlpha, type ChartDimming } from "./dimming";
 import { CHART_PLOT_LEFT, CHART_PLOT_RIGHT, formatChartTime } from "./format";
 import { heatmapBracket, heatmapColorPosition, heatmapValueAt, heatmapValueFromBracket, sharedHeatmapColorDomain } from "./heatmapInterpolation";
 import { MEASUREMENT_PLOT as MAIN_CHART_PLOT } from "./MeasurementCanvas";
@@ -75,6 +75,8 @@ export function DiurnalHeatmapCanvas({ measurements, measurementView, sessionAgg
   const canvas = useRef<HTMLCanvasElement>(null);
   const uncertaintyCanvas = useRef<HTMLCanvasElement>(null);
   const dimmingCanvas = useRef<HTMLCanvasElement>(null);
+  const dimmingRasterCanvas = useRef<HTMLCanvasElement | null>(null);
+  const dimmingRasterImage = useRef<ImageData | null>(null);
   const rasterCanvas = useRef<HTMLCanvasElement | null>(null);
   const rasterImage = useRef<ImageData | null>(null);
   const drag = useRef<Drag | null>(null);
@@ -276,13 +278,43 @@ export function DiurnalHeatmapCanvas({ measurements, measurementView, sessionAgg
     const plotWidth = Math.max(1, size.width - MEASUREMENT_PLOT.left - MEASUREMENT_PLOT.right);
     const plotHeight = Math.max(1, size.height - MEASUREMENT_PLOT.top - MEASUREMENT_PLOT.bottom);
     const domainSpan = Math.max(1, domain[1] - domain[0]);
-    context.fillStyle = `rgba(255, 255, 255, ${1 - DIMMED_ALPHA_FACTOR})`;
-    for (const [start, end] of dimmedTimeRanges(dimming, domain)) {
-      const x = MEASUREMENT_PLOT.left + (start - domain[0]) / domainSpan * plotWidth;
-      const width = (end - start) / domainSpan * plotWidth;
-      context.fillRect(x, MEASUREMENT_PLOT.top, width, plotHeight);
+    const rasterWidth = Math.max(1, Math.min(720, Math.ceil(plotWidth)));
+    const rasterHeight = Math.max(1, Math.min(280, Math.ceil(plotHeight)));
+    const raster = dimmingRasterCanvas.current ?? document.createElement("canvas");
+    dimmingRasterCanvas.current = raster;
+    if (raster.width !== rasterWidth || raster.height !== rasterHeight) {
+      raster.width = rasterWidth;
+      raster.height = rasterHeight;
+      dimmingRasterImage.current = null;
     }
-  }, [dimming, domain, size]);
+    const rasterContext = raster.getContext("2d");
+    if (!rasterContext) return;
+    const image = dimmingRasterImage.current ?? rasterContext.createImageData(rasterWidth, rasterHeight);
+    dimmingRasterImage.current = image;
+    image.data.fill(0);
+    for (let y = 0; y < rasterHeight; y += 1) {
+      const bin = Math.min(7, Math.floor(y / rasterHeight * 8));
+      for (let x = 0; x < rasterWidth; x += 1) {
+        const time = domain[0] + x / Math.max(1, rasterWidth - 1) * domainSpan;
+        const [left, right, timeRatio] = heatmapBracket(dates, time);
+        const row = timeRatio < 0.5 ? left : right;
+        const lowCertainty = showUncertainRegions
+          && time >= fullDomain[0]
+          && time <= fullDomain[1]
+          && (data.lowSupport[row]?.[bin] ?? false);
+        const alpha = 1 - heatmapVisibilityAlpha(dimming, time, lowCertainty);
+        if (alpha <= 0) continue;
+        const offset = (y * rasterWidth + x) * 4;
+        image.data[offset] = 255;
+        image.data[offset + 1] = 255;
+        image.data[offset + 2] = 255;
+        image.data[offset + 3] = Math.round(alpha * 255);
+      }
+    }
+    rasterContext.putImageData(image, 0, 0);
+    context.imageSmoothingEnabled = false;
+    context.drawImage(raster, MEASUREMENT_PLOT.left, MEASUREMENT_PLOT.top, plotWidth, plotHeight);
+  }, [data.lowSupport, dates, dimming, domain, fullDomain, showUncertainRegions, size]);
 
   useEffect(() => {
     const element = root.current;
@@ -453,13 +485,13 @@ export function DiurnalHeatmapCanvas({ measurements, measurementView, sessionAgg
       onKeyDown={handleKeyDown}
     />
     <canvas
-      ref={uncertaintyCanvas}
-      className={`history-heatmap__uncertainty${showUncertainRegions ? " history-heatmap__uncertainty--visible" : ""}`}
+      ref={dimmingCanvas}
+      className={`history-heatmap__dimming${showUncertainRegions || dimmedTimeRanges(dimming, domain).length > 0 ? " history-heatmap__dimming--visible" : ""}`}
       aria-hidden="true"
     />
     <canvas
-      ref={dimmingCanvas}
-      className={`history-heatmap__dimming${dimmedTimeRanges(dimming, domain).length > 0 ? " history-heatmap__dimming--visible" : ""}`}
+      ref={uncertaintyCanvas}
+      className={`history-heatmap__uncertainty${showUncertainRegions ? " history-heatmap__uncertainty--visible" : ""}`}
       aria-hidden="true"
     />
     <ResponsiveContainer width="100%" height="100%">
