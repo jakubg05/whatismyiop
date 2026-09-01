@@ -1,3 +1,3 @@
-export { MedicalDisclaimerPage } from "./MedicalDisclaimerPage";
-export { PrivacyPolicyPage } from "./PrivacyPolicyPage";
-export { TermsPage } from "./TermsPage";
+export { MedicalDisclaimerPage } from "./pages/MedicalDisclaimerPage";
+export { PrivacyPolicyPage } from "./pages/PrivacyPolicyPage";
+export { TermsPage } from "./pages/TermsPage";

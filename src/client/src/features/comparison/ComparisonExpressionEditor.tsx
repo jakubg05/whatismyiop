@@ -40,7 +40,7 @@ import {
   materialSymbolPath,
   type MaterialSymbolName,
 } from "../../shared/ui";
-import { eventPalette, periodPalette } from "../../shared/theme/periodPalette";
+import { eventPalette, periodPalette } from "../annotations/palette";
 
 type Explanation = { visible: boolean; left: number; message: string };
 type ComparisonVisualCompletion = Completion & { comparisonColor?: string };

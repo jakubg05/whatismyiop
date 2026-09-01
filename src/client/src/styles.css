@@ -1,7 +1,9 @@
+@import "./shared/styles/tokens.css";
+@import "./shared/styles/base.css";
 @import "./shared/ui/styles.css";
 @import "./features/charts/chronological/styles.css";
 @import "./features/comparison/styles.css";
-@import "./app/styles.css";
+@import "./features/workspace/styles.css";
 @import "./features/data-import/styles.css";
 @import "./features/charts/diurnal/styles.css";
 @import "./shared/layout/styles.css";
