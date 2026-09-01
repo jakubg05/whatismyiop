@@ -17,7 +17,7 @@ export type SessionPoint = {
 type MeasurementSession = {
   start: number;
   end: number;
-  measurements: Measurement[];
+  measurementsByEye: Record<Eye, Measurement[]>;
 };
 
 const SESSION_WINDOW_MS = 10 * 60 * 1000;
@@ -27,9 +27,21 @@ export function aggregateMeasurementSessions(
   measurements: readonly Measurement[],
   aggregation: SessionAggregation = "median",
 ): SessionPoint[] {
-  const ordered = [...measurements].sort(
-    (left, right) => left.time - right.time || left.sequence - right.sequence,
-  );
+  let ordered = measurements;
+  for (let index = 1; index < measurements.length; index += 1) {
+    const previous = measurements[index - 1];
+    const current = measurements[index];
+    if (
+      previous.time > current.time ||
+      (previous.time === current.time && previous.sequence > current.sequence)
+    ) {
+      ordered = [...measurements].sort(
+        (left, right) =>
+          left.time - right.time || left.sequence - right.sequence,
+      );
+      break;
+    }
+  }
   const sessions: MeasurementSession[] = [];
 
   for (const measurement of ordered) {
@@ -38,33 +50,35 @@ export function aggregateMeasurementSessions(
       sessions.push({
         start: measurement.time,
         end: measurement.time,
-        measurements: [measurement],
+        measurementsByEye: {
+          OD: measurement.eye === "OD" ? [measurement] : [],
+          OS: measurement.eye === "OS" ? [measurement] : [],
+        },
       });
       continue;
     }
     session.end = measurement.time;
-    session.measurements.push(measurement);
+    session.measurementsByEye[measurement.eye].push(measurement);
   }
 
-  return sessions.flatMap((session, sessionId) => {
+  const points: SessionPoint[] = [];
+  for (let sessionId = 0; sessionId < sessions.length; sessionId += 1) {
+    const session = sessions[sessionId];
     const sessionTime = session.start + (session.end - session.start) / 2;
-    return EYES.flatMap((eye): SessionPoint[] => {
-      const eyeMeasurements = session.measurements.filter(
-        (measurement) => measurement.eye === eye,
-      );
-      if (eyeMeasurements.length === 0) return [];
+    for (const eye of EYES) {
+      const eyeMeasurements = session.measurementsByEye[eye];
+      if (eyeMeasurements.length === 0) continue;
       const values = eyeMeasurements.map((measurement) => measurement.iop);
-      return [
-        {
-          sessionId,
-          sessionStart: session.start,
-          sessionEnd: session.end,
-          time: sessionTime,
-          eye,
-          iop: aggregation === "median" ? median(values) : mean(values),
-          measurements: eyeMeasurements,
-        },
-      ];
-    });
-  });
+      points.push({
+        sessionId,
+        sessionStart: session.start,
+        sessionEnd: session.end,
+        time: sessionTime,
+        eye,
+        iop: aggregation === "median" ? median(values) : mean(values),
+        measurements: eyeMeasurements,
+      });
+    }
+  }
+  return points;
 }

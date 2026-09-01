@@ -4,6 +4,7 @@ import {
   type Measurement,
   type MeasurementView,
   type SessionAggregation,
+  type SessionPoint,
 } from "../../../measurements";
 import {
   fitLowessTrend,
@@ -30,6 +31,7 @@ export type EyeTrend = {
 const MIN_OBSERVATIONS = 8;
 const DAY_MS = 86_400_000;
 const SAMPLE_COUNT = 128;
+const MAX_LOWESS_OBSERVATIONS = 2_048;
 
 type TrendObservation = {
   time: number;
@@ -61,9 +63,36 @@ function medianGap(observations: TrendObservation[]): number {
   );
 }
 
+function reduceObservations(
+  observations: TrendObservation[],
+): TrendObservation[] {
+  if (observations.length <= MAX_LOWESS_OBSERVATIONS) return observations;
+  const reduced: TrendObservation[] = [];
+  for (let bucket = 0; bucket < MAX_LOWESS_OBSERVATIONS; bucket += 1) {
+    const start = Math.floor(
+      (bucket * observations.length) / MAX_LOWESS_OBSERVATIONS,
+    );
+    const end = Math.floor(
+      ((bucket + 1) * observations.length) / MAX_LOWESS_OBSERVATIONS,
+    );
+    let time = 0;
+    let iop = 0;
+    for (let index = start; index < end; index += 1) {
+      time += observations[index].time;
+      iop += observations[index].iop;
+    }
+    const count = end - start;
+    reduced.push({ time: time / count, iop: iop / count });
+  }
+  return reduced;
+}
+
 function estimateEye(observations: TrendObservation[]): TrendEstimate[] {
-  const rawValues = observations.map((item) => item.iop);
-  const times = observations.map((item) => item.time);
+  const supportTimes = observations.map((item) => item.time);
+  const gapLimit = Math.max(45 * DAY_MS, medianGap(observations) * 3);
+  const fittedObservations = reduceObservations(observations);
+  const rawValues = fittedObservations.map((item) => item.iop);
+  const times = fittedObservations.map((item) => item.time);
   const firstTime = times[0];
   const lastTime = times.at(-1)!;
   const timeSpanDays = Math.max(
@@ -85,7 +114,6 @@ function estimateEye(observations: TrendObservation[]): TrendEstimate[] {
     timeSpanDays,
     false,
   ).fitted;
-  const gapLimit = Math.max(45 * DAY_MS, medianGap(observations) * 3);
   return Array.from({ length: SAMPLE_COUNT }, (_, index) => {
     const time =
       firstTime + ((lastTime - firstTime) * index) / (SAMPLE_COUNT - 1);
@@ -101,7 +129,7 @@ function estimateEye(observations: TrendObservation[]): TrendEstimate[] {
       iop,
       lower: iop - margin,
       upper: iop + margin,
-      supported: nearestDistance(times, time) <= gapLimit,
+      supported: nearestDistance(supportTimes, time) <= gapLimit,
     };
   });
 }
@@ -110,14 +138,31 @@ export function buildTrendSeries(
   measurements: Measurement[],
   view: MeasurementView,
   aggregation: SessionAggregation,
+  precomputedSessions?: readonly SessionPoint[],
 ): EyeTrend[] {
-  const inputs =
-    view === "raw"
-      ? [...measurements].sort(
+  let rawInputs: readonly Measurement[] = measurements;
+  if (view === "raw") {
+    for (let index = 1; index < measurements.length; index += 1) {
+      const previous = measurements[index - 1];
+      const current = measurements[index];
+      if (
+        previous.time > current.time ||
+        (previous.time === current.time &&
+          previous.sequence > current.sequence)
+      ) {
+        rawInputs = [...measurements].sort(
           (left, right) =>
             left.time - right.time || left.sequence - right.sequence,
-        )
-      : aggregateMeasurementSessions(measurements, aggregation);
+        );
+        break;
+      }
+    }
+  }
+  const inputs =
+    view === "raw"
+      ? rawInputs
+      : (precomputedSessions ??
+        aggregateMeasurementSessions(measurements, aggregation));
   return (["OD", "OS"] as Eye[]).flatMap((eye) => {
     const observations = inputs
       .filter((input) => input.eye === eye)
