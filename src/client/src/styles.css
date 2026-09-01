@@ -1,6 +1,6 @@
-@import "./shared/styles.css";
-@import "./main-chart/styles.css";
-@import "./comparison-expression.css";
-@import "./app.css";
+@import "./shared/ui/styles.css";
+@import "./features/charts/chronological/styles.css";
+@import "./features/comparison/styles.css";
+@import "./app/styles.css";
 
 .visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }

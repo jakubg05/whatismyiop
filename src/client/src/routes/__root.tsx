@@ -1,6 +1,6 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { ComparisonExpressionProvider } from "../ComparisonExpressionState";
-import { ToastProvider } from "../ToastState";
+import { ToastProvider } from "../app/toast/ToastState";
+import { ComparisonExpressionProvider } from "../features/comparison";
 
 export const Route = createRootRoute({
   component: RootLayout,
