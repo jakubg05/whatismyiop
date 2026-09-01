@@ -11,7 +11,7 @@ function reading(
   position = "Sitting",
 ): Measurement {
   return {
-    sourceRow: minuteOffset + (eye === "OD" ? 2 : 3),
+    sequence: minuteOffset + (eye === "OD" ? 2 : 3),
     time: minuteOffset * minute,
     eye,
     iop,

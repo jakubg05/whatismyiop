@@ -20,16 +20,16 @@ describe("measurement import", () => {
     expect(parseMeasurementsCsv("Date / Time;IOP (OD);IOP (OS)\n")).toEqual([]);
   });
 
-  it("sorts measurements while retaining their source rows", () => {
+  it("sorts measurements and assigns a stable sequence", () => {
     const measurements = parseMeasurementsCsv(`Date / Time;IOP (OD);IOP (OS)
 2026-01-02T08:00:00;21;
 2026-01-01T08:00:00;;19`);
 
     expect(
-      measurements.map(({ sourceRow, eye, iop }) => ({ sourceRow, eye, iop })),
+      measurements.map(({ sequence, eye, iop }) => ({ sequence, eye, iop })),
     ).toEqual([
-      { sourceRow: 3, eye: "OS", iop: 19 },
-      { sourceRow: 2, eye: "OD", iop: 21 },
+      { sequence: 0, eye: "OS", iop: 19 },
+      { sequence: 1, eye: "OD", iop: 21 },
     ]);
   });
 
@@ -40,7 +40,7 @@ describe("measurement import", () => {
 2026-03-02T08:00:00;;`);
 
     expect(measurements).toHaveLength(1);
-    expect(measurements[0]).toMatchObject({ sourceRow: 3, eye: "OS", iop: 22 });
+    expect(measurements[0]).toMatchObject({ sequence: 0, eye: "OS", iop: 22 });
   });
 
   it("trims BOM-prefixed headers and supplies display defaults", () => {
@@ -52,6 +52,18 @@ describe("measurement import", () => {
       quality: "Not recorded",
       position: "Sitting",
     });
+  });
+
+  it("discards unsupported CSV fields", () => {
+    const [measurement] = parseMeasurementsCsv(
+      "Date / Time;IOP (OD);IOP (OS);Quality OD;Position;Patient Name;Tonometer Number\n2026-01-01T08:00:00;20;;Good;Sitting;Private Person;ABC-123",
+    );
+
+    expect(Object.keys(measurement).sort()).toEqual(
+      ["eye", "iop", "position", "quality", "sequence", "time"].sort(),
+    );
+    expect(JSON.stringify(measurement)).not.toContain("Private Person");
+    expect(JSON.stringify(measurement)).not.toContain("ABC-123");
   });
 
   it("reports all missing required columns", () => {

@@ -2,13 +2,23 @@ import { Link } from "@tanstack/react-router";
 import { Button, GitHubIcon } from "../ui";
 import { ClearDataDialog } from "./ClearDataDialog";
 
+const shortDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "UTC",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
 type SiteFooterProps =
   | { variant: "compact" }
   | {
       variant: "full";
-      fileName: string;
+      workspaceActive: boolean;
       measurementCount: number;
+      firstMeasurementTime?: number;
+      lastMeasurementTime?: number;
       onChooseFile: () => void;
+      onGenerateReport: () => void;
       onClearData: () => void;
     };
 
@@ -45,25 +55,29 @@ export function SiteFooter(props: SiteFooterProps) {
           <section className="site-footer__privacy">
             <h2>Stored in your browser</h2>
             <p>
-              Your CSV, periods, and events stay in this browser. WhatIsMyIOP
-              does not upload them or require an account.
+              Your measurements, periods, and Annotations stay in this browser.
+              WhatIsMyIOP does not upload them or require an account.
             </p>
           </section>
         )}
 
-        {full && props.fileName && (
+        {full && props.workspaceActive && (
           <section className="site-footer__data">
-            <h2>Your local data</h2>
+            <h2>Measurement history</h2>
             <div className="site-footer__file">
-              <strong>{props.fileName}</strong>
-              <span>
-                {props.measurementCount > 0
-                  ? `${props.measurementCount.toLocaleString()} measurements stored locally`
-                  : "Treatment history stored locally"}
-              </span>
+              <strong>
+                {props.measurementCount.toLocaleString()} measurements
+              </strong>
+              {props.firstMeasurementTime !== undefined && props.lastMeasurementTime !== undefined && (
+                <span>
+                  {shortDateFormatter.format(props.firstMeasurementTime)} to{" "}
+                  {shortDateFormatter.format(props.lastMeasurementTime)}
+                </span>
+              )}
             </div>
             <div className="site-footer__actions">
-              <Button onClick={props.onChooseFile}>Update measurements</Button>
+              <Button onClick={props.onGenerateReport}>Generate report</Button>
+              <Button variant="quiet" onClick={props.onChooseFile}>Import file</Button>
               <ClearDataDialog onConfirm={props.onClearData} />
             </div>
           </section>

@@ -28,7 +28,7 @@ export function aggregateMeasurementSessions(
   aggregation: SessionAggregation = "median",
 ): SessionPoint[] {
   const ordered = [...measurements].sort(
-    (left, right) => left.time - right.time || left.sourceRow - right.sourceRow,
+    (left, right) => left.time - right.time || left.sequence - right.sequence,
   );
   const sessions: MeasurementSession[] = [];
 

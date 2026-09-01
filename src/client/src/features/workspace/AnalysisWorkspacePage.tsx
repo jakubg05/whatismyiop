@@ -21,7 +21,7 @@ import {
 } from "../../shared/lib/wallClock";
 import {
   ComparisonExpressionEditor,
-  NOW_COMPARISON_EVENT_ID,
+  NOW_COMPARISON_ANNOTATION_ID,
   parseComparisonExpression,
   resolveComparisonSegments,
   type ComparisonCatalog,
@@ -32,7 +32,7 @@ import {
   normalizePeriodEdges,
   periodPalette,
   type EditablePeriod,
-  type TimelineEvent,
+  type PointAnnotation,
   type TreatmentPeriod,
 } from "../annotations";
 import {
@@ -40,7 +40,7 @@ import {
   binDiurnalSessions,
   diurnalYAxisScale,
 } from "../charts/diurnal";
-import { ImportPanel } from "../data-import";
+import { ImportConfirmationDialog, ImportPanel } from "../data-import";
 import {
   ChartEditor,
   MeasurementsChart,
@@ -51,6 +51,9 @@ import {
 import { SiteFooter } from "../../shared/layout/SiteFooter";
 import {
   deserializeWorkspace,
+  deserializeReport,
+  REPORT_FILE_EXTENSION,
+  serializeReport,
   serializeWorkspace,
   WORKSPACE_STORAGE_KEY,
   type Workspace,
@@ -58,8 +61,11 @@ import {
 import { SiteHeader } from "../../shared/layout/SiteHeader";
 import { useToast } from "../../app/toast/ToastProvider";
 
-const EMPTY_MEASUREMENTS_CSV = "Date / Time;IOP (OD);IOP (OS)\n";
 const NO_MEASUREMENTS: Measurement[] = [];
+
+type PendingImport =
+  | { kind: "measurements"; measurements: Measurement[]; fileName: string }
+  | { kind: "report"; workspace: Workspace; fileName: string };
 
 function emptyDraftPeriod(): EditablePeriod {
   return {
@@ -87,10 +93,13 @@ function wallClockTimestamp(time = Date.now()): number {
 
 export function AnalysisWorkspacePage() {
   const fileInput = useRef<HTMLInputElement>(null);
+  const measurementFileInput = useRef<HTMLInputElement>(null);
+  const reportFileInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const [comparisonText, setComparisonText] = useState("");
   const { showToast } = useToast();
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
+  const [pendingImport, setPendingImport] = useState<PendingImport | null>(null);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [visibleEyes, setVisibleEyes] = useState<Record<Eye, boolean>>({
     OD: true,
@@ -113,22 +122,22 @@ export function AnalysisWorkspacePage() {
     useState<ComparisonValuePreview | null>(null);
   const [draftPeriod, setDraftPeriod] =
     useState<EditablePeriod>(emptyDraftPeriod);
-  const [draftEvent, setDraftEvent] = useState({
+  const [draftAnnotation, setDraftAnnotation] = useState({
     label: "",
     date: "",
     clock: "",
   });
   const [draftLabelError, setDraftLabelError] = useState<{
-    kind: "period" | "event";
+    kind: "period" | "annotation";
     message: string;
   } | null>(null);
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
 
   const workspaceActive = workspace !== null;
   const measurements = workspace?.measurements ?? NO_MEASUREMENTS;
   const periods = workspace?.periods ?? [];
-  const events = workspace?.events ?? [];
+  const annotations = workspace?.annotations ?? [];
   const updatePeriods = useCallback(
     (update: (current: TreatmentPeriod[]) => TreatmentPeriod[]) => {
       setWorkspace((current) =>
@@ -137,10 +146,10 @@ export function AnalysisWorkspacePage() {
     },
     [],
   );
-  const updateEvents = useCallback(
-    (update: (current: TimelineEvent[]) => TimelineEvent[]) => {
+  const updateAnnotations = useCallback(
+    (update: (current: PointAnnotation[]) => PointAnnotation[]) => {
       setWorkspace((current) =>
-        current ? { ...current, events: update(current.events) } : current,
+        current ? { ...current, annotations: update(current.annotations) } : current,
       );
     },
     [],
@@ -148,9 +157,9 @@ export function AnalysisWorkspacePage() {
   const resetEditor = useCallback(() => {
     setMode(null);
     setDraftPeriod(emptyDraftPeriod());
-    setDraftEvent({ label: "", date: "", clock: "" });
+    setDraftAnnotation({ label: "", date: "", clock: "" });
     setEditingPeriodId(null);
-    setEditingEventId(null);
+    setEditingAnnotationId(null);
     setDraftLabelError(null);
   }, []);
   const diurnalObservations = useMemo(
@@ -181,8 +190,8 @@ export function AnalysisWorkspacePage() {
   const today = formatDateInput(now);
   const currentTime = formatTimeInput(now);
   const comparisonCatalog = useMemo<ComparisonCatalog>(
-    () => ({ periods, events, now }),
-    [events, now, periods],
+    () => ({ periods, annotations, now }),
+    [annotations, now, periods],
   );
   const comparisonExpression = useMemo(
     () => parseComparisonExpression(comparisonText, comparisonCatalog),
@@ -215,23 +224,23 @@ export function AnalysisWorkspacePage() {
         ? { kind: "period", value: periods[paletteIndex], paletteIndex }
         : null;
     }
-    if (comparisonValuePreview?.kind === "event") {
+    if (comparisonValuePreview?.kind === "annotation") {
       if (comparisonValuePreview.label === "now") {
         return {
-          kind: "event",
-          value: { id: NOW_COMPARISON_EVENT_ID, label: "now", time: now },
-          paletteIndex: events.length,
+          kind: "annotation",
+          value: { id: NOW_COMPARISON_ANNOTATION_ID, label: "now", time: now },
+          paletteIndex: annotations.length,
         };
       }
-      const paletteIndex = events.findIndex(
+      const paletteIndex = annotations.findIndex(
         (item) => item.label === comparisonValuePreview.label,
       );
       return paletteIndex >= 0
-        ? { kind: "event", value: events[paletteIndex], paletteIndex }
+        ? { kind: "annotation", value: annotations[paletteIndex], paletteIndex }
         : null;
     }
     return null;
-  }, [comparisonValuePreview, events, now, periods]);
+  }, [comparisonValuePreview, annotations, now, periods]);
   const diurnalSeries = useMemo(
     () =>
       comparisonPeriods.map((period, index) => {
@@ -309,7 +318,7 @@ export function AnalysisWorkspacePage() {
   }, [chartFullDomain, measurements]);
 
   useEffect(() => {
-    if (!comparisonMode || (mode !== "period" && mode !== "event")) return;
+    if (!comparisonMode || (mode !== "period" && mode !== "annotation")) return;
     resetEditor();
   }, [comparisonMode, mode, resetEditor]);
 
@@ -335,28 +344,71 @@ export function AnalysisWorkspacePage() {
     }
   }, [showToast, workspace]);
 
+  function finishImport(nextWorkspace: Workspace, message: string) {
+    setWorkspace(nextWorkspace);
+    setPendingImport(null);
+    setComparisonText("");
+    resetEditor();
+    showToast(message, "info");
+  }
+
+  function applyImport(next: PendingImport) {
+    if (next.kind === "report") {
+      finishImport(next.workspace, `Opened ${next.fileName}`);
+      return;
+    }
+    finishImport(
+      {
+        measurements: next.measurements,
+        periods: workspace?.periods ?? [],
+        annotations: workspace?.annotations ?? [],
+      },
+      `Imported ${next.measurements.length.toLocaleString()} measurements.`,
+    );
+  }
+
   async function loadFile(file: File) {
     try {
-      const csvText = await file.text();
-      const nextMeasurements = parseMeasurementsCsv(csvText);
-      setWorkspace((current) => ({
-        fileName: file.name,
-        csvText,
-        measurements: nextMeasurements,
-        periods: current?.measurements.length === 0 ? current.periods : [],
-        events: current?.measurements.length === 0 ? current.events : [],
-      }));
-      setComparisonText("");
-      resetEditor();
+      const text = await file.text();
+      const next: PendingImport = text.trimStart().startsWith("{")
+        ? { kind: "report", workspace: deserializeReport(text), fileName: file.name }
+        : { kind: "measurements", measurements: parseMeasurementsCsv(text), fileName: file.name };
+      const needsConfirmation = next.kind === "report"
+        ? workspace !== null
+        : measurements.length > 0;
+      if (needsConfirmation) setPendingImport(next);
+      else applyImport(next);
     } catch (reason) {
       showToast(
         reason instanceof Error
           ? reason.message
-          : "Could not read this CSV file.",
+          : "Could not read this file.",
         "warning",
       );
     }
   }
+
+  useEffect(() => {
+    if (workspaceActive) return;
+    function handlePaste(event: ClipboardEvent) {
+      const target = event.target;
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) return;
+      const files = Array.from(event.clipboardData?.files ?? []);
+      if (files.length === 0) return;
+      event.preventDefault();
+      if (files.length !== 1) {
+        showToast("Paste one file at a time.", "warning");
+        return;
+      }
+      void loadFile(files[0]);
+    }
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  });
 
   function clearStoredData() {
     window.localStorage.removeItem(WORKSPACE_STORAGE_KEY);
@@ -367,14 +419,31 @@ export function AnalysisWorkspacePage() {
 
   function continueWithoutMeasurements() {
     setWorkspace({
-      fileName: "Treatment history",
-      csvText: EMPTY_MEASUREMENTS_CSV,
       measurements: [],
       periods: [],
-      events: [],
+      annotations: [],
     });
     setComparisonText("");
     resetEditor();
+  }
+
+  function generateReport() {
+    if (!workspace) return;
+    const now = new Date();
+    const localDate = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+    const blob = new Blob([serializeReport(workspace, now)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `report-${localDate}${REPORT_FILE_EXTENSION}`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   function savePeriod() {
@@ -441,43 +510,43 @@ export function AnalysisWorkspacePage() {
     resetEditor();
   }
 
-  function eventTimestamp(source = draftEvent): number | null {
+  function annotationTimestamp(source = draftAnnotation): number | null {
     return parseDateTimeBoundary(source.date, source.clock);
   }
 
-  function saveEvent() {
-    const time = eventTimestamp();
-    const label = draftEvent.label.trim();
+  function saveAnnotation() {
+    const time = annotationTimestamp();
+    const label = draftAnnotation.label.trim();
     if (!label) {
-      const message = "Enter an event name in the label on the chart.";
-      setDraftLabelError({ kind: "event", message });
+      const message = "Enter an annotation name in the label on the chart.";
+      setDraftLabelError({ kind: "annotation", message });
       showToast(message, "warning");
       return;
     }
     if (time === null) {
-      showToast("Choose a date and time for the event.", "warning");
+      showToast("Choose a date and time for the annotation.", "warning");
       return;
     }
     const labelError = annotationLabelError(
       label,
-      "event",
+      "annotation",
       comparisonCatalog,
-      editingEventId ?? undefined,
+      editingAnnotationId ?? undefined,
     );
     if (labelError) {
-      setDraftLabelError({ kind: "event", message: labelError });
+      setDraftLabelError({ kind: "annotation", message: labelError });
       showToast(labelError, "warning");
       return;
     }
-    if (editingEventId) {
-      const nextEvent = { id: editingEventId, label, time };
-      updateEvents((current) =>
-        current.map((event) =>
-          event.id === editingEventId ? nextEvent : event,
+    if (editingAnnotationId) {
+      const nextAnnotation = { id: editingAnnotationId, label, time };
+      updateAnnotations((current) =>
+        current.map((annotation) =>
+          annotation.id === editingAnnotationId ? nextAnnotation : annotation,
         ),
       );
     } else {
-      updateEvents((current) => [
+      updateAnnotations((current) => [
         ...current,
         { id: crypto.randomUUID(), label, time },
       ]);
@@ -491,9 +560,9 @@ export function AnalysisWorkspacePage() {
         current.filter((period) => period.id !== editingPeriodId),
       );
     }
-    if (editingEventId) {
-      updateEvents((current) =>
-        current.filter((event) => event.id !== editingEventId),
+    if (editingAnnotationId) {
+      updateAnnotations((current) =>
+        current.filter((annotation) => annotation.id !== editingAnnotationId),
       );
     }
     resetEditor();
@@ -520,12 +589,16 @@ export function AnalysisWorkspacePage() {
     event.preventDefault();
     dragDepth.current = 0;
     setIsDraggingFile(false);
-    const file = event.dataTransfer.files[0];
-    if (file) void loadFile(file);
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length !== 1) {
+      if (files.length > 1) showToast("Drop one file at a time.", "warning");
+      return;
+    }
+    void loadFile(files[0]);
   }
 
-  const setDraftEventTime = useCallback((time: number) => {
-    setDraftEvent((current) => ({
+  const setDraftAnnotationTime = useCallback((time: number) => {
+    setDraftAnnotation((current) => ({
       ...current,
       date: formatDateInput(time),
       clock: formatTimeInput(time),
@@ -541,13 +614,13 @@ export function AnalysisWorkspacePage() {
     [resetEditor],
   );
 
-  const selectEvent = useCallback(
+  const selectAnnotation = useCallback(
     (time: number) => {
       resetEditor();
-      setDraftEventTime(time);
-      setMode("event");
+      setDraftAnnotationTime(time);
+      setMode("annotation");
     },
-    [resetEditor, setDraftEventTime],
+    [resetEditor, setDraftAnnotationTime],
   );
 
   const editPeriod = useCallback(
@@ -567,16 +640,16 @@ export function AnalysisWorkspacePage() {
     [resetEditor],
   );
 
-  const editEvent = useCallback(
-    (event: TimelineEvent) => {
+  const editAnnotation = useCallback(
+    (annotation: PointAnnotation) => {
       resetEditor();
-      setDraftEvent({
-        label: event.label,
-        date: formatDateInput(event.time),
-        clock: formatTimeInput(event.time),
+      setDraftAnnotation({
+        label: annotation.label,
+        date: formatDateInput(annotation.time),
+        clock: formatTimeInput(annotation.time),
       });
-      setEditingEventId(event.id);
-      setMode("event");
+      setEditingAnnotationId(annotation.id);
+      setMode("annotation");
     },
     [resetEditor],
   );
@@ -585,7 +658,7 @@ export function AnalysisWorkspacePage() {
     setVisibleEyes((current) => ({ ...current, [eye]: !current[eye] }));
   }, []);
   const openInfo = useCallback(
-    (nextMode: Exclude<ChartMode, "period" | "event" | null>) => {
+    (nextMode: Exclude<ChartMode, "period" | "annotation" | null>) => {
       resetEditor();
       setMode(nextMode);
     },
@@ -607,12 +680,12 @@ export function AnalysisWorkspacePage() {
     [maximumIop, minimumIop, targetEnabled, targetValue],
   );
   const activeDraftLabelError =
-    (mode === "period" || mode === "event") && draftLabelError?.kind === mode
+    (mode === "period" || mode === "annotation") && draftLabelError?.kind === mode
       ? draftLabelError.message
       : null;
   const showComparisonBlockedToast = useCallback(() => {
     showToast(
-      "Clear the search expressions before creating or editing periods and events.",
+      "Clear the search expressions before creating or editing periods and annotations.",
       "warning",
     );
   }, [showToast]);
@@ -623,7 +696,7 @@ export function AnalysisWorkspacePage() {
         ref={fileInput}
         hidden
         type="file"
-        accept=".csv,text/csv"
+        accept={`.csv,${REPORT_FILE_EXTENSION}`}
         onClick={(event) => {
           event.currentTarget.value = "";
         }}
@@ -632,6 +705,45 @@ export function AnalysisWorkspacePage() {
           if (file) void loadFile(file);
         }}
       />
+      <input
+        ref={measurementFileInput}
+        hidden
+        type="file"
+        accept=".csv,text/csv"
+        onClick={(event) => { event.currentTarget.value = ""; }}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void loadFile(file);
+        }}
+      />
+      <input
+        ref={reportFileInput}
+        hidden
+        type="file"
+        accept={REPORT_FILE_EXTENSION}
+        onClick={(event) => { event.currentTarget.value = ""; }}
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file) void loadFile(file);
+        }}
+      />
+
+      {pendingImport?.kind === "measurements" && (
+        <ImportConfirmationDialog
+          kind="measurements"
+          currentCount={measurements.length}
+          nextCount={pendingImport.measurements.length}
+          onCancel={() => setPendingImport(null)}
+          onConfirm={() => applyImport(pendingImport)}
+        />
+      )}
+      {pendingImport?.kind === "report" && (
+        <ImportConfirmationDialog
+          kind="report"
+          onCancel={() => setPendingImport(null)}
+          onConfirm={() => applyImport(pendingImport)}
+        />
+      )}
 
       <div
         className={`analysis-shell ${mode ? "analysis-shell--editor-open" : ""}`}
@@ -643,6 +755,8 @@ export function AnalysisWorkspacePage() {
             <ImportPanel
               isDraggingFile={isDraggingFile}
               onChooseFile={() => fileInput.current?.click()}
+              onChooseMeasurements={() => measurementFileInput.current?.click()}
+              onChooseReport={() => reportFileInput.current?.click()}
               onContinueWithoutMeasurements={continueWithoutMeasurements}
               onDragEnter={handleDragEnter}
               onDragOver={handleDragOver}
@@ -662,6 +776,11 @@ export function AnalysisWorkspacePage() {
             </div>
           )}
 
+          <div
+            className={`chronological-workspace${!workspaceActive ? " chronological-workspace--inactive" : ""}`}
+            inert={!workspaceActive}
+            aria-hidden={!workspaceActive}
+          >
           <MeasurementsChart
             measurements={measurements}
             visibleEyes={visibleEyes}
@@ -670,16 +789,16 @@ export function AnalysisWorkspacePage() {
             onOpenSessionInfo={openSessionInfo}
             onOpenHeatmapInfo={openHeatmapInfo}
             periods={periods}
-            events={events}
+            annotations={annotations}
             comparisonPeriods={comparisonPeriods}
             comparisonMode={comparisonMode}
             annotationPreview={chartAnnotationPreview}
             onComparisonBlocked={showComparisonBlockedToast}
             mode={mode}
             onSelectPeriod={selectPeriod}
-            onSelectEvent={selectEvent}
+            onSelectAnnotation={selectAnnotation}
             onEditPeriod={editPeriod}
-            onEditEvent={editEvent}
+            onEditAnnotation={editAnnotation}
             onCancelEdit={resetEditor}
             draftPeriod={draftPeriod}
             draftPeriodLabel={draftPeriod.label}
@@ -688,13 +807,13 @@ export function AnalysisWorkspacePage() {
               setDraftLabelError(null);
               setDraftPeriod(value);
             }}
-            draftEventLabel={draftEvent.label}
-            onDraftEventLabel={(label) => {
+            draftAnnotationLabel={draftAnnotation.label}
+            onDraftAnnotationLabel={(label) => {
               setDraftLabelError(null);
-              setDraftEvent((value) => ({ ...value, label }));
+              setDraftAnnotation((value) => ({ ...value, label }));
             }}
-            draftEventTime={eventTimestamp(draftEvent)}
-            onDraftEventTime={setDraftEventTime}
+            draftAnnotationTime={annotationTimestamp(draftAnnotation)}
+            onDraftAnnotationTime={setDraftAnnotationTime}
             today={today}
             presentTime={now}
             domain={chartDomain}
@@ -706,6 +825,7 @@ export function AnalysisWorkspacePage() {
             onTargetEnabledChange={setTargetEnabled}
             onTargetValueChange={changeTargetValue}
           />
+          </div>
 
           <section className="comparison-workspace">
             <section className="diurnal-section">
@@ -745,9 +865,12 @@ export function AnalysisWorkspacePage() {
 
           <SiteFooter
             variant="full"
-            fileName={workspace?.fileName ?? ""}
+            workspaceActive={workspaceActive}
             measurementCount={measurements.length}
+            firstMeasurementTime={measurements[0]?.time}
+            lastMeasurementTime={measurements.at(-1)?.time}
             onChooseFile={() => fileInput.current?.click()}
+            onGenerateReport={generateReport}
             onClearData={clearStoredData}
           />
         </div>
@@ -755,11 +878,11 @@ export function AnalysisWorkspacePage() {
         <ChartEditor
           mode={mode}
           draftPeriodLabel={draftPeriod.label}
-          draftEventLabel={draftEvent.label}
+          draftAnnotationLabel={draftAnnotation.label}
           labelError={activeDraftLabelError}
-          isEditing={Boolean(editingPeriodId || editingEventId)}
+          isEditing={Boolean(editingPeriodId || editingAnnotationId)}
           onSavePeriod={savePeriod}
-          onSaveEvent={saveEvent}
+          onSaveAnnotation={saveAnnotation}
           onDelete={deleteDraft}
           onCancel={resetEditor}
           onOpenSessionInfo={openSessionInfo}

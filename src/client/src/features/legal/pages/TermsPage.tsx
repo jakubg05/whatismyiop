@@ -31,8 +31,9 @@ export function TermsPage() {
         <h2>File compatibility</h2>
         <p>
           The website currently supports CSV exports from the iCare HOME2
-          tonometer. Other device models and export formats may differ and may
-          not work. References to iCare HOME2 identify file compatibility only;
+          tonometer and versioned WhatIsMyIOP report files. Other device models
+          and export formats may differ and may not work. References to iCare
+          HOME2 identify file compatibility only;
           WhatIsMyIOP.com is independent and is not affiliated with or endorsed
           by the device manufacturer.
         </p>

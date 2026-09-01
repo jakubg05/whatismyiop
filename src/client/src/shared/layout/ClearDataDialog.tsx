@@ -46,7 +46,7 @@ export function ClearDataDialog({ onConfirm }: { onConfirm: () => void }) {
           <div className="clear-data-dialog__copy">
             <h2 id="clear-data-dialog-title">Clear all local data</h2>
             <p id="clear-data-dialog-description">
-              This permanently removes your measurements, periods, and events
+              This permanently removes your measurements, periods, and annotations
               from this browser.
             </p>
           </div>

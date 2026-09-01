@@ -91,7 +91,7 @@
 }
 .legal-callout {
   padding: var(--s5);
-  border: 1px solid #d8dde2;
+  border: 0.0625rem solid #d8dde2;
   border-radius: var(--radius-panel);
   background: #f5f7f8;
 }

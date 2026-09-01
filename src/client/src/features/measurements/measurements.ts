@@ -4,7 +4,7 @@ import { parseWallClockTimestamp } from "../../shared/lib/wallClock";
 export type Eye = "OD" | "OS";
 
 export type Measurement = {
-  sourceRow: number;
+  sequence: number;
   time: number;
   eye: Eye;
   iop: number;
@@ -48,7 +48,7 @@ export function parseMeasurementsCsv(csvText: string): Measurement[] {
     const time = parseWallClockTimestamp(String(row["Date / Time"] ?? ""));
     if (time === null) return [];
 
-    const sourceRow = index + 2;
+    const sequence = index;
     const position = String(row.Position ?? "").trim();
     return EYE_COLUMNS.flatMap(
       ({ eye, pressure: pressureColumn, quality: qualityColumn }) => {
@@ -56,7 +56,7 @@ export function parseMeasurementsCsv(csvText: string): Measurement[] {
         if (iop === null) return [];
         return [
           {
-            sourceRow,
+            sequence,
             time,
             eye,
             iop,
@@ -68,7 +68,10 @@ export function parseMeasurementsCsv(csvText: string): Measurement[] {
     );
   });
 
-  return measurements.sort(
-    (left, right) => left.time - right.time || left.sourceRow - right.sourceRow,
-  );
+  return measurements
+    .sort(
+      (left, right) =>
+        left.time - right.time || left.sequence - right.sequence,
+    )
+    .map((measurement, sequence) => ({ ...measurement, sequence }));
 }

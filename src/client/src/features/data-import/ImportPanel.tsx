@@ -6,6 +6,8 @@ import { ImportActions } from "./ImportActions";
 type Props = {
   isDraggingFile: boolean;
   onChooseFile: () => void;
+  onChooseMeasurements: () => void;
+  onChooseReport: () => void;
   onContinueWithoutMeasurements: () => void;
   onDragEnter: DragEventHandler<HTMLElement>;
   onDragOver: DragEventHandler<HTMLElement>;
@@ -16,6 +18,8 @@ type Props = {
 export function ImportPanel({
   isDraggingFile,
   onChooseFile,
+  onChooseMeasurements,
+  onChooseReport,
   onContinueWithoutMeasurements,
   onDragEnter,
   onDragOver,
@@ -26,7 +30,7 @@ export function ImportPanel({
     <>
       <section
         className={`import-dropzone${isDraggingFile ? " import-dropzone--dragging" : ""}`}
-        aria-label="Import IOP measurements"
+        aria-label="Import IOP measurements or a WhatIsMyIOP report"
         onDragEnter={onDragEnter}
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
@@ -34,20 +38,26 @@ export function ImportPanel({
       >
         <svg className="import-dropzone__outline" aria-hidden="true">
           <rect
-            x="1"
-            y="1"
-            width="calc(100% - 2px)"
-            height="calc(100% - 2px)"
-            rx="13"
+            x="0.0625rem"
+            y="0.0625rem"
+            width="calc(100% - 0.125rem)"
+            height="calc(100% - 0.125rem)"
+            rx="0.8125rem"
             vectorEffect="non-scaling-stroke"
           />
         </svg>
         <ImportActions
           onChooseFile={onChooseFile}
+          onChooseMeasurements={onChooseMeasurements}
+          onChooseReport={onChooseReport}
           onContinueWithoutMeasurements={onContinueWithoutMeasurements}
         />
         <div className="import-dropzone__facts" aria-label="Import details">
-          <span>Currently supports iCare HOME2 CSV exports</span>
+          <span>iCare HOME2 CSV</span>
+          <span aria-hidden="true">·</span>
+          <span>WhatIsMyIOP report</span>
+          <span aria-hidden="true">·</span>
+          <span>Drop or paste a file</span>
           <span aria-hidden="true">·</span>
           <a
             href="https://github.com/jakubg05/whatismyiop"
@@ -60,7 +70,7 @@ export function ImportPanel({
           </a>
         </div>
         <p className="import-dropzone__notice">
-          Your file is saved in this browser until you clear it. This tool does
+          The imported data is saved in this browser until you clear it. This tool does
           not diagnose conditions or recommend treatment.{" "}
           <Link to="/policy">Privacy</Link> ·{" "}
           <Link to="/disclaimer">Medical disclaimer</Link>
@@ -80,7 +90,7 @@ export function ImportPanel({
           pressure patterns and which times of day have fewer measurements.
         </p>
         <p>
-          Periods let you show ongoing treatments on the chart, while events
+          Periods let you show ongoing treatments on the chart, while Annotations
           mark one-time changes or procedures. Use them to compare parts of your
           history or see what happened before and after a change. If you change
           eye-care professionals, you have a chronological record of treatment

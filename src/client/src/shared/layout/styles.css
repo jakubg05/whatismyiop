@@ -108,7 +108,7 @@
 .clear-data-dialog {
   width: min(28rem, calc(100vw - 2rem));
   padding: 0;
-  border: 1px solid var(--editor-divider);
+  border: 0.0625rem solid var(--editor-divider);
   border-radius: 0.875rem;
   background: var(--editor-canvas);
   color: var(--editor-ink);
@@ -194,7 +194,7 @@
 .site-footer__bottom {
   grid-column: 1 / -1;
   padding-top: var(--s4);
-  border-top: 1px solid var(--dark-hover);
+  border-top: 0.0625rem solid var(--dark-hover);
   display: flex;
   flex-wrap: wrap;
   align-items: center;

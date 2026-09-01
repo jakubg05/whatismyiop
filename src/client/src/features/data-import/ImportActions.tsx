@@ -3,11 +3,15 @@ import { Button, MaterialSymbol, useDismissiblePopover } from "../../shared/ui";
 
 type Props = {
   onChooseFile: () => void;
+  onChooseMeasurements: () => void;
+  onChooseReport: () => void;
   onContinueWithoutMeasurements: () => void;
 };
 
 export function ImportActions({
   onChooseFile,
+  onChooseMeasurements,
+  onChooseReport,
   onContinueWithoutMeasurements,
 }: Props) {
   const root = useRef<HTMLDivElement>(null);
@@ -37,7 +41,7 @@ export function ImportActions({
           onClick={onChooseFile}
         >
           <MaterialSymbol name="file_upload" />
-          <span>Choose CSV export</span>
+          <span>Choose file</span>
         </Button>
         <button
           type="button"
@@ -52,6 +56,24 @@ export function ImportActions({
       </div>
       {open && (
         <div id={menuId} className="import-actions__menu">
+          <button type="button" onClick={() => {
+            setOpen(false);
+            onChooseMeasurements();
+          }}>
+            <MaterialSymbol name="file_upload" />
+            <span>Import iCare CSV</span>
+          </button>
+          <button type="button" onClick={() => {
+            setOpen(false);
+            onChooseReport();
+          }}>
+            <img
+              className="import-actions__report-logo"
+              src="/whatismyiop_mark_black.svg"
+              alt=""
+            />
+            <span>Open WhatIsMyIOP report</span>
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -60,7 +82,7 @@ export function ImportActions({
             }}
           >
             <MaterialSymbol name="file_upload_off" />
-            <span>Start without a CSV</span>
+            <span>Start empty</span>
           </button>
         </div>
       )}

@@ -38,7 +38,7 @@
 .import-dropzone--dragging {
   --drop-outline: hsl(0 0% 60%);
   background: hsl(0 0% 96.5%);
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 3%);
+  box-shadow: inset 0 0 0 0.0625rem rgb(0 0 0 / 3%);
 }
 .import-dropzone .ui-button--primary {
   min-height: 3.3rem;
@@ -66,7 +66,7 @@
 }
 .import-actions {
   position: relative;
-  width: 16.8rem;
+  width: min(16.8rem, 100%);
   filter: drop-shadow(0 0.9rem 1.5rem rgb(0 0 0 / 14%));
 }
 .import-actions__split {
@@ -85,7 +85,7 @@
 .import-dropzone .import-actions__toggle {
   width: 3.6rem;
   min-height: 3.3rem;
-  border: 1px solid var(--cta);
+  border: 0.0625rem solid var(--cta);
   border-left-color: rgb(255 255 255 / 18%);
   border-radius: 0 0.6rem 0.6rem 0;
   display: grid;
@@ -126,7 +126,7 @@
   left: 0;
   box-sizing: border-box;
   overflow: hidden;
-  border-top: 1px solid rgb(255 255 255 / 14%);
+  border-top: 0.0625rem solid rgb(255 255 255 / 14%);
   border-radius: 0 0 0.6rem 0.6rem;
   background: var(--floating-surface);
   color: var(--floating-ink);
@@ -154,6 +154,13 @@
   flex: 0 0 auto;
   fill: currentColor;
   opacity: 0.68;
+}
+.import-actions__menu .import-actions__report-logo {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  filter: invert(1);
+  opacity: 0.8;
 }
 .import-actions__menu button:hover,
 .import-actions__menu button:focus-visible {
@@ -239,4 +246,63 @@
   .import-actions__menu {
     animation: none;
   }
+}
+
+.import-confirmation-dialog {
+  width: min(30rem, calc(100vw - 2rem));
+  padding: 0;
+  border: 0.0625rem solid var(--editor-divider);
+  border-radius: 0.875rem;
+  background: var(--editor-canvas);
+  color: var(--editor-ink);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 38%);
+  color-scheme: dark;
+}
+.import-confirmation-dialog::backdrop {
+  background: rgb(0 0 0 / 64%);
+}
+.import-confirmation-dialog__form {
+  padding: var(--s5);
+  display: grid;
+  gap: var(--s4);
+}
+.import-confirmation-dialog__copy {
+  display: grid;
+  gap: var(--s2);
+}
+.import-confirmation-dialog h2 {
+  color: var(--editor-ink);
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+.import-confirmation-dialog p {
+  color: var(--editor-muted);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.import-confirmation-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+.import-confirmation-dialog .ui-button--secondary {
+  border-color: transparent;
+  background: var(--editor-button);
+  color: var(--editor-ink);
+}
+.import-confirmation-dialog .ui-button--secondary:hover,
+.import-confirmation-dialog .ui-button--secondary:focus-visible {
+  border-color: transparent;
+  background: var(--editor-input);
+}
+.import-confirmation-dialog .ui-button--danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+.import-confirmation-dialog .ui-button--danger:hover,
+.import-confirmation-dialog .ui-button--danger:focus-visible {
+  border-color: #b94b3d;
+  background: #b94b3d;
+  color: #fff;
 }

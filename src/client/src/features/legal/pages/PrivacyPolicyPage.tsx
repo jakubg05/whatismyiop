@@ -4,29 +4,31 @@ export function PrivacyPolicyPage() {
   return (
     <LegalDocumentLayout
       title="Privacy and local data policy"
-      summary="The measurement file is handled by code running in your browser. The website does not send its contents to the site operator."
+      summary="Measurement exports and WhatIsMyIOP reports are handled by code running in your browser. The website does not send their contents to the site operator."
     >
       <section>
-        <h2>Your measurement file</h2>
+        <h2>Your imported files</h2>
         <p>
-          When you choose a CSV file, the application reads and analyses it
-          locally in your browser. The application does not transmit the file,
-          its filename, its measurements, your saved periods, or your
-          annotations to the site operator or Cloudflare.
+          When you choose an iCare CSV or WhatIsMyIOP report, the application
+          reads it locally in your browser. The application does not transmit
+          the file, its measurements, your saved periods, or your annotations
+          to the site operator or Cloudflare.
         </p>
         <p>
-          The file may contain health-related information, including dates and
-          times, right- and left-eye pressure measurements, measurement quality,
-          position, and any other text present in supported columns.
+          An iCare CSV may contain information that this application does not
+          need, such as a person&apos;s name or a tonometer number. The application
+          keeps only measurement date and time, eye, pressure, quality,
+          position, and ordering. It discards the original CSV text and all
+          other columns after parsing.
         </p>
       </section>
 
       <section>
         <h2>Storage on your device</h2>
         <p>
-          To restore your work when you return, the application saves the raw
-          CSV text, filename, periods, and annotations in this browser&apos;s
-          local storage under <code>whatismyiop:v1</code>. It remains there
+          To restore your work when you return, the application saves the
+          supported measurement fields, periods, and annotations in this
+          browser&apos;s local storage under <code>whatismyiop:v1</code>. They remain there
           until you use <strong>Clear data</strong>, clear this site&apos;s
           browser data, or remove the browser profile.
         </p>
@@ -38,12 +40,27 @@ export function PrivacyPolicyPage() {
       </section>
 
       <section>
+        <h2>Generated reports</h2>
+        <p>
+          You can download an editable WhatIsMyIOP report containing the saved
+          measurements, periods, annotations, and report metadata. The report is
+          generated locally and is not uploaded by the application.
+        </p>
+        <p>
+          Reports are not encrypted. Anyone who can access a report file may be
+          able to read its health-related information. If you send a report by
+          email, messaging, cloud storage, or another service, that service
+          handles the file under its own terms and privacy practices.
+        </p>
+      </section>
+
+      <section>
         <h2>Website delivery data</h2>
         <p>
           The site is delivered using Cloudflare. Like other web-hosting and
           security providers, Cloudflare may process connection information such
           as your IP address, requested URL, request time, browser or device
-          information, routing information, and security events. This
+          information, routing information, and security annotations. This
           information is used to deliver the site, maintain availability, and
           protect it from abuse.
         </p>
@@ -68,7 +85,7 @@ export function PrivacyPolicyPage() {
         <h2>Cookies and similar technologies</h2>
         <p>
           The application does not currently set advertising or analytics
-          cookies. It uses local storage only for the measurement-file state
+          cookies. It uses local storage only for the workspace state
           described above. If analytics, advertising, cloud sync, accounts, or
           another non-essential technology is introduced, this policy and any
           required consent controls must be updated first.

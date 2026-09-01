@@ -6,6 +6,11 @@
   padding: 0 var(--gutter) 3rem;
   transition: margin-inline-end var(--medium) var(--ease);
 }
+.chronological-workspace--inactive {
+  opacity: 0.5;
+  pointer-events: none;
+  user-select: none;
+}
 .analysis-shell--editor-open .analysis-main {
   margin-inline-end: var(--editor-width);
 }
