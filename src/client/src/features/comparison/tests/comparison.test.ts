@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  NOW_COMPARISON_EVENT_ID,
+  NOW_COMPARISON_ANNOTATION_ID,
   canonicalizeComparisonExpression,
   comparisonCompletionContext,
   parseComparisonExpression,
@@ -38,7 +38,7 @@ const catalog: ComparisonCatalog = {
       openEnded: true,
     },
   ],
-  events: [
+  annotations: [
     { id: "xalatan", label: "Xalatan", time: Date.UTC(2026, 4, 15, 8, 30) },
   ],
   now: Date.UTC(2026, 5, 1, 12, 0),
@@ -152,7 +152,7 @@ describe("comparison expression grammar", () => {
     ).toHaveLength(1);
   });
 
-  it("only permits event values after a direction", () => {
+  it("only permits annotation values after a direction", () => {
     expect(parseComparisonExpression("Xalatan", catalog)).toMatchObject({
       segments: [],
       expected: "segment-start",
@@ -163,17 +163,17 @@ describe("comparison expression grammar", () => {
     ).toHaveLength(1);
   });
 
-  it("treats now as a built-in event target without adding it to the saved catalog", () => {
+  it("treats now as a built-in annotation target without adding it to the saved catalog", () => {
     const parsed = parseComparisonExpression("before:now", catalog);
     expect(parsed.segments).toEqual([
       expect.objectContaining({
         kind: "relative",
-        targetType: "event",
-        targetId: NOW_COMPARISON_EVENT_ID,
+        targetType: "annotation",
+        targetId: NOW_COMPARISON_ANNOTATION_ID,
         label: "before:now",
       }),
     ]);
-    expect(catalog.events.map((event) => event.label)).toEqual(["Xalatan"]);
+    expect(catalog.annotations.map((event) => event.label)).toEqual(["Xalatan"]);
   });
 
   it("rejects after for an open-ended period", () => {
@@ -289,7 +289,7 @@ describe("Unicode comparison labels", () => {
   it("accepts Unicode labels throughout the grammar", () => {
     const unicodeCatalog: ComparisonCatalog = {
       periods: [{ ...catalog.periods[0], id: "liecba", label: "Liečba_2" }],
-      events: [{ ...catalog.events[0], id: "zmena", label: "Zmena-Å" }],
+      annotations: [{ ...catalog.annotations[0], id: "zmena", label: "Zmena-Å" }],
       now: catalog.now,
     };
     expect(
@@ -310,7 +310,7 @@ describe("comparison segment boundaries", () => {
       end,
     )[0];
 
-  it("creates adjacent minute-precise event windows", () => {
+  it("creates adjacent minute-precise annotation windows", () => {
     expect(segment("range:14d before:Xalatan")).toMatchObject({
       start: "2026-05-01",
       startTime: "08:30",

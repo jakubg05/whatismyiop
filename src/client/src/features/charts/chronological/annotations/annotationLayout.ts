@@ -1,6 +1,6 @@
 import type { TimeDomain } from "../chart/chartNavigation";
 
-export type AnnotationKind = "period" | "event";
+export type AnnotationKind = "period" | "annotation";
 export type AnnotationKey = `${AnnotationKind}:${string}`;
 
 export type AnnotationLabel = {
@@ -59,15 +59,24 @@ export function layoutAnnotationLabels(
     )
     .sort((left, right) => left.time - right.time)
     .map((label) => {
-      const left = ((label.time - domainStart) / domainDuration) * plotWidth;
+      const anchorLeft = Math.max(
+        0,
+        Math.min(
+          plotWidth,
+          ((label.time - domainStart) / domainDuration) * plotWidth,
+        ),
+      );
       const chromeWidth = label.focusKey
         ? INTERACTIVE_LABEL_CHROME_WIDTH
         : STATIC_LABEL_CHROME_WIDTH;
       const compactWidth = Math.min(
-        MAXIMUM_LABEL_WIDTH,
-        Math.max(
-          MINIMUM_LABEL_WIDTH,
-          label.text.length * APPROXIMATE_CHARACTER_WIDTH + chromeWidth,
+        plotWidth,
+        Math.min(
+          MAXIMUM_LABEL_WIDTH,
+          Math.max(
+            MINIMUM_LABEL_WIDTH,
+            label.text.length * APPROXIMATE_CHARACTER_WIDTH + chromeWidth,
+          ),
         ),
       );
       const spanWidth =
@@ -75,7 +84,14 @@ export function layoutAnnotationLabels(
           ? 0
           : ((label.endTime - label.time) / domainDuration) * plotWidth;
       const fullWidth = label.kind === "period" && spanWidth >= compactWidth;
-      const width = fullWidth ? spanWidth : compactWidth;
+      const left = fullWidth
+        ? anchorLeft
+        : Math.min(anchorLeft, Math.max(0, plotWidth - compactWidth));
+      const availableWidth = Math.max(0, plotWidth - left);
+      const width = Math.min(
+        availableWidth,
+        fullWidth ? spanWidth : compactWidth,
+      );
       let lane = laneEnds.findIndex((laneEnd) => left >= laneEnd + LABEL_GAP);
       if (lane === -1) lane = laneEnds.length;
       laneEnds[lane] = left + width;

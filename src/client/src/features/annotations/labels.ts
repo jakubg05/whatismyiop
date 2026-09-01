@@ -1,9 +1,9 @@
-import type { TimelineEvent, TreatmentPeriod } from "./model";
+import type { PointAnnotation, TreatmentPeriod } from "./model";
 
-type AnnotationKind = "period" | "event";
+type AnnotationKind = "period" | "annotation";
 type AnnotationCatalog = {
   periods: readonly TreatmentPeriod[];
-  events: readonly TimelineEvent[];
+  annotations: readonly PointAnnotation[];
 };
 
 const LABEL_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N}_-]*$/u;
@@ -26,11 +26,11 @@ export function annotationLabelError(
   }
   const duplicate = [
     ...catalog.periods.map((value) => ({ ...value, kind: "period" as const })),
-    ...catalog.events.map((value) => ({ ...value, kind: "event" as const })),
+    ...catalog.annotations.map((value) => ({ ...value, kind: "annotation" as const })),
   ].some(
     (value) =>
       !(value.kind === kind && value.id === excludingId) &&
       value.label.toLocaleLowerCase() === normalized,
   );
-  return duplicate ? `A period or event named ${label} already exists.` : null;
+  return duplicate ? `A period or annotation named ${label} already exists.` : null;
 }

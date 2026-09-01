@@ -9,7 +9,7 @@ export type EditablePeriod = {
 
 export type TreatmentPeriod = EditablePeriod & { id: string };
 
-export type TimelineEvent = {
+export type PointAnnotation = {
   id: string;
   label: string;
   time: number;

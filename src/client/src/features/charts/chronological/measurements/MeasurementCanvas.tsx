@@ -15,6 +15,7 @@ import {
 import { CHART_PLOT_INSETS } from "../../shared/chartLayout";
 import { panDomain, type TimeDomain } from "../chart/chartNavigation";
 import { TargetLineOverlay } from "../chart/ChartControls";
+import { remToCssPixels } from "../../../../shared/lib/cssUnits";
 import {
   chartVisibilityAlpha,
   type ChartDimming,
@@ -71,11 +72,15 @@ type PanGesture = {
 type AnnotationDrag = { pointerId: number };
 type NavigationModifier = "annotate" | "zoom" | null;
 const COLORS = { OD: "#a63d74", OS: "#3f7d4e" } as const;
-const HIT_RADIUS = 12;
 const RAW_RADIUS = 2;
 const SESSION_RADIUS = 4;
 const COLLIDING_SESSION_GAP = 2;
 const SESSION_POINT_SEPARATION = SESSION_RADIUS * 2 + COLLIDING_SESSION_GAP;
+
+function pointerHitRadius(): number {
+  const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  return remToCssPixels(coarsePointer ? 1.375 : 0.75);
+}
 
 export function MeasurementCanvas({
   measurements,
@@ -166,7 +171,7 @@ export function MeasurementCanvas({
       [
         ...visibleMeasurements.map((measurement) => ({
           kind: "raw" as const,
-          id: `raw:${measurement.sourceRow}:${measurement.eye}`,
+          id: `raw:${measurement.sequence}:${measurement.eye}`,
           time: measurement.time,
           eye: measurement.eye,
           iop: measurement.iop,
@@ -188,7 +193,7 @@ export function MeasurementCanvas({
     for (const point of chartPoints) {
       if (point.kind !== "session") continue;
       for (const measurement of point.session.measurements)
-        points.set(measurement.sourceRow, point);
+        points.set(measurement.sequence, point);
     }
     return points;
   }, [chartPoints]);
@@ -394,7 +399,7 @@ export function MeasurementCanvas({
         const pointSessionId =
           point.kind === "session"
             ? point.session.sessionId
-            : sessionPointBySourceRow.get(point.measurement.sourceRow)?.session
+            : sessionPointBySourceRow.get(point.measurement.sequence)?.session
                 .sessionId;
         const radius =
           (point.kind === "session" ? sessionRadius : rawRadius) *
@@ -789,6 +794,7 @@ export function MeasurementCanvas({
     const { bounds, projection } = chartGeometry(canvas);
     const pointerX = clientX - bounds.left;
     const pointerY = clientY - bounds.top;
+    const hitRadius = pointerHitRadius();
     if (!projection.contains(pointerX, pointerY)) return null;
 
     const time = projection.timeForX(pointerX);
@@ -804,7 +810,7 @@ export function MeasurementCanvas({
       if (value === null) continue;
       const y = projection.yForValue(value);
       const distance = Math.abs(y - pointerY);
-      if (distance <= HIT_RADIUS && (!nearest || distance < nearest.distance))
+      if (distance <= hitRadius && (!nearest || distance < nearest.distance))
         nearest = { series, value, y, distance };
     }
     return nearest
@@ -845,16 +851,17 @@ export function MeasurementCanvas({
     const { bounds, projection } = chartGeometry(canvas);
     const pointerX = clientX - bounds.left;
     const pointerY = clientY - bounds.top;
+    const hitRadius = pointerHitRadius();
     if (!projection.contains(pointerX, pointerY)) return null;
     if (chartPoints.length === 0) return null;
 
     const [start, end] = timeIndexRange(
       chartPoints,
-      projection.timeForX(pointerX - HIT_RADIUS - SESSION_POINT_SEPARATION),
-      projection.timeForX(pointerX + HIT_RADIUS + SESSION_POINT_SEPARATION),
+      projection.timeForX(pointerX - hitRadius - SESSION_POINT_SEPARATION),
+      projection.timeForX(pointerX + hitRadius + SESSION_POINT_SEPARATION),
     );
     let best: PositionedCanvasPoint | null = null;
-    let bestDistanceSquared = HIT_RADIUS * HIT_RADIUS;
+    let bestDistanceSquared = hitRadius * hitRadius;
 
     for (let index = start; index < end; index += 1) {
       const point = chartPoints[index];
@@ -867,7 +874,7 @@ export function MeasurementCanvas({
           baseX,
           bounds.width - CHART_PLOT_INSETS.right,
         );
-      if (Math.abs(x - pointerX) > HIT_RADIUS) continue;
+      if (Math.abs(x - pointerX) > hitRadius) continue;
       const y = projection.yForValue(point.iop);
       const distanceSquared = (x - pointerX) ** 2 + (y - pointerY) ** 2;
       if (distanceSquared <= bestDistanceSquared) {
@@ -880,7 +887,7 @@ export function MeasurementCanvas({
         );
         const tooltipPoint =
           !showRawReadings && point.kind === "raw"
-            ? sessionPointBySourceRow.get(point.measurement.sourceRow)
+            ? sessionPointBySourceRow.get(point.measurement.sequence)
             : point;
         if (!tooltipPoint) continue;
         best = {

@@ -19,8 +19,8 @@
 .comparison-expression {
   height: var(--comparison-field-height);
   padding-inline: var(--s3);
-  border: 1px solid var(--line-strong);
-  outline: 1px solid transparent;
+  border: 0.0625rem solid var(--line-strong);
+  outline: 0.0625rem solid transparent;
   outline-offset: 0;
   border-radius: 0.5rem;
   display: grid;
@@ -103,7 +103,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--subtle);
-  font: 400 0.875rem/var (--comparison-line-height) var(--font);
+  font: 400 0.875rem/var(--comparison-line-height) var(--font);
   font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -163,7 +163,7 @@
   width: min(18rem, calc(100vw - 2 * var(--gutter)));
   max-height: 18rem;
   padding: var(--s1);
-  border: 1px solid var(--floating-border);
+  border: 0.0625rem solid var(--floating-border);
   border-radius: 0.75rem;
   overflow: hidden;
   background: var(--floating-surface);
@@ -209,8 +209,8 @@
   > li.comparison-completion__separator {
   display: block;
   width: 100%;
-  min-height: 1px;
-  height: 1px;
+  min-height: 0.0625rem;
+  height: 0.0625rem;
   margin: 0.1875rem 0;
   padding: 0;
   border-radius: 0;
@@ -265,7 +265,7 @@
 
 .comparison-expression__editor
   .cm-editor
-  .comparison-completion__marker--event {
+  .comparison-completion__marker--annotation {
   border-radius: 0.0625rem;
   transform: rotate(45deg);
 }

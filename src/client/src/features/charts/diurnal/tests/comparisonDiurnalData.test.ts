@@ -71,7 +71,7 @@ describe("diurnal aggregation", () => {
 
   it("weights each session once and excludes sessions straddling a boundary", () => {
     const reading = (minute: number, iop: number): Measurement => ({
-      sourceRow: minute + iop,
+      sequence: minute + iop,
       time: Date.UTC(2026, 4, 1, 8, minute),
       eye: "OD",
       iop,

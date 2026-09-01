@@ -10,20 +10,20 @@ import {
 const domain = [0, 100] as const;
 
 describe("annotation keys", () => {
-  it("keeps period and event identities distinct", () => {
+  it("keeps period and annotation identities distinct", () => {
     expect(annotationKey("period", "same-id")).toBe("period:same-id");
-    expect(annotationKey("event", "same-id")).toBe("event:same-id");
+    expect(annotationKey("annotation", "same-id")).toBe("annotation:same-id");
     expect(annotationIsKind("period:same-id", "period")).toBe(true);
-    expect(annotationIsKind("event:same-id", "period")).toBe(false);
+    expect(annotationIsKind("annotation:same-id", "period")).toBe(false);
   });
 });
 
 describe("annotation label layout", () => {
   it("places overlapping labels in separate lanes", () => {
     const labels: AnnotationLabel[] = [
-      { id: "first", kind: "event", text: "First", time: 10 },
-      { id: "second", kind: "event", text: "Second", time: 12 },
-      { id: "third", kind: "event", text: "Third", time: 90 },
+      { id: "first", kind: "annotation", text: "First", time: 10 },
+      { id: "second", kind: "annotation", text: "Second", time: 12 },
+      { id: "third", kind: "annotation", text: "Third", time: 90 },
     ];
     const positioned = layoutAnnotationLabels(
       labels,
@@ -58,31 +58,52 @@ describe("annotation label layout", () => {
     expect(label.width).toBe(600);
   });
 
+  it("keeps labels inside a narrow plot", () => {
+    const [label] = layoutAnnotationLabels(
+      [
+        {
+          id: "edge-annotation",
+          kind: "annotation",
+          text: "An annotation near the right edge",
+          time: 95,
+        },
+      ],
+      domain,
+      200,
+      null,
+      false,
+    );
+
+    expect(label.left).toBe(0);
+    expect(label.width).toBe(200);
+    expect(label.left + label.width).toBeLessThanOrEqual(200);
+  });
+
   it("keeps only the focused label outside preview mode", () => {
     const labels: AnnotationLabel[] = [
       {
         id: "first",
-        focusKey: "event:first",
-        kind: "event",
+        focusKey: "annotation:first",
+        kind: "annotation",
         text: "First",
         time: 10,
       },
       {
         id: "second",
-        focusKey: "event:second",
-        kind: "event",
+        focusKey: "annotation:second",
+        kind: "annotation",
         text: "Second",
         time: 20,
       },
     ];
 
     expect(
-      layoutAnnotationLabels(labels, domain, 1000, "event:second", false).map(
+      layoutAnnotationLabels(labels, domain, 1000, "annotation:second", false).map(
         ({ id }) => id,
       ),
     ).toEqual(["second"]);
     expect(
-      layoutAnnotationLabels(labels, domain, 1000, "event:second", true).map(
+      layoutAnnotationLabels(labels, domain, 1000, "annotation:second", true).map(
         ({ id }) => id,
       ),
     ).toEqual(["first", "second"]);

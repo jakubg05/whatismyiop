@@ -46,6 +46,7 @@ import {
   sharedHeatmapColorDomain,
 } from "../../chronological/heatmap/heatmapInterpolation";
 import { positionHeatmapTooltipAtDataPoint } from "../../chronological/measurements/tooltipPosition";
+import { cssPixelsToRem } from "../../../../shared/lib/cssUnits";
 import {
   RightAxisTicks,
   TimeAxisTick,
@@ -185,7 +186,7 @@ function HeatmapTooltip({
         {
           left: hover.left,
           top: hover.top,
-          "--heatmap-tooltip-notch-top": `${hover.anchorOffset}px`,
+          "--heatmap-tooltip-notch-top": cssPixelsToRem(hover.anchorOffset),
         } as CSSProperties
       }
     >
@@ -875,7 +876,14 @@ export function HistoryHeatmap({
         <div
           className="history-heatmap__tooltip-viewport"
           style={{
-            inset: `${HISTORY_PLOT_INSETS.top}px ${HISTORY_PLOT_INSETS.right}px ${HISTORY_PLOT_INSETS.bottom}px ${HISTORY_PLOT_INSETS.left}px`,
+            inset: [
+              HISTORY_PLOT_INSETS.top,
+              HISTORY_PLOT_INSETS.right,
+              HISTORY_PLOT_INSETS.bottom,
+              HISTORY_PLOT_INSETS.left,
+            ]
+              .map(cssPixelsToRem)
+              .join(" "),
           }}
         >
           {positionedHover && (

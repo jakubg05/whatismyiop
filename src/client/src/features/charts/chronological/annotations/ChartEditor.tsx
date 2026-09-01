@@ -7,11 +7,11 @@ import type { ChartMode } from "../chart/MeasurementsChart";
 export function ChartEditor({
   mode,
   draftPeriodLabel,
-  draftEventLabel,
+  draftAnnotationLabel,
   labelError,
   isEditing,
   onSavePeriod,
-  onSaveEvent,
+  onSaveAnnotation,
   onDelete,
   onCancel,
   onOpenSessionInfo,
@@ -20,11 +20,11 @@ export function ChartEditor({
 }: {
   mode: ChartMode;
   draftPeriodLabel: string;
-  draftEventLabel: string;
+  draftAnnotationLabel: string;
   labelError: string | null;
   isEditing: boolean;
   onSavePeriod: () => void;
-  onSaveEvent: () => void;
+  onSaveAnnotation: () => void;
   onDelete: () => void;
   onCancel: () => void;
   onOpenSessionInfo: () => void;
@@ -52,11 +52,11 @@ export function ChartEditor({
                     ? "How heatmaps work?"
                     : (mode === "period"
                         ? draftPeriodLabel
-                        : draftEventLabel
+                        : draftAnnotationLabel
                       ).trim() || "Untitled"
             }
             subtitle={
-              (mode === "period" || mode === "event") && labelError ? (
+              (mode === "period" || mode === "annotation") && labelError ? (
                 <small
                   id="annotation-name-guidance"
                   className="editor-drawer__name-guidance--warning"
@@ -76,7 +76,7 @@ export function ChartEditor({
                     Delete
                   </button>
                 )}
-                {(mode === "period" || mode === "event") && (
+                {(mode === "period" || mode === "annotation") && (
                   <Button
                     type="submit"
                     form={`${mode}-editor-form`}
@@ -107,12 +107,12 @@ export function ChartEditor({
             }}
           />
         )}
-        {mode === "event" && (
+        {mode === "annotation" && (
           <form
-            id="event-editor-form"
+            id="annotation-editor-form"
             onSubmit={(event) => {
               event.preventDefault();
-              onSaveEvent();
+              onSaveAnnotation();
             }}
           />
         )}

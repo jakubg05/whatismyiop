@@ -115,7 +115,7 @@ export function buildTrendSeries(
     view === "raw"
       ? [...measurements].sort(
           (left, right) =>
-            left.time - right.time || left.sourceRow - right.sourceRow,
+            left.time - right.time || left.sequence - right.sequence,
         )
       : aggregateMeasurementSessions(measurements, aggregation);
   return (["OD", "OS"] as Eye[]).flatMap((eye) => {

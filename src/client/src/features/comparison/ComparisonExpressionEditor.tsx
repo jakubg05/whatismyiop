@@ -40,12 +40,12 @@ import {
   materialSymbolPath,
   type MaterialSymbolName,
 } from "../../shared/ui";
-import { eventPalette, periodPalette } from "../annotations/palette";
+import { annotationPalette, periodPalette } from "../annotations/palette";
 
 type Explanation = { visible: boolean; left: number; message: string };
 type ComparisonVisualCompletion = Completion & { comparisonColor?: string };
 export type ComparisonValuePreview = {
-  kind: "period" | "event";
+  kind: "period" | "annotation";
   label: string;
 };
 const defaultValueCompletionSection: CompletionSection = {
@@ -70,7 +70,7 @@ function completionIconName(completion: Completion): MaterialSymbolName | null {
 
 function materialCompletionIcon(completion: Completion): Node | null {
   if (
-    (completion.type === "period" || completion.type === "event") &&
+    (completion.type === "period" || completion.type === "annotation") &&
     completion.label !== "now"
   ) {
     const marker = document.createElement("span");
@@ -97,7 +97,7 @@ function materialCompletionSupportingText(
   completion: Completion,
 ): HTMLSpanElement | null {
   if (
-    (completion.type !== "period" && completion.type !== "event") ||
+    (completion.type !== "period" && completion.type !== "annotation") ||
     !completion.detail
   )
     return null;
@@ -118,7 +118,7 @@ function comparisonPreviewFromTarget(
     ?.querySelector<HTMLElement>("[data-comparison-preview-kind]");
   const kind = preview?.dataset.comparisonPreviewKind;
   const label = preview?.dataset.comparisonPreviewLabel;
-  return (kind === "period" || kind === "event") && label
+  return (kind === "period" || kind === "annotation") && label
     ? { kind, label }
     : null;
 }
@@ -161,7 +161,7 @@ function noMatchMessage(
 ): string {
   if (expected === "duration")
     return "Expected a whole-day duration such as 14d";
-  if (expected === "target-value") return "No matching period or event";
+  if (expected === "target-value") return "No matching period or annotation";
   if (expected === "and") return "Expected AND";
   if (expected === "direction") return "Expected before: or after:";
   if (expected === "maximum")
@@ -175,7 +175,7 @@ function expectedStateLabel(
   if (expected === "segment-start") return "comparison keyword or saved period";
   if (expected === "duration") return "whole-day duration";
   if (expected === "direction") return "before or after";
-  if (expected === "target-value") return "period or event name";
+  if (expected === "target-value") return "period or annotation name";
   if (expected === "and") return "AND";
   return "six-segment limit";
 }
@@ -192,7 +192,7 @@ function editorCanonicalText(
   return lastToken?.role === "duration" ||
     lastToken?.role === "direct-period-value" ||
     lastToken?.role === "period-value" ||
-    lastToken?.role === "event-value" ||
+    lastToken?.role === "annotation-value" ||
     lastToken?.role === "and"
     ? `${formatted} `
     : formatted;
@@ -359,7 +359,13 @@ export function ComparisonExpressionEditor({
         (context.options.length === 0 || (!hasMatch && query.length > 0));
       const root = composer.current?.getBoundingClientRect();
       const token = view.coordsAtPos(context.from);
-      const popupWidth = Math.min(288, Math.max(0, window.innerWidth - 32));
+      const rootFontSize = Number.parseFloat(
+        window.getComputedStyle(document.documentElement).fontSize,
+      );
+      const popupWidth = Math.min(
+        18 * rootFontSize,
+        Math.max(0, window.innerWidth - 2 * rootFontSize),
+      );
       const desiredLeft = Math.max(
         0,
         (token?.left ?? root?.left ?? 0) - (root?.left ?? 0),
@@ -426,26 +432,26 @@ export function ComparisonExpressionEditor({
                   (period) => period.label === option.label,
                 )
               : -1;
-          const eventIndex =
-            option.type === "event"
+          const annotationIndex =
+            option.type === "annotation"
               ? option.label === "now"
-                ? catalog.events.length
-                : catalog.events.findIndex(
+                ? catalog.annotations.length
+                : catalog.annotations.findIndex(
                     (event) => event.label === option.label,
                   )
               : -1;
           const completion: ComparisonVisualCompletion = {
             label: option.label,
             detail:
-              option.type === "period" || option.type === "event"
+              option.type === "period" || option.type === "annotation"
                 ? option.detail
                 : undefined,
             type: option.type,
             comparisonColor:
               periodIndex >= 0
                 ? periodPalette(periodIndex).stroke
-                : eventIndex >= 0
-                  ? eventPalette(eventIndex)
+                : annotationIndex >= 0
+                  ? annotationPalette(annotationIndex)
                   : undefined,
             section:
               query.length === 0 &&
@@ -523,7 +529,7 @@ export function ComparisonExpressionEditor({
         .find((token) => token.to === from);
       if (
         previous &&
-        (previous.role === "period-value" || previous.role === "event-value")
+        (previous.role === "period-value" || previous.role === "annotation-value")
       ) {
         const insert = `${previous.canonical} `;
         view.dispatch({

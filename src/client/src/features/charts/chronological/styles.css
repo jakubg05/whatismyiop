@@ -1,6 +1,12 @@
 :root {
-  --chart-height: 28rem;
-  --chart-plot-right: 44px;
+  --chart-height: clamp(22rem, 58svh, 28rem);
+  --chart-plot-left: 3.25rem;
+  --chart-plot-right: 2.75rem;
+  --chart-history-top: 0.75rem;
+  --chart-history-bottom: 2.5rem;
+  --chart-diurnal-top: 1rem;
+  --chart-diurnal-bottom: 3.125rem;
+  --heatmap-overlap: 2.5rem;
 }
 .chart-panel {
   max-width: 92rem;
@@ -24,7 +30,7 @@
 .chart-shortcuts__trigger {
   min-height: var(--control-sm);
   padding: 0 var(--s3);
-  border: 1px solid var(--line);
+  border: 0.0625rem solid var(--line);
   border-radius: var(--radius);
   outline: 0;
   display: inline-flex;
@@ -61,7 +67,7 @@
 }
 .chart-shortcuts__menu {
   width: 100%;
-  border: 1px solid var(--line);
+  border: 0.0625rem solid var(--line);
   border-radius: 0.75rem;
   overflow: hidden;
   background: #fff;
@@ -81,7 +87,7 @@
   margin: 0;
 }
 .chart-shortcuts__menu dl > div + div {
-  border-top: 1px solid var(--line);
+  border-top: 0.0625rem solid var(--line);
 }
 .chart-shortcuts__menu dt,
 .chart-shortcuts__menu dd {
@@ -97,7 +103,7 @@
 }
 .chart-shortcuts__menu kbd {
   padding: 0.0625rem 0.3rem;
-  border: 1px solid var(--line);
+  border: 0.0625rem solid var(--line);
   border-radius: 0.25rem;
   background: transparent;
   color: var(--ink);
@@ -120,18 +126,18 @@
   position: relative;
   min-width: 0;
   min-height: var(--control-sm);
-  border: 1px solid var(--line);
+  border: 0.0625rem solid var(--line);
   border-radius: var(--radius);
   display: inline-flex;
   background: var(--canvas);
 }
 .ui-chart-select__trigger {
   width: auto;
-  min-height: calc(var(--control-sm) - 2px);
+  min-height: calc(var(--control-sm) - 0.125rem);
   height: 100%;
   padding: 0 var(--s2);
   border: 0;
-  border-radius: calc(var(--radius) - 1px);
+  border-radius: calc(var(--radius) - 0.0625rem);
   outline: 0;
   display: flex;
   align-items: center;
@@ -180,16 +186,16 @@
   position: absolute;
   z-index: 30;
   top: 100%;
-  left: -1px;
+  left: -0.0625rem;
   width: max-content;
-  min-width: calc(100% + 2px);
+  min-width: calc(100% + 0.125rem);
   padding-top: 0.375rem;
 }
 .ui-chart-select__menu {
   width: max-content;
   min-width: 100%;
   padding: var(--s1);
-  border: 1px solid var(--floating-border);
+  border: 0.0625rem solid var(--floating-border);
   border-radius: 0.75rem;
   display: grid;
   overflow: hidden;
@@ -295,7 +301,8 @@
 .measurement-view-control__sessions {
   min-height: 0;
   border: 0;
-  border-radius: calc(var(--radius) - 1px) 0 0 calc(var(--radius) - 1px);
+  border-radius: calc(var(--radius) - 0.0625rem) 0 0
+    calc(var(--radius) - 0.0625rem);
   transition:
     background-color var(--fast) var(--ease),
     color var(--fast) var(--ease);
@@ -327,8 +334,9 @@
 .measurement-view-control__raw {
   min-width: 3.25rem;
   padding: 0 var(--s2);
-  border-left: 1px solid var(--line) !important;
-  border-radius: 0 calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0;
+  border-left: 0.0625rem solid var(--line) !important;
+  border-radius: 0 calc(var(--radius) - 0.0625rem)
+    calc(var(--radius) - 0.0625rem) 0;
   font-size: 0.75rem;
   font-weight: 500;
   transition:
@@ -340,7 +348,7 @@
   padding: var(--s1);
 }
 .chart-control__popover {
-  right: -1px;
+  right: -0.0625rem;
   left: auto;
   min-width: 13.75rem;
 }
@@ -469,7 +477,7 @@
   min-height: 1rem;
   height: 1rem;
   padding: 0;
-  border-radius: 999px;
+  border-radius: 999rem;
   display: block;
   gap: 0;
   background: transparent;
@@ -492,7 +500,7 @@
   width: 100%;
 }
 .chart-composite--heatmap .history-heatmap {
-  margin-top: -40px;
+  margin-top: calc(-1 * var(--heatmap-overlap));
 }
 .history-heatmap {
   --heatmap-expanded-height: calc(clamp(16rem, 25vw, 20rem) + 2.25rem);
@@ -527,23 +535,23 @@
   pointer-events: none;
 }
 .chart-right-axis--history {
-  top: 12px;
-  bottom: 40px;
+  top: var(--chart-history-top);
+  bottom: var(--chart-history-bottom);
 }
 .chart-right-axis--heatmap {
   top: 0;
-  bottom: 40px;
+  bottom: var(--chart-history-bottom);
 }
 .chart-right-axis--diurnal {
-  top: 16px;
-  bottom: 50px;
+  top: var(--chart-diurnal-top);
+  bottom: var(--chart-diurnal-bottom);
 }
 .chart-right-axis--history,
 .chart-right-axis--diurnal {
-  border-left: 1px solid #666;
+  border-left: 0.0625rem solid #666;
 }
 .chart-right-axis--heatmap {
-  border-left: 1px solid var(--line);
+  border-left: 0.0625rem solid var(--line);
 }
 .chart-right-axis__tick {
   position: absolute;
@@ -558,11 +566,11 @@
   white-space: nowrap;
 }
 .chart-right-axis__tick > i {
-  flex: 0 0 6px;
-  height: 1px;
+  flex: 0 0 0.375rem;
+  height: 0.0625rem;
 }
 .chart-right-axis__tick > span {
-  margin-left: 2px;
+  margin-left: 0.125rem;
   line-height: 1;
 }
 .chart-right-axis--history .chart-right-axis__tick > i,
@@ -571,16 +579,16 @@
 }
 .chart-right-axis--history .chart-right-axis__tick > span,
 .chart-right-axis--diurnal .chart-right-axis__tick > span {
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .chart-right-axis--heatmap .chart-right-axis__tick > i {
   background: var(--line);
 }
 .chart-right-axis--heatmap .chart-right-axis__tick > span {
-  font-size: 11px;
+  font-size: 0.6875rem;
 }
 .chart-right-axis--heatmap .chart-right-axis__tick--top > span {
-  transform: translateY(7px);
+  transform: translateY(0.4375rem);
 }
 .history-heatmap__canvas {
   position: absolute;
@@ -595,8 +603,8 @@
   cursor: grabbing;
 }
 .history-heatmap__canvas:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
+  outline: 0.125rem solid var(--accent);
+  outline-offset: -0.125rem;
 }
 .history-heatmap__uncertainty {
   position: absolute;
@@ -687,7 +695,7 @@
 }
 .history-heatmap__legend {
   width: max-content;
-  max-width: calc(100% - 96px);
+  max-width: calc(100% - var(--chart-plot-left) - var(--chart-plot-right));
   min-height: 1.5rem;
   margin: var(--s1) 0 0 auto;
   padding: 0;
@@ -718,7 +726,7 @@
 .history-heatmap__legend-scale > i {
   width: 100%;
   height: 0.375rem;
-  border-radius: 999px;
+  border-radius: 999rem;
   background: linear-gradient(
     90deg,
     #000004,
@@ -727,7 +735,7 @@
     #f98e09,
     #fcffa4
   );
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 8%);
+  box-shadow: inset 0 0 0 0.0625rem rgb(0 0 0 / 8%);
 }
 .history-heatmap__legend-ticks {
   display: grid;
@@ -754,7 +762,7 @@
   }
   to {
     max-height: var(--heatmap-expanded-height);
-    margin-top: -40px;
+    margin-top: calc(-1 * var(--heatmap-overlap));
     opacity: 1;
     transform: translateY(0) scaleY(1);
     clip-path: inset(0);
@@ -763,7 +771,7 @@
 @keyframes heatmap-disappear {
   from {
     max-height: var(--heatmap-expanded-height);
-    margin-top: -40px;
+    margin-top: calc(-1 * var(--heatmap-overlap));
     opacity: 1;
     transform: translateY(0) scaleY(1);
     clip-path: inset(0);
@@ -779,7 +787,8 @@
 .chart-daylight-background {
   position: absolute;
   z-index: 0;
-  inset: 12px var(--chart-plot-right) 40px 52px;
+  inset: var(--chart-history-top) var(--chart-plot-right)
+    var(--chart-history-bottom) var(--chart-plot-left);
   overflow: hidden;
   pointer-events: none;
   transition: opacity 160ms var(--ease);
@@ -808,8 +817,8 @@
   position: absolute;
   z-index: 6;
   right: var(--chart-plot-right);
-  bottom: calc(100% - 12px);
-  left: 52px;
+  bottom: calc(100% - var(--chart-history-top));
+  left: var(--chart-plot-left);
   overflow: visible;
   pointer-events: none;
 }
@@ -818,7 +827,7 @@
   max-width: 18.75rem;
   padding: 0.1875rem 0.4375rem;
   border: 0;
-  border-left: 2px solid var(--accent);
+  border-left: 0.125rem solid var(--accent);
   display: flex;
   align-items: center;
   gap: 0.3125rem;
@@ -873,7 +882,7 @@
 .chart-annotation-label--muted {
   opacity: 0.24;
 }
-.chart-annotation-label--event {
+.chart-annotation-label--annotation {
   background: #eee9f4;
   color: #65448f;
 }
@@ -885,11 +894,11 @@
   background: #fff6cd !important;
   color: #5e4b12 !important;
   opacity: 1;
-  box-shadow: 0 0 0 3px rgb(183 137 0 / 22%);
+  box-shadow: 0 0 0 0.1875rem rgb(183 137 0 / 22%);
 }
 .chart-annotation-label--range-wide {
   max-width: none;
-  border-inline-width: 2px;
+  border-inline-width: 0.125rem;
   border-inline-style: solid;
 }
 .chart-wrap .recharts-wrapper {
@@ -925,20 +934,22 @@
   pointer-events: none;
 }
 .target-line-overlay--history {
-  inset: 12px var(--chart-plot-right) 40px 52px;
+  inset: var(--chart-history-top) var(--chart-plot-right)
+    var(--chart-history-bottom) var(--chart-plot-left);
 }
 .target-line-overlay--diurnal {
-  inset: 16px var(--chart-plot-right) 20px 52px;
+  inset: var(--chart-diurnal-top) var(--chart-plot-right) 1.25rem
+    var(--chart-plot-left);
 }
 .target-line-overlay__rule {
   position: absolute;
   top: var(--target-line-position);
   right: 0;
   left: 0;
-  height: 3px;
+  height: 0.1875rem;
   transform: translateY(-50%);
   background: var(--target);
-  box-shadow: 0 1px 1px rgb(255 255 255 / 32%);
+  box-shadow: 0 0.0625rem 0.0625rem rgb(255 255 255 / 32%);
 }
 .target-line-overlay__rule span {
   position: absolute;
@@ -964,7 +975,8 @@
 .measurement-canvas-tooltip-viewport {
   position: absolute;
   z-index: 4;
-  inset: 12px var(--chart-plot-right) 40px 52px;
+  inset: var(--chart-history-top) var(--chart-plot-right)
+    var(--chart-history-bottom) var(--chart-plot-left);
   overflow: hidden;
   pointer-events: none;
 }
@@ -1009,7 +1021,8 @@
   margin-left: var(--s1);
 }
 .measurement-canvas-tooltip--trend {
-  min-width: 15rem;
+  width: min(15rem, calc(100vw - 2 * var(--gutter)));
+  max-width: 100%;
 }
 .measurement-canvas-tooltip--trend.measurement-canvas-tooltip--notch-bottom {
   transform: translateY(-100%);
@@ -1056,22 +1069,23 @@
 .chart-selection-layer {
   position: absolute;
   z-index: 45;
-  inset: 12px var(--chart-plot-right) 40px 52px;
+  inset: var(--chart-history-top) var(--chart-plot-right)
+    var(--chart-history-bottom) var(--chart-plot-left);
   overflow: visible;
   pointer-events: none;
 }
 .annotation-date-anchor {
   position: absolute;
   inset-block: 0;
-  width: 2px;
+  width: 0.125rem;
   pointer-events: none;
 }
 .selection-handle {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 2px;
-  margin-left: -1px;
+  width: 0.125rem;
+  margin-left: -0.0625rem;
   background: var(--selection-color, #6c8eac);
   pointer-events: auto;
   cursor: ew-resize;
@@ -1091,14 +1105,14 @@
 }
 .selection-drag-preview--draft {
   display: block;
-  border-inline: 1px dashed var(--selection-color, #6c8eac);
+  border-inline: 0.0625rem dashed var(--selection-color, #6c8eac);
   background: color-mix(
     in srgb,
     var(--selection-color, #6c8eac) 12%,
     transparent
   );
 }
-.selection-handle--event {
+.selection-handle--annotation {
   background: var(--selection-color, var(--accent));
 }
 .selection-handle > span {
@@ -1108,12 +1122,12 @@
   width: 0.875rem;
   height: 1.875rem;
   transform: translate(-50%, -50%);
-  border: 2px solid currentColor;
+  border: 0.125rem solid currentColor;
   border-radius: 0.4375rem;
   background: var(--surface);
   color: var(--selection-color, #6c8eac);
 }
-.selection-handle--event > span {
+.selection-handle--annotation > span {
   color: var(--selection-color, var(--accent));
 }
 .selection-handle__date-control {
@@ -1175,8 +1189,8 @@
 }
 .selection-handle__date-control .selection-handle__date-input:focus,
 .selection-handle__date-control .selection-handle__time-input:focus {
-  outline: 1px solid var(--editor-line);
-  outline-offset: -1px;
+  outline: 0.0625rem solid var(--editor-line);
+  outline-offset: -0.0625rem;
 }
 .selection-handle__date-control .selection-handle__date-input:disabled,
 .selection-handle__date-control .selection-handle__time-input:disabled {
@@ -1256,7 +1270,7 @@
   width: 100%;
   height: 100%;
   padding: 0 var(--s4) var(--s4);
-  border-left: 1px solid var(--editor-divider);
+  border-left: 0.0625rem solid var(--editor-divider);
   display: grid;
   grid-template-rows: auto auto;
   align-content: start;
@@ -1384,7 +1398,7 @@
   object-fit: cover;
   object-position: center;
   display: block;
-  border: 1px solid rgb(255 255 255 / 10%);
+  border: 0.0625rem solid rgb(255 255 255 / 10%);
 }
 .session-explanation__image-pair {
   display: grid;
@@ -1425,7 +1439,30 @@
 }
 @media (max-width: 40rem) {
   :root {
-    --chart-height: 22.5rem;
+    --chart-height: clamp(18rem, 52svh, 22.5rem);
+  }
+
+  .chart-shortcuts {
+    width: 100%;
+  }
+
+  .chart-shortcuts__popover,
+  .ui-chart-select__popover,
+  .chart-control__popover {
+    max-width: calc(100vw - 2 * var(--gutter));
+  }
+
+  .chart-shortcuts__menu dl > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s1);
+  }
+
+  .chart-filters {
+    width: 100%;
+  }
+
+  .ui-chart-select__menu {
+    max-width: calc(100vw - 2 * var(--gutter));
   }
 }
 @media (prefers-reduced-motion: reduce) {

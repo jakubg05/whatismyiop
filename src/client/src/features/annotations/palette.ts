@@ -7,7 +7,7 @@ const PERIOD_PALETTE = [
   { stroke: "#356f70", fill: "#a9cecc" },
 ] as const;
 
-const EVENT_PALETTE = [
+const ANNOTATION_PALETTE = [
   "#8f6aa8",
   "#b56f8a",
   "#b47b5c",
@@ -20,6 +20,6 @@ export function periodPalette(index: number) {
   return PERIOD_PALETTE[index % PERIOD_PALETTE.length];
 }
 
-export function eventPalette(index: number) {
-  return EVENT_PALETTE[index % EVENT_PALETTE.length];
+export function annotationPalette(index: number) {
+  return ANNOTATION_PALETTE[index % ANNOTATION_PALETTE.length];
 }

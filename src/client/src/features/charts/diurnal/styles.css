@@ -42,7 +42,7 @@
 .diurnal-chart {
   position: relative;
   width: 100%;
-  height: 24.5rem;
+  height: clamp(20rem, 52svh, 24.5rem);
 }
 .diurnal-chart--inactive {
   padding: var(--s6) var(--s4);
@@ -93,14 +93,14 @@
   outline: 0;
 }
 .series-visibility-control__item:focus-visible {
-  box-shadow: 0 0 0 2px var(--ink);
+  box-shadow: 0 0 0 0.125rem var(--ink);
 }
 .series-visibility-control__item--hidden {
   opacity: 0.42;
 }
 .series-visibility-control__item--hidden .series-visibility-control__swatch {
   background: transparent !important;
-  box-shadow: inset 0 0 0 1.5px currentColor;
+  box-shadow: inset 0 0 0 0.09375rem currentColor;
 }
 .series-visibility-control__swatch {
   width: 0.5rem;
@@ -130,7 +130,7 @@
 
 @media (max-width: 40rem) {
   .diurnal-chart {
-    height: 22.5rem;
+    height: clamp(18rem, 52svh, 22.5rem);
   }
 }
 @media (prefers-reduced-motion: reduce) {

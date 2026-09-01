@@ -18,7 +18,7 @@ function reading(
   position = "Sitting",
 ): Measurement {
   return {
-    sourceRow: dayOffset * 10 + hour + (eye === "OD" ? 1 : 2),
+    sequence: dayOffset * 10 + hour + (eye === "OD" ? 1 : 2),
     time: dayOffset * day + hour * 60 * 60 * 1000,
     eye,
     iop,
@@ -113,7 +113,7 @@ describe("trend estimates", () => {
       reading(index, 12, "OD", 15 + index),
       {
         ...reading(index, 12, "OD", 17 + index),
-        sourceRow: 500 + index,
+        sequence: 500 + index,
         time: index * day + 12 * 60 * 60 * 1000 + 60_000,
       },
     ]).flat();
@@ -130,7 +130,7 @@ describe("trend estimates", () => {
       reading(index, 12, "OD", 15 + index),
       {
         ...reading(index, 12, "OD", 18 + index),
-        sourceRow: 500 + index,
+        sequence: 500 + index,
         time: index * day + 12 * 60 * 60 * 1000 + 60_000,
       },
     ]).flat();

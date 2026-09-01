@@ -3,14 +3,14 @@ import {
   formatTimeInput,
   parseDateTimeBoundary,
 } from "../../shared/lib/wallClock";
-import type { TimelineEvent, TreatmentPeriod } from "../annotations";
+import type { PointAnnotation, TreatmentPeriod } from "../annotations";
 
 type ComparisonDirection = "before" | "after";
-type ComparisonTargetType = "period" | "event";
+type ComparisonTargetType = "period" | "annotation";
 
 export type ComparisonCatalog = {
   periods: readonly TreatmentPeriod[];
-  events: readonly TimelineEvent[];
+  annotations: readonly PointAnnotation[];
   now: number;
 };
 
@@ -49,7 +49,7 @@ type ComparisonTokenRole =
   | "direction"
   | "direct-period-value"
   | "period-value"
-  | "event-value"
+  | "annotation-value"
   | "and";
 
 type ComparisonToken = {
@@ -71,7 +71,7 @@ type ComparisonParseResult = {
 export type ComparisonCompletion = {
   label: string;
   detail?: string;
-  type: "keyword" | "duration" | "period" | "event" | "delimiter";
+  type: "keyword" | "duration" | "period" | "annotation" | "delimiter";
 };
 
 type ComparisonCompletionContext = {
@@ -86,7 +86,7 @@ type ComparisonCompletionContext = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_COMPARISON_DAYS = 36_500;
 const MAX_COMPARISON_SEGMENTS = 6;
-export const NOW_COMPARISON_EVENT_ID = "comparison-now";
+export const NOW_COMPARISON_ANNOTATION_ID = "comparison-now";
 const RECOMMENDED_DURATIONS = ["7d", "14d", "30d", "90d"] as const;
 function durationValue(text: string): number | null {
   if (!/^[1-9][0-9]*d$/.test(text)) return null;
@@ -136,7 +136,7 @@ function readWord(
 
 type ComparisonTarget =
   | { type: "period"; value: TreatmentPeriod }
-  | { type: "event"; value: TimelineEvent };
+  | { type: "annotation"; value: PointAnnotation };
 
 function targetValueByLabel(
   catalog: ComparisonCatalog,
@@ -145,18 +145,18 @@ function targetValueByLabel(
   const normalized = label.toLocaleLowerCase();
   if (normalized === "now") {
     return {
-      type: "event",
-      value: { id: NOW_COMPARISON_EVENT_ID, label: "now", time: catalog.now },
+      type: "annotation",
+      value: { id: NOW_COMPARISON_ANNOTATION_ID, label: "now", time: catalog.now },
     };
   }
   const period = catalog.periods.find(
     (value) => value.label.toLocaleLowerCase() === normalized,
   );
   if (period) return { type: "period", value: period };
-  const event = catalog.events.find(
+  const annotation = catalog.annotations.find(
     (value) => value.label.toLocaleLowerCase() === normalized,
   );
-  return event ? { type: "event", value: event } : null;
+  return annotation ? { type: "annotation", value: annotation } : null;
 }
 
 export function parseComparisonExpression(
@@ -278,7 +278,7 @@ export function parseComparisonExpression(
       }
       const targetLabel = target.value.label;
       const targetRole =
-        target.type === "period" ? "period-value" : "event-value";
+        target.type === "period" ? "period-value" : "annotation-value";
       append({
         from: value.from,
         to: value.to,
@@ -355,8 +355,8 @@ function optionMessage(
       : "Expected a whole-day duration such as 14d";
   if (expected === "target-value")
     return count
-      ? `${count} matching periods and events`
-      : "No matching period or event";
+      ? `${count} matching periods and annotations`
+      : "No matching period or annotation";
   if (expected === "and")
     return count ? "Add another comparison segment" : "Expected AND";
   return count
@@ -409,23 +409,23 @@ function completionsForState(
       ...periodOptions,
     ];
 
-  const eventOptions = catalog.events.map((event) => ({
-    label: event.label,
-    detail: formatDateInput(event.time),
-    type: "event" as const,
+  const annotationOptions = catalog.annotations.map((annotation) => ({
+    label: annotation.label,
+    detail: formatDateInput(annotation.time),
+    type: "annotation" as const,
   }));
-  eventOptions.push({
+  annotationOptions.push({
     label: "now",
     detail: formatDateInput(catalog.now),
-    type: "event",
+    type: "annotation",
   });
-  return [...periodOptions, ...eventOptions];
+  return [...periodOptions, ...annotationOptions];
 }
 
 function tokenExpected(token: ComparisonToken): ComparisonExpectedState {
   if (token.role === "duration") return "duration";
   if (token.role === "direction") return "direction";
-  if (token.role === "period-value" || token.role === "event-value")
+  if (token.role === "period-value" || token.role === "annotation-value")
     return "target-value";
   if (token.role === "and") return "and";
   return "segment-start";
@@ -523,26 +523,26 @@ export function resolveComparisonSegments(
       end = openEnded
         ? presentTime
         : parseDateTimeBoundary(period.end, period.endTime, "end");
-    } else if (definition.targetType === "event") {
-      const event =
-        definition.targetId === NOW_COMPARISON_EVENT_ID
-          ? { id: NOW_COMPARISON_EVENT_ID, label: "now", time: presentTime }
-          : catalog.events.find((item) => item.id === definition.targetId);
-      if (!event) return [];
+    } else if (definition.targetType === "annotation") {
+      const annotation =
+        definition.targetId === NOW_COMPARISON_ANNOTATION_ID
+          ? { id: NOW_COMPARISON_ANNOTATION_ID, label: "now", time: presentTime }
+          : catalog.annotations.find((item) => item.id === definition.targetId);
+      if (!annotation) return [];
       if (definition.days === null) {
-        start = definition.direction === "before" ? domainStart : event.time;
+        start = definition.direction === "before" ? domainStart : annotation.time;
         end =
-          definition.direction === "before" ? event.time - 60_000 : domainEnd;
+          definition.direction === "before" ? annotation.time - 60_000 : domainEnd;
       } else {
         const duration = definition.days * DAY_MS;
         start =
           definition.direction === "before"
-            ? event.time - duration
-            : event.time;
+            ? annotation.time - duration
+            : annotation.time;
         end =
           definition.direction === "before"
-            ? event.time - 60_000
-            : event.time + duration - 60_000;
+            ? annotation.time - 60_000
+            : annotation.time + duration - 60_000;
       }
     } else {
       const period = catalog.periods.find(

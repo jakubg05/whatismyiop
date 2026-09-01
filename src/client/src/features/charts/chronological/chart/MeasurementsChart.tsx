@@ -28,7 +28,7 @@ import {
 } from "../../../measurements";
 import type {
   EditablePeriod,
-  TimelineEvent,
+  PointAnnotation,
   TreatmentPeriod,
 } from "../../../annotations";
 import {
@@ -42,13 +42,14 @@ import {
   formatTimeInput,
   parseDateTimeBoundary,
 } from "../../../../shared/lib/wallClock";
+import { cssPixelsToRem } from "../../../../shared/lib/cssUnits";
 import {
   EyeToggleGroup,
   MaterialSymbol,
   ToggleButtonGroup,
   useHoverPopover,
 } from "../../../../shared/ui";
-import { eventPalette, periodPalette } from "../../../annotations/palette";
+import { annotationPalette, periodPalette } from "../../../annotations/palette";
 import {
   clipDomain,
   daylightBackground,
@@ -80,17 +81,17 @@ import { movePeriodEdge, periodTimeDomain } from "../../../annotations/period";
 import { useChartViewport } from "./useChartViewport";
 
 export type ChartMode =
-  "period" | "event" | "trend" | "sessions" | "heatmap" | null;
+  "period" | "annotation" | "trend" | "sessions" | "heatmap" | null;
 type PositionFilter = "all" | "sitting" | "reclined";
 
 export type ChartAnnotationPreview =
   | { kind: "period"; value: TreatmentPeriod; paletteIndex: number }
-  | { kind: "event"; value: TimelineEvent; paletteIndex: number };
+  | { kind: "annotation"; value: PointAnnotation; paletteIndex: number };
 
 type AnnotationDrag = { start: number; startX: number; moved: boolean };
 type PeriodEdge = "start" | "end";
 type HandleDrag =
-  { kind: "period"; edge: PeriodEdge } | { kind: "event"; time: number };
+  { kind: "period"; edge: PeriodEdge } | { kind: "annotation"; time: number };
 
 const DAY_MS = 86_400_000;
 const POSITION_FILTER_OPTIONS: readonly {
@@ -119,25 +120,25 @@ type Props = {
   onOpenSessionInfo: () => void;
   onOpenHeatmapInfo: () => void;
   periods: TreatmentPeriod[];
-  events: TimelineEvent[];
+  annotations: PointAnnotation[];
   comparisonPeriods: TreatmentPeriod[];
   comparisonMode: boolean;
   annotationPreview: ChartAnnotationPreview | null;
   onComparisonBlocked: () => void;
   mode: ChartMode;
   onSelectPeriod: (period: Omit<EditablePeriod, "label">) => void;
-  onSelectEvent: (time: number) => void;
+  onSelectAnnotation: (time: number) => void;
   onEditPeriod: (period: TreatmentPeriod) => void;
-  onEditEvent: (event: TimelineEvent) => void;
+  onEditAnnotation: (event: PointAnnotation) => void;
   onCancelEdit: () => void;
   draftPeriod: EditablePeriod;
   draftPeriodLabel: string;
   draftLabelError: string | null;
   setDraftPeriod: Dispatch<SetStateAction<EditablePeriod>>;
-  draftEventLabel: string;
-  onDraftEventLabel: (label: string) => void;
-  draftEventTime: number | null;
-  onDraftEventTime: (time: number) => void;
+  draftAnnotationLabel: string;
+  onDraftAnnotationLabel: (label: string) => void;
+  draftAnnotationTime: number | null;
+  onDraftAnnotationTime: (time: number) => void;
   today: string;
   presentTime: number;
   domain: TimeDomain;
@@ -205,7 +206,7 @@ function ChartShortcuts() {
                 <dt>
                   <kbd>Ctrl</kbd> + click
                 </dt>
-                <dd>Add an event</dd>
+                <dd>Add an annotation</dd>
               </div>
               <div className="chart-shortcuts__primary">
                 <dt>
@@ -245,25 +246,25 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   onOpenSessionInfo,
   onOpenHeatmapInfo,
   periods,
-  events,
+  annotations,
   comparisonPeriods,
   comparisonMode,
   annotationPreview,
   onComparisonBlocked,
   mode,
   onSelectPeriod,
-  onSelectEvent,
+  onSelectAnnotation,
   onEditPeriod,
-  onEditEvent,
+  onEditAnnotation,
   onCancelEdit,
   draftPeriod,
   draftPeriodLabel,
   draftLabelError,
   setDraftPeriod,
-  draftEventLabel,
-  onDraftEventLabel,
-  draftEventTime,
-  onDraftEventTime,
+  draftAnnotationLabel,
+  onDraftAnnotationLabel,
+  draftAnnotationTime,
+  onDraftAnnotationTime,
   today,
   presentTime,
   domain,
@@ -301,7 +302,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [positionFilter, setPositionFilter] = useState<PositionFilter>("all");
   const [qualityFilter, setQualityFilter] = useState("all");
   const [showPeriods, setShowPeriods] = useState(true);
-  const [showEvents, setShowEvents] = useState(true);
+  const [showAnnotations, setShowAnnotations] = useState(true);
   const [showTrend, setShowTrend] = useState(true);
   const [visibleTrendEyes, setVisibleTrendEyes] = useState<
     Record<Eye, boolean>
@@ -316,7 +317,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   const [periodHandleEdges, setPeriodHandleEdges] = useState<
     readonly [PeriodEdge, PeriodEdge]
   >(["start", "end"]);
-  const annotationEditorOpen = mode === "period" || mode === "event";
+  const annotationEditorOpen = mode === "period" || mode === "annotation";
   const annotationPreviewActive = annotationPreview !== null;
   const annotationDisplayMode = comparisonMode || annotationPreviewActive;
   const previewFocusKey = annotationPreview
@@ -365,7 +366,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   );
   const daylight = useMemo(() => daylightBackground(domain), [domain]);
 
-  if (!handleDrag.current || handleDrag.current.kind === "event")
+  if (!handleDrag.current || handleDrag.current.kind === "annotation")
     draftPeriodRef.current = draftPeriod;
 
   const focusAnnotationLabelInput = useCallback(
@@ -400,10 +401,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   useEffect(() => {
     setHoveredAnnotation((current) => {
       if (!showPeriods && annotationIsKind(current, "period")) return null;
-      if (!showEvents && annotationIsKind(current, "event")) return null;
+      if (!showAnnotations && annotationIsKind(current, "annotation")) return null;
       return current;
     });
-  }, [showEvents, showPeriods]);
+  }, [showAnnotations, showPeriods]);
 
   const handlePlotHoverTimeChange = useCallback(
     (time: number | null) => {
@@ -456,9 +457,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         (period) => hoverFocus === annotationKey("period", period.id),
       ) ?? null)
     : null;
-  const hoveredEvent = annotationIsKind(hoverFocus, "event")
-    ? (events.find(
-        (event) => hoverFocus === annotationKey("event", event.id),
+  const hoveredPointAnnotation = annotationIsKind(hoverFocus, "annotation")
+    ? (annotations.find(
+        (event) => hoverFocus === annotationKey("annotation", event.id),
       ) ?? null)
     : null;
   const hoveredPeriodStart = hoveredPeriod
@@ -568,7 +569,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         openEnded: false,
       });
     } else {
-      onSelectEvent(end);
+      onSelectAnnotation(end);
     }
     dragRef.current = null;
     if (dragPreview.current) dragPreview.current.style.display = "none";
@@ -583,11 +584,11 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     handleDrag.current = { kind: "period", edge };
   }
 
-  function beginEventHandleDrag(event: ReactPointerEvent<HTMLDivElement>) {
+  function beginAnnotationHandleDrag(event: ReactPointerEvent<HTMLDivElement>) {
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     handleDrag.current = {
-      kind: "event",
+      kind: "annotation",
       time: timeFromClientX(event.clientX).time,
     };
   }
@@ -654,19 +655,25 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     const left = ratioForTime(start) * plotWidth;
     const spanWidth = Math.max(0, ratioForTime(end) * plotWidth - left);
     const compactWidth = Math.min(
-      300,
-      Math.max(72, draftPeriodLabel.length * 7 + 38),
+      plotWidth,
+      Math.min(300, Math.max(72, draftPeriodLabel.length * 7 + 38)),
     );
     const fullWidth = spanWidth >= compactWidth;
-    label.style.left = `${left}px`;
-    label.style.width = `${fullWidth ? spanWidth : compactWidth}px`;
+    const displayLeft = fullWidth
+      ? left
+      : Math.min(left, Math.max(0, plotWidth - compactWidth));
+    const availableWidth = Math.max(0, plotWidth - displayLeft);
+    label.style.left = cssPixelsToRem(displayLeft);
+    label.style.width = cssPixelsToRem(
+      Math.min(availableWidth, fullWidth ? spanWidth : compactWidth),
+    );
     label.classList.toggle("chart-annotation-label--range-wide", fullWidth);
   }
 
-  function moveEventHandle(event: ReactPointerEvent<HTMLDivElement>) {
+  function moveAnnotationHandle(event: ReactPointerEvent<HTMLDivElement>) {
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
     const next = timeFromClientX(event.clientX);
-    handleDrag.current = { kind: "event", time: next.time };
+    handleDrag.current = { kind: "annotation", time: next.time };
     event.currentTarget.style.left = `${next.ratio * 100}%`;
     const tag = event.currentTarget.querySelector<HTMLElement>(
       ".selection-handle__date-control",
@@ -688,12 +695,12 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     handleDrag.current = null;
     setDraggedPeriodFocus(null);
     setPeriodHandleEdges(["start", "end"]);
-    if (pending?.kind === "event") onDraftEventTime(pending.time);
+    if (pending?.kind === "annotation") onDraftAnnotationTime(pending.time);
   }
 
-  function updateDraftEventDateTime(date: string, clock: string) {
+  function updateDraftAnnotationDateTime(date: string, clock: string) {
     const time = parseDateTimeBoundary(date, clock);
-    if (time !== null) onDraftEventTime(time);
+    if (time !== null) onDraftAnnotationTime(time);
   }
 
   function visiblePeriodDomain(period: EditablePeriod): TimeDomain | null {
@@ -707,7 +714,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     if (annotationPreview?.kind === "period") return [annotationPreview.value];
     if (annotationPreviewActive) return [];
     if (comparisonMode) return comparisonPeriods;
-    if (annotationIsKind(focusedAnnotation, "event")) return [];
+    if (annotationIsKind(focusedAnnotation, "annotation")) return [];
     if (annotationIsKind(focusedAnnotation, "period")) {
       return periods.filter(
         (period) => focusedAnnotation === annotationKey("period", period.id),
@@ -723,27 +730,27 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     periods,
     showPeriods,
   ]);
-  const visibleEvents = useMemo(() => {
-    if (annotationPreview?.kind === "event") return [annotationPreview.value];
+  const visibleAnnotations = useMemo(() => {
+    if (annotationPreview?.kind === "annotation") return [annotationPreview.value];
     if (
       annotationPreviewActive ||
       comparisonMode ||
       annotationIsKind(focusedAnnotation, "period")
     )
       return [];
-    if (annotationIsKind(focusedAnnotation, "event")) {
-      return events.filter(
-        (event) => focusedAnnotation === annotationKey("event", event.id),
+    if (annotationIsKind(focusedAnnotation, "annotation")) {
+      return annotations.filter(
+        (event) => focusedAnnotation === annotationKey("annotation", event.id),
       );
     }
-    return showEvents ? events : [];
+    return showAnnotations ? annotations : [];
   }, [
     annotationPreview,
     annotationPreviewActive,
     comparisonMode,
-    events,
+    annotations,
     focusedAnnotation,
-    showEvents,
+    showAnnotations,
   ]);
   const annotationLabels = useMemo(() => {
     const labels: AnnotationLabel[] = [];
@@ -780,21 +787,21 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         });
       }
     }
-    for (const [index, event] of visibleEvents.entries()) {
-      if (event.time >= domainStart && event.time <= domainEnd) {
-        const focusKey = annotationKey("event", event.id);
+    for (const [index, annotation] of visibleAnnotations.entries()) {
+      if (annotation.time >= domainStart && annotation.time <= domainEnd) {
+        const focusKey = annotationKey("annotation", annotation.id);
         const colorIndex =
-          annotationPreview?.kind === "event" &&
-          annotationPreview.value.id === event.id
+          annotationPreview?.kind === "annotation" &&
+          annotationPreview.value.id === annotation.id
             ? annotationPreview.paletteIndex
-            : paletteIndex(events, event, index);
+            : paletteIndex(annotations, annotation, index);
         labels.push({
-          id: event.id,
+          id: annotation.id,
           focusKey,
-          kind: "event",
-          text: focusedAnnotation === focusKey ? draftEventLabel : event.label,
-          time: event.time,
-          color: eventPalette(colorIndex),
+          kind: "annotation",
+          text: focusedAnnotation === focusKey ? draftAnnotationLabel : annotation.label,
+          time: annotation.time,
+          color: annotationPalette(colorIndex),
         });
       }
     }
@@ -811,17 +818,17 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     }
     if (
       !annotationDisplayMode &&
-      mode === "event" &&
-      draftEventTime !== null &&
-      draftEventTime >= domainStart &&
-      draftEventTime <= domainEnd
+      mode === "annotation" &&
+      draftAnnotationTime !== null &&
+      draftAnnotationTime >= domainStart &&
+      draftAnnotationTime <= domainEnd
     ) {
       labels.push({
-        id: "draft-event",
-        kind: "event",
-        text: draftEventLabel.trim() || "Event name",
-        time: draftEventTime,
-        color: eventPalette(events.length),
+        id: "draft-annotation",
+        kind: "annotation",
+        text: draftAnnotationLabel.trim() || "Annotation name",
+        time: draftAnnotationTime,
+        color: annotationPalette(annotations.length),
         draft: true,
       });
     }
@@ -845,18 +852,18 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     domain,
     domainEnd,
     domainStart,
-    draftEventLabel,
-    draftEventTime,
+    draftAnnotationLabel,
+    draftAnnotationTime,
     draftPeriod,
     draftPeriodLabel,
     draggedPeriodFocus,
-    events,
+    annotations,
     focusedAnnotation,
     mode,
     periods,
     presentTime,
     visibleDraftPeriod,
-    visibleEvents,
+    visibleAnnotations,
     visiblePeriods,
   ]);
   const labelLaneCount = annotationLaneCount(annotationLabels);
@@ -867,14 +874,14 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         (period) => activeAnnotation === annotationKey("period", period.id),
       )
     : -1;
-  const focusedEventIndex = annotationIsKind(activeAnnotation, "event")
-    ? events.findIndex(
-        (event) => activeAnnotation === annotationKey("event", event.id),
+  const focusedAnnotationIndex = annotationIsKind(activeAnnotation, "annotation")
+    ? annotations.findIndex(
+        (event) => activeAnnotation === annotationKey("annotation", event.id),
       )
     : -1;
   const selectionColor =
-    mode === "event" || focusedEventIndex >= 0
-      ? eventPalette(focusedEventIndex >= 0 ? focusedEventIndex : events.length)
+    mode === "annotation" || focusedAnnotationIndex >= 0
+      ? annotationPalette(focusedAnnotationIndex >= 0 ? focusedAnnotationIndex : annotations.length)
       : periodPalette(
           focusedPeriodIndex >= 0 ? focusedPeriodIndex : periods.length,
         ).stroke;
@@ -913,8 +920,8 @@ export const MeasurementsChart = memo(function MeasurementsChart({
   ]);
   const dimMeasurements =
     mode === "period" ||
-    mode === "event" ||
-    annotationIsKind(activeAnnotation, "event") ||
+    mode === "annotation" ||
+    annotationIsKind(activeAnnotation, "annotation") ||
     emphasizedRanges.length > 0;
   const dimming = useMemo<ChartDimming>(
     () => ({
@@ -949,10 +956,10 @@ export const MeasurementsChart = memo(function MeasurementsChart({
       );
       if (period) onEditPeriod(period);
     } else {
-      const event = events.find(
-        (item) => annotationKey("event", item.id) === label.focusKey,
+      const annotation = annotations.find(
+        (item) => annotationKey("annotation", item.id) === label.focusKey,
       );
-      if (event) onEditEvent(event);
+      if (annotation) onEditAnnotation(annotation);
     }
   }
 
@@ -1051,12 +1058,20 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     <section className="panel chart-panel">
       <div
         className={`chart-composite${renderHeatmap && measurements.length > 0 ? " chart-composite--heatmap" : ""}`}
-        style={{ marginTop: `${labelLaneCount * ANNOTATION_LANE_HEIGHT}px` }}
+        style={{
+          marginTop: cssPixelsToRem(
+            labelLaneCount * ANNOTATION_LANE_HEIGHT,
+          ),
+        }}
       >
         <div ref={chart} className="chart-wrap">
           <div
             className="chart-annotation-labels"
-            style={{ height: `${labelLaneCount * ANNOTATION_LANE_HEIGHT}px` }}
+            style={{
+              height: cssPixelsToRem(
+                labelLaneCount * ANNOTATION_LANE_HEIGHT,
+              ),
+            }}
           >
             {annotationLabels.map((label) => (
               <div
@@ -1067,7 +1082,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                     ? focusedPeriodLabel
                     : undefined
                 }
-                className={`chart-annotation-label chart-annotation-label--${label.kind === "period" ? "range" : "event"}${label.fullWidth ? " chart-annotation-label--range-wide" : ""}${label.draft ? " chart-annotation-label--draft" : ""}${draftLabelError && (label.draft || label.focusKey === focusedAnnotation) ? " chart-annotation-label--warning" : ""}${annotationIsMuted(label.focusKey) ? " chart-annotation-label--muted" : ""}`}
+                className={`chart-annotation-label chart-annotation-label--${label.kind === "period" ? "range" : "annotation"}${label.fullWidth ? " chart-annotation-label--range-wide" : ""}${label.draft ? " chart-annotation-label--draft" : ""}${draftLabelError && (label.draft || label.focusKey === focusedAnnotation) ? " chart-annotation-label--warning" : ""}${annotationIsMuted(label.focusKey) ? " chart-annotation-label--muted" : ""}`}
                 role={label.focusKey ? "button" : undefined}
                 tabIndex={label.focusKey ? 0 : undefined}
                 onClick={() => label.focusKey && focusAnnotation(label)}
@@ -1086,9 +1101,11 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                 }}
                 onPointerLeave={() => setHoveredAnnotation(null)}
                 style={{
-                  left: `${label.left}px`,
-                  top: `${label.lane * ANNOTATION_LANE_HEIGHT}px`,
-                  width: `${label.width}px`,
+                  left: cssPixelsToRem(label.left),
+                  top: cssPixelsToRem(
+                    label.lane * ANNOTATION_LANE_HEIGHT,
+                  ),
+                  width: cssPixelsToRem(label.width),
                   borderColor: label.color,
                   color: label.color,
                   backgroundColor: label.color
@@ -1102,7 +1119,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                     className="chart-annotation-label__input"
                     type="text"
                     name={`${label.kind}-graph-label`}
-                    aria-label={`${label.kind === "period" ? "Period" : "Event"} label`}
+                    aria-label={`${label.kind === "period" ? "Period" : "annotation"} label`}
                     aria-invalid={
                       draftLabelError &&
                       (label.draft || label.focusKey === focusedAnnotation)
@@ -1114,13 +1131,13 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                     data-1p-ignore
                     data-lpignore="true"
                     placeholder={
-                      label.kind === "period" ? "Period name" : "Event name"
+                      label.kind === "period" ? "Period name" : "Annotation name"
                     }
                     value={
                       label.draft
                         ? label.kind === "period"
                           ? draftPeriodLabel
-                          : draftEventLabel
+                          : draftAnnotationLabel
                         : label.text
                     }
                     onClick={(event) => event.stopPropagation()}
@@ -1131,7 +1148,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                             ...current,
                             label: event.target.value,
                           }))
-                        : onDraftEventLabel(event.target.value)
+                        : onDraftAnnotationLabel(event.target.value)
                     }
                   />
                 ) : (
@@ -1258,20 +1275,20 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                     stroke="none"
                   />
                 )}
-              {visibleEvents.map((event) => {
+              {visibleAnnotations.map((annotation) => {
                 const index =
-                  annotationPreview?.kind === "event" &&
-                  annotationPreview.value.id === event.id
+                  annotationPreview?.kind === "annotation" &&
+                  annotationPreview.value.id === annotation.id
                     ? annotationPreview.paletteIndex
-                    : paletteIndex(events, event, visibleEvents.indexOf(event));
+                    : paletteIndex(annotations, annotation, visibleAnnotations.indexOf(annotation));
                 return (
                   <ReferenceLine
-                    key={event.id}
-                    x={event.time}
-                    stroke={eventPalette(index)}
+                    key={annotation.id}
+                    x={annotation.time}
+                    stroke={annotationPalette(index)}
                     strokeWidth={2}
                     strokeOpacity={
-                      annotationIsMuted(annotationKey("event", event.id))
+                      annotationIsMuted(annotationKey("annotation", annotation.id))
                         ? 0.2
                         : 1
                     }
@@ -1280,11 +1297,11 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               })}
               {!annotationDisplayMode &&
                 focusedAnnotation === null &&
-                mode === "event" &&
-                draftEventTime !== null && (
+                mode === "annotation" &&
+                draftAnnotationTime !== null && (
                   <ReferenceLine
-                    x={draftEventTime}
-                    stroke={eventPalette(events.length)}
+                    x={draftAnnotationTime}
+                    stroke={annotationPalette(annotations.length)}
                     strokeWidth={2}
                     strokeDasharray="4 3"
                   />
@@ -1370,18 +1387,18 @@ export const MeasurementsChart = memo(function MeasurementsChart({
                 )}
               </>
             )}
-            {hoveredEvent && (
+            {hoveredPointAnnotation && (
               <div
                 className="annotation-date-anchor"
-                style={{ left: `${ratioForTime(hoveredEvent.time) * 100}%` }}
+                style={{ left: `${ratioForTime(hoveredPointAnnotation.time) * 100}%` }}
               >
                 <ChartDateTag
-                  ariaLabel="Event date and time"
-                  className="selection-handle__date-control--event"
-                  value={formatDateInput(hoveredEvent.time)}
-                  timeValue={formatTimeInput(hoveredEvent.time)}
-                  displayValue={displayDate(formatDateInput(hoveredEvent.time))}
-                  alignRight={ratioForTime(hoveredEvent.time) > 0.8}
+                  ariaLabel="Annotation date and time"
+                  className="selection-handle__date-control--annotation"
+                  value={formatDateInput(hoveredPointAnnotation.time)}
+                  timeValue={formatTimeInput(hoveredPointAnnotation.time)}
+                  displayValue={displayDate(formatDateInput(hoveredPointAnnotation.time))}
+                  alignRight={ratioForTime(hoveredPointAnnotation.time) > 0.8}
                 />
               </div>
             )}
@@ -1397,35 +1414,35 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               />
             )}
             {mode === "period" && periodHandleEdges.map(renderPeriodHandle)}
-            {mode === "event" && draftEventTime !== null && (
+            {mode === "annotation" && draftAnnotationTime !== null && (
               <div
-                className="selection-handle selection-handle--event"
-                style={{ left: `${ratioForTime(draftEventTime) * 100}%` }}
-                onPointerDown={beginEventHandleDrag}
-                onPointerMove={moveEventHandle}
+                className="selection-handle selection-handle--annotation"
+                style={{ left: `${ratioForTime(draftAnnotationTime) * 100}%` }}
+                onPointerDown={beginAnnotationHandleDrag}
+                onPointerMove={moveAnnotationHandle}
                 onPointerUp={finishHandleDrag}
                 onPointerCancel={finishHandleDrag}
               >
                 <span />
                 <ChartDateTag
-                  ariaLabel="Event date and time"
-                  className="selection-handle__date-control--event"
+                  ariaLabel="Annotation date and time"
+                  className="selection-handle__date-control--annotation"
                   active
-                  value={formatDateInput(draftEventTime)}
-                  timeValue={formatTimeInput(draftEventTime)}
+                  value={formatDateInput(draftAnnotationTime)}
+                  timeValue={formatTimeInput(draftAnnotationTime)}
                   onChange={(date) =>
-                    updateDraftEventDateTime(
+                    updateDraftAnnotationDateTime(
                       date,
-                      formatTimeInput(draftEventTime),
+                      formatTimeInput(draftAnnotationTime),
                     )
                   }
                   onTimeChange={(clock) =>
-                    updateDraftEventDateTime(
-                      formatDateInput(draftEventTime),
+                    updateDraftAnnotationDateTime(
+                      formatDateInput(draftAnnotationTime),
                       clock,
                     )
                   }
-                  alignRight={ratioForTime(draftEventTime) > 0.8}
+                  alignRight={ratioForTime(draftAnnotationTime) > 0.8}
                 />
               </div>
             )}
@@ -1522,9 +1539,9 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               ariaDisabled: comparisonMode,
             },
             {
-              value: "events",
-              label: "Events",
-              checked: showEvents,
+              value: "annotations",
+              label: "annotations",
+              checked: showAnnotations,
               ariaDisabled: comparisonMode,
             },
           ]}
@@ -1534,7 +1551,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             } else if (value === "periods") {
               setShowPeriods((current) => !current);
             } else {
-              setShowEvents((current) => !current);
+              setShowAnnotations((current) => !current);
             }
           }}
         />

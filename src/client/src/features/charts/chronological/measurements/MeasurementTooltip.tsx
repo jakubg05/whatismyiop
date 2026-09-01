@@ -5,6 +5,7 @@ import {
   type SessionPoint,
 } from "../../../measurements";
 import { formatFullTime } from "../../../../shared/lib/wallClock";
+import { cssPixelsToRem } from "../../../../shared/lib/cssUnits";
 import { interpolateTrend, interpolateTrendEstimate } from "../trend/trend";
 import {
   TREND_TOOLTIP_WIDTH,
@@ -178,7 +179,7 @@ function RawReadingTooltipContent({
         )}
         <div>
           <dt>Source</dt>
-          <dd>Row {point.measurement.sourceRow}</dd>
+          <dd>Row {point.measurement.sequence}</dd>
         </div>
       </dl>
     </>
@@ -202,7 +203,9 @@ export function MeasurementTooltip({
         {
           left: positionedPoint.left,
           top: positionedPoint.top,
-          "--trend-tooltip-notch-left": `${positionedPoint.trendNotchLeft ?? TREND_TOOLTIP_WIDTH / 2}px`,
+          "--trend-tooltip-notch-left": cssPixelsToRem(
+            positionedPoint.trendNotchLeft ?? TREND_TOOLTIP_WIDTH / 2,
+          ),
         } as CSSProperties
       }
     >

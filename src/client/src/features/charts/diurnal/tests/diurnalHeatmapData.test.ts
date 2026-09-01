@@ -36,11 +36,11 @@ function session(
 function reading(
   timestamp: string,
   iop: number,
-  sourceRow: number,
+  sequence: number,
 ): Measurement {
   const time = Date.parse(`${timestamp}Z`);
   return {
-    sourceRow,
+    sequence,
     time,
     eye: "OD",
     iop,
