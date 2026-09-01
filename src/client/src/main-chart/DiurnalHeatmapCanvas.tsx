@@ -9,6 +9,7 @@ import { CHART_PLOT_LEFT, CHART_PLOT_RIGHT, formatChartTime } from "./format";
 import { heatmapBracket, heatmapColorPosition, heatmapValueAt, heatmapValueFromBracket, sharedHeatmapColorDomain } from "./heatmapInterpolation";
 import { MEASUREMENT_PLOT as MAIN_CHART_PLOT } from "./MeasurementCanvas";
 import { positionHeatmapTooltipAtDataPoint } from "./tooltipPosition";
+import { RightAxisTicks, TimeAxisTick } from "./RightAxisTicks";
 
 const HOUR_TICKS = Array.from({ length: 9 }, (_, index) => index * 3);
 const DAY_MS = 86_400_000;
@@ -463,7 +464,7 @@ export function DiurnalHeatmapCanvas({ measurements, measurementView, sessionAgg
     />
     <ResponsiveContainer width="100%" height="100%">
       <ScatterChart margin={{ top: MEASUREMENT_PLOT.top, right: CHART_PLOT_RIGHT, bottom: 10, left: 0 }}>
-        <XAxis type="number" dataKey="time" domain={domain} allowDataOverflow ticks={timeTicks} interval={0} tickFormatter={formatChartTime} tick={{ fill: "var(--muted)", fontSize: 12 }} />
+        <XAxis type="number" dataKey="time" domain={domain} allowDataOverflow ticks={timeTicks} interval={0} tickFormatter={formatChartTime} tick={<TimeAxisTick />} />
         <YAxis
           width={CHART_PLOT_LEFT}
           type="number"
@@ -480,6 +481,7 @@ export function DiurnalHeatmapCanvas({ measurements, measurementView, sessionAgg
         <Scatter data={axisAnchors} fill="transparent" isAnimationActive={false} />
       </ScatterChart>
     </ResponsiveContainer>
+    <RightAxisTicks className="chart-right-axis--heatmap" ticks={HOUR_TICKS} domain={[0, 24]} reversed formatTick={hourLabel} />
     <div
       className="history-heatmap__tooltip-viewport"
       style={{ inset: `${MEASUREMENT_PLOT.top}px ${MEASUREMENT_PLOT.right}px ${MEASUREMENT_PLOT.bottom}px ${MEASUREMENT_PLOT.left}px` }}

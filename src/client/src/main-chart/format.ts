@@ -15,4 +15,4 @@ export function chartTimeTicks(domain: readonly [number, number], plotWidth: num
 }
 
 export const CHART_PLOT_LEFT = 52;
-export const CHART_PLOT_RIGHT = 20;
+export const CHART_PLOT_RIGHT = 44;

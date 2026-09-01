@@ -29,6 +29,7 @@ import { clipDomain, daylightBackground, intersectDomains, navigateWheelDomain, 
 import { MeasurementCanvas, MEASUREMENT_PLOT } from "./MeasurementCanvas";
 import { DiurnalHeatmapCanvas } from "./DiurnalHeatmapCanvas";
 import { moveRangeEdge, rangeTimeDomain, type EditableRange } from "./range";
+import { RightAxisTicks, TimeAxisTick } from "./RightAxisTicks";
 import { ChartDateTag, ChartSelect, HeatmapControl, MeasurementViewControl, TargetControl, TrendControl } from "./controls";
 import { type ChartDimming, type ChartDimmingFocus } from "./dimming";
 import { chartTimeTicks, CHART_PLOT_LEFT, CHART_PLOT_RIGHT, formatChartTime } from "./format";
@@ -867,7 +868,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
               interval={0}
               height={30}
               tickFormatter={formatChartTime}
-              tick={renderHeatmap ? false : { fill: "var(--muted)", fontSize: 12 }}
+              tick={renderHeatmap ? false : <TimeAxisTick />}
               tickLine={!renderHeatmap}
             />
             <YAxis width={CHART_PLOT_LEFT} type="number" dataKey="iop" domain={pressureDomain} ticks={renderHeatmap ? pressureTicks.slice(1) : pressureTicks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
@@ -900,6 +901,11 @@ export const MeasurementsChart = memo(function MeasurementsChart({
             )}
           </ScatterChart>
         </ResponsiveContainer>
+        <RightAxisTicks
+          className="chart-right-axis--history"
+          ticks={renderHeatmap ? pressureTicks.slice(1) : pressureTicks}
+          domain={pressureDomain}
+        />
         <MeasurementCanvas
           measurements={filteredMeasurements}
           showRawReadings={measurementView === "raw"}

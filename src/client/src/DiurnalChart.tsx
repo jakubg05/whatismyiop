@@ -14,6 +14,8 @@ import {
 import type { Eye, MeasurementView, SessionAggregation } from "./analysis";
 import type { DiurnalPoint, DiurnalYAxisScale } from "./comparison";
 import { MeasurementViewControl, SeriesVisibilityControl, TargetControl, TargetLineOverlay } from "./main-chart/controls";
+import { CHART_PLOT_LEFT, CHART_PLOT_RIGHT } from "./main-chart/format";
+import { RightAxisTicks } from "./main-chart/RightAxisTicks";
 import { EyeToggleGroup } from "./shared";
 
 export type DiurnalSeries = {
@@ -150,7 +152,7 @@ export function DiurnalChart({
   return <>
     <div className="diurnal-chart">
       <ResponsiveContainer width="100%" height="100%">
-        <ScatterChart data={points} margin={{ top: 16, right: 20, bottom: 20, left: 0 }}>
+        <ScatterChart data={points} margin={{ top: 16, right: CHART_PLOT_RIGHT, bottom: 20, left: 0 }}>
           <CartesianGrid stroke="var(--line)" vertical={false} />
           {Array.from({ length: 8 }, (_, bin) => bin % 2 === 1 && (
             <ReferenceArea key={bin} x1={bin * 180} x2={(bin + 1) * 180} fill="#e8ecee" fillOpacity={0.72} stroke="none" />
@@ -164,7 +166,7 @@ export function DiurnalChart({
             minTickGap={18}
             tick={{ fill: "var(--muted)", fontSize: 11 }}
           />
-          <YAxis width={52} type="number" dataKey="mean" domain={yScale.domain} ticks={yScale.ticks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
+          <YAxis width={CHART_PLOT_LEFT} type="number" dataKey="mean" domain={yScale.domain} ticks={yScale.ticks} allowDataOverflow allowDecimals={false} tick={{ fill: "var(--muted)", fontSize: 12 }} label={{ value: "mmHg", angle: -90, position: "insideLeft", fill: "var(--muted)" }} />
           <Tooltip active={pinnedTooltip ? false : undefined} content={<DiurnalTooltip measurementView={measurementView} />} cursor={false} isAnimationActive={false} />
           {visibleSeries.map((item) => {
             const dimmed = focusedSeriesId !== null && focusedSeriesId !== item.id;
@@ -215,6 +217,7 @@ export function DiurnalChart({
           )})}
         </ScatterChart>
       </ResponsiveContainer>
+      <RightAxisTicks className="chart-right-axis--diurnal" ticks={yScale.ticks} domain={yScale.domain} />
       {targetEnabled && <TargetLineOverlay
         className="target-line-overlay--diurnal"
         value={targetValue}
