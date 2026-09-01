@@ -7,6 +7,7 @@
     "dev": "vite --config src/client/vite.config.ts",
     "build": "tsc -b src/client/tsconfig.json && vite build --config src/client/vite.config.ts",
     "test": "vitest run --root src/client",
+    "showcase:generate": "node scripts/generate-showcase-report.mjs",
     "preview:worker": "npm run build && wrangler dev",
     "deploy": "npm run build && wrangler deploy",
     "deploy:check": "npm run build && wrangler deploy --dry-run"

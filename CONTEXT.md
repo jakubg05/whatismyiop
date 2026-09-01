@@ -1,15 +1,15 @@
-# Home Tonometer Analysis
+# WhatIsMyIOP
 
-The application helps clinicians interpret home-tonometer measurements by viewing persistent clinical context and temporary time slices across chronological and diurnal charts.
+WhatIsMyIOP turns home-tonometer measurement exports into charts for reviewing pressure history. Persistent Periods and Annotations preserve context, while Comparison Segments select temporary intervals across chronological and time-of-day views.
 
 ## Language
 
 **Persistent Period**:
-A saved interval in the patient's measurement history that remains available independently of the current comparison search.
+A saved interval in a measurement history that remains available independently of the current comparison expression.
 _Avoid_: Search period, temporary period
 
 **Annotation**:
-A saved point-in-time clinical change or procedure in the patient's measurement history.
+A saved point-in-time note in a measurement history, such as a treatment change or procedure.
 _Avoid_: Point, comparison
 
 **Measurement Export**:
@@ -21,7 +21,7 @@ An editable, portable WhatIsMyIOP snapshot containing measurements, Persistent P
 _Avoid_: Project, PDF, measurement export
 
 **Comparison Segment**:
-A temporary time interval defined in the comparison box and displayed on the chronological and diurnal charts without becoming part of the saved clinical history.
+A temporary interval defined by a Comparison Expression and displayed on the chronological and time-of-day charts without becoming part of the saved measurement history.
 _Avoid_: Comparison period, search period, temporary period
 
 **Comparison Expression**:

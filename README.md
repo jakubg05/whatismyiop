@@ -1,42 +1,57 @@
-# WhatIsMyIOP
+<div align="center">
+  <a href="https://whatismyiop.com">
+    <img src="docs/assets/readme/whatismyiop_banner.png" width="900" alt="WhatIsMyIop.com" />
+  </a>
+  <p>
+    <a href="https://whatismyiop.com"><img alt="Open WhatIsMyIOP.com" src="https://img.shields.io/badge/Open-WhatIsMyIOP.com-9137a7?style=flat-square" /></a>
+    <a href="https://github.com/jakubg05/whatismyiop/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/jakubg05/whatismyiop/actions/workflows/ci.yml/badge.svg?branch=dev" /></a>
+  </p>
+</div>
 
-WhatIsMyIOP is a browser-based viewer for home eye-pressure measurements. It currently reads CSV exports from the iCare HOME2 tonometer and turns them into charts that are easier to inspect than the original spreadsheet.
+WhatIsMyIOP turns iCare HOME2 CSV exports into charts for reviewing home eye-pressure measurements. It shows measurements over time, time-of-day patterns, treatment periods, annotations, and comparisons between selected parts of the history.
 
-The app can:
+<p align="center">
+  <img src="docs/assets/readme/history-and-heatmap.png" alt="Chronological eye-pressure chart with treatment periods, annotations, trends, and a time-of-day heatmap" width="100%" />
+</p>
 
-- show raw readings or group nearby readings into sessions
-- calculate median and average session values
-- draw trends from raw readings or session values for either eye
-- plot pressure by date and time of day as a heatmap
-- mark treatment periods and annotations
-- compare saved periods with short comparison expressions
-- generate and reopen editable `.whatismyiop` reports
+## What it does
 
-Imported files stay in the browser. The app keeps only the measurement fields it uses, along with saved periods and annotations, so the work is still there after a refresh. It discards the original CSV text and does not upload imported data to an application server. Use **Clear data** in the app to remove the browser copy.
+- Shows raw readings or groups nearby readings into measurement sessions
+- Calculates averages, medians, and trends for the left and right eye
+- Displays measurements by date and time of day
+- Adds treatment periods and annotations to the measurement history
+- Compares selected periods side by side
+- Saves editable `.whatismyiop` reports with their chart context
 
-## Run it locally
+<p align="center">
+  <img src="docs/assets/readme/period-comparison.png" alt="Time-of-day comparison between a baseline period and the 30 days after a procedure" width="100%" />
+</p>
 
-You need Node.js and npm.
+## Data and privacy
+
+The app parses imported files in the browser and does not upload measurements to an application server. It stores the active workspace in that browser so it remains available after a refresh. The original CSV text is discarded after parsing. Users can clear the stored copy or export an editable report.
+
+Do not attach real patient exports, reports, or identifiable screenshots to public issues.
+
+## Run locally
 
 ```sh
-npm install
+npm ci
 npm run dev
 ```
 
-Vite will print the local address when the development server starts.
+The [development guide](docs/development.md) covers prerequisites, tests, production builds, project structure, synthetic demo data, and Cloudflare previews.
 
-## Useful commands
+## Contributing
 
-```sh
-npm test       # run the test suite
-npm run build  # type-check and build the site
-npm run deploy # build and deploy with Wrangler
-```
+Bug reports and pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before starting a larger change.
 
-Cloudflare deployment settings live in `wrangler.jsonc`.
+## Medical scope
 
-## A medical note
-
-This is a charting tool, not a medical device. It does not diagnose an eye condition, decide whether a pressure is safe, or recommend treatment. Keep the original measurements and discuss them with an eye-care professional.
+WhatIsMyIOP is a charting tool, not a medical device. It does not diagnose an eye condition, determine whether a pressure is safe, or recommend treatment.
 
 WhatIsMyIOP is independent and is not affiliated with or endorsed by the manufacturer of iCare HOME2.
+
+## License
+
+WhatIsMyIOP is available under the [MIT License](LICENSE).
