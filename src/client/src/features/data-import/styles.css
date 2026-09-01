@@ -1,0 +1,308 @@
+.import-dropzone {
+  --drop-outline: hsl(0 0% 76%);
+  position: relative;
+  width: min(52.8rem, calc(100vw - 2rem));
+  min-height: 18rem;
+  margin: clamp(2.4rem, 8.4vh, 6rem) auto 1.8rem;
+  padding: 1.8rem;
+  border: 0;
+  border-radius: 1.05rem;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1.2rem;
+  background: hsl(0 0% 98%);
+  color: var(--ink);
+  text-align: center;
+  transition:
+    background var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+.import-dropzone__outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  color: var(--drop-outline);
+  pointer-events: none;
+}
+.import-dropzone__outline rect {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-dasharray: 11 9;
+  stroke-linecap: round;
+}
+.import-dropzone:focus-within,
+.import-dropzone--dragging {
+  --drop-outline: hsl(0 0% 60%);
+  background: hsl(0 0% 96.5%);
+  box-shadow: inset 0 0 0 0.0625rem rgb(0 0 0 / 3%);
+}
+.import-dropzone .ui-button--primary {
+  min-height: 3.3rem;
+  padding-inline: 1.2rem;
+  border-color: var(--cta);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  background: var(--cta);
+  color: #fff;
+  font-size: 0.975rem;
+}
+.import-dropzone .ui-button--primary svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  fill: currentColor;
+  stroke: none;
+}
+.import-dropzone .ui-button--primary:hover,
+.import-dropzone .ui-button--primary:focus-visible {
+  border-color: var(--cta-hover);
+  background: var(--cta-hover);
+  color: #fff;
+}
+.import-actions {
+  position: relative;
+  width: min(16.8rem, 100%);
+  filter: drop-shadow(0 0.9rem 1.5rem rgb(0 0 0 / 14%));
+}
+.import-actions__split {
+  width: 100%;
+  display: flex;
+}
+.import-dropzone .import-actions__choose {
+  min-width: 0;
+  padding-inline: 0.9rem;
+  flex: 1 1 auto;
+  border-radius: 0.6rem 0 0 0.6rem;
+}
+.import-dropzone .import-actions__choose > svg {
+  opacity: 0.68;
+}
+.import-dropzone .import-actions__toggle {
+  width: 3.6rem;
+  min-height: 3.3rem;
+  border: 0.0625rem solid var(--cta);
+  border-left-color: rgb(255 255 255 / 18%);
+  border-radius: 0 0.6rem 0.6rem 0;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  background: var(--cta);
+  color: #fff;
+  cursor: default;
+}
+.import-dropzone .import-actions--open .import-actions__choose {
+  border-color: var(--cta);
+  border-radius: 0.6rem 0 0;
+  background: var(--cta);
+}
+.import-dropzone .import-actions--open .import-actions__choose:hover,
+.import-dropzone .import-actions--open .import-actions__choose:focus-visible {
+  border-color: var(--cta-hover);
+  background: var(--cta-hover);
+}
+.import-dropzone .import-actions--open .import-actions__toggle {
+  border-radius: 0 0.6rem 0 0;
+}
+.import-dropzone .import-actions__toggle svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  fill: currentColor;
+  stroke: none;
+  transition: transform var(--fast) var(--ease);
+}
+.import-actions--open .import-actions__toggle svg {
+  transform: rotate(180deg);
+}
+.import-actions__menu {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  right: 0;
+  left: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-top: 0.0625rem solid rgb(255 255 255 / 14%);
+  border-radius: 0 0 0.6rem 0.6rem;
+  background: var(--floating-surface);
+  color: var(--floating-ink);
+  transform-origin: top;
+  animation: import-menu-open var(--fast) var(--ease) both;
+}
+.import-actions__menu button {
+  width: 100%;
+  min-height: 3.6rem;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: transparent;
+  color: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.import-actions__menu button svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  fill: currentColor;
+  opacity: 0.68;
+}
+.import-actions__menu .import-actions__report-logo {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  filter: invert(1);
+  opacity: 0.8;
+}
+.import-actions__menu button:hover,
+.import-actions__menu button:focus-visible {
+  outline: 0;
+  background: rgb(255 255 255 / 9%);
+}
+@keyframes import-menu-open {
+  from {
+    opacity: 0;
+    transform: translateY(-0.25rem) scaleY(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+.import-dropzone__facts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+  color: hsl(0 0% 47%);
+  font-size: 0.9rem;
+}
+.import-dropzone__facts a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ink);
+  line-height: 1;
+  text-decoration: none;
+  vertical-align: middle;
+}
+.import-dropzone__facts a:hover,
+.import-dropzone__facts a:focus-visible {
+  color: hsl(0 0% 43%);
+}
+.import-dropzone__facts a svg {
+  flex: 0 0 auto;
+  display: block;
+}
+.import-dropzone__github {
+  width: 1.275rem;
+  height: 1.275rem;
+  fill: currentColor;
+}
+.import-dropzone__notice {
+  max-width: 45.6rem;
+  color: hsl(0 0% 47%);
+  font-size: 0.825rem;
+  line-height: 1.5;
+}
+.import-dropzone__notice a {
+  color: var(--ink);
+  text-underline-offset: 0.15em;
+}
+.import-explainer {
+  width: min(52.8rem, calc(100vw - 2rem));
+  margin: 0 auto 1.8rem;
+}
+.import-explainer h2 {
+  margin-bottom: 0.9rem;
+  color: var(--ink);
+  font-size: 1rem;
+}
+.import-explainer p {
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+.import-explainer p + p {
+  margin-top: 0.9rem;
+}
+
+@media (max-width: 40rem) {
+  .import-dropzone {
+    min-height: 15.6rem;
+    margin-top: 1.5rem;
+    padding: 1.5rem 1.2rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .import-actions__menu {
+    animation: none;
+  }
+}
+
+.import-confirmation-dialog {
+  width: min(30rem, calc(100vw - 2rem));
+  padding: 0;
+  border: 0.0625rem solid var(--editor-divider);
+  border-radius: 0.875rem;
+  background: var(--editor-canvas);
+  color: var(--editor-ink);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 38%);
+  color-scheme: dark;
+}
+.import-confirmation-dialog::backdrop {
+  background: rgb(0 0 0 / 64%);
+}
+.import-confirmation-dialog__form {
+  padding: var(--s5);
+  display: grid;
+  gap: var(--s4);
+}
+.import-confirmation-dialog__copy {
+  display: grid;
+  gap: var(--s2);
+}
+.import-confirmation-dialog h2 {
+  color: var(--editor-ink);
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+.import-confirmation-dialog p {
+  color: var(--editor-muted);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.import-confirmation-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+.import-confirmation-dialog .ui-button--secondary {
+  border-color: transparent;
+  background: var(--editor-button);
+  color: var(--editor-ink);
+}
+.import-confirmation-dialog .ui-button--secondary:hover,
+.import-confirmation-dialog .ui-button--secondary:focus-visible {
+  border-color: transparent;
+  background: var(--editor-input);
+}
+.import-confirmation-dialog .ui-button--danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+.import-confirmation-dialog .ui-button--danger:hover,
+.import-confirmation-dialog .ui-button--danger:focus-visible {
+  border-color: #b94b3d;
+  background: #b94b3d;
+  color: #fff;
+}

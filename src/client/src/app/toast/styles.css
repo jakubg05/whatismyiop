@@ -1,0 +1,70 @@
+.toast-stack {
+  position: fixed;
+  z-index: 100;
+  top: var(--s3);
+  left: 50%;
+  width: min(34rem, calc(100% - 2rem));
+  max-height: calc(100svh - 2 * var(--s3));
+  display: grid;
+  gap: var(--s2);
+  overflow-y: auto;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+.toast {
+  min-height: 2.75rem;
+  padding: 0.625rem 0.625rem 0.625rem 0.875rem;
+  border: 0;
+  border-radius: var(--radius);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s3);
+  font: var(--small);
+  pointer-events: auto;
+  animation: toast-drop var(--medium) var(--ease) both;
+}
+.toast--error {
+  background: #8f2d26;
+  color: #fff5f4;
+}
+.toast--warning {
+  background: #f2cf5b;
+  color: #17140a;
+}
+.toast--info {
+  background: #245b88;
+  color: #f4f9ff;
+}
+.toast button {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.toast button svg {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+}
+
+@keyframes toast-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

@@ -1,6 +1,5 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { ComparisonExpressionProvider } from "../ComparisonExpressionState";
-import { ToastProvider } from "../ToastState";
+import { ToastProvider } from "../app/toast/ToastProvider";
 
 export const Route = createRootRoute({
   component: RootLayout,
@@ -9,11 +8,9 @@ export const Route = createRootRoute({
 function RootLayout() {
   return (
     <ToastProvider>
-      <ComparisonExpressionProvider>
-        <div className="app-layout">
-          <Outlet />
-        </div>
-      </ComparisonExpressionProvider>
+      <div className="app-layout">
+        <Outlet />
+      </div>
     </ToastProvider>
   );
 }

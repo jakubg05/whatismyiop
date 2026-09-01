@@ -18,33 +18,31 @@ Comparison Segments are visualization state only. They never create, edit, or pe
 expression     = segment (" AND " segment){0,5}
 
 segment        = direct-period | relative-segment
-direct-period  = "period:" period-label
+direct-period  = period-label
 
-relative-segment = ["range:" duration " "] direction ":" target-type ":" target-label
+relative-segment = ["range:" duration " "] direction ":" target-label
 direction        = "before" | "after"
-target-type      = "period" | "event"
 duration         = positive-day-count "d"
 ```
 
 Canonical examples:
 
 ```text
-period:Baseline
-before:event:Xalatan
-after:period:PostOp
-range:14d before:event:Xalatan
-range:30d after:period:Treatment
-period:Baseline AND range:14d before:event:Xalatan AND period:FollowUp
+Baseline
+before:Xalatan
+after:PostOp
+range:14d before:Xalatan
+range:30d after:Treatment
+Baseline AND range:14d before:Xalatan AND FollowUp
 ```
 
 Rules:
 
-- Keywords are lowercase and include their colon: `period:`, `range:`, `before:`, `after:`, and `event:` when used as a target type.
+- Keywords are lowercase and include their colon: `range:`, `before:`, and `after:`.
 - `AND` is always uppercase.
-- `event:` is never valid at segment start. It is available only after `before:` or `after:`.
-- A Persistent Period may be used directly through `period:`.
-- An Annotation cannot define a segment directly because it has no duration. It must be targeted through `before:event:` or `after:event:`.
-- `after:period:` is unavailable for an open-ended Persistent Period.
+- A Persistent Period may be used directly by its label.
+- An Annotation cannot define a segment directly because it has no duration. It must be targeted through `before:` or `after:`.
+- `after:` is unavailable for an open-ended Persistent Period.
 - Exact duplicate segments are allowed.
 
 ## Duration grammar
@@ -85,7 +83,7 @@ The parser proceeds strictly from left to right and derives the longest valid pr
 Example:
 
 ```text
-period:Baseline AND range:14 before:event:Xalatan AND period:FollowUp
+Baseline AND range:14 before:Xalatan AND FollowUp
 ```
 
 Only `period:Baseline` is active because `14` is not a valid duration. The damaged segment and everything following it remain as ordinary inactive text.
@@ -93,7 +91,7 @@ Only `period:Baseline` is active because `14` is not a valid duration. The damag
 For:
 
 ```text
-range:014d before:event:Xalatan
+range:014d before:Xalatan
 ```
 
 Only `range:` is recognized and canonically formatted. `014d` and everything after it remain inactive text.
@@ -112,12 +110,10 @@ The dropdown contains only options valid for the parser state at the caret. It n
 
 | Expected state | Dropdown contents |
 |---|---|
-| Segment start | `period:`, `range:`, `before:`, `after:` |
+| Segment start | Persistent Period labels, `range:`, `before:`, `after:` |
 | Duration after `range:` | Recommended duration values |
 | Direction after a duration | `before:`, `after:` |
-| Target type after a direction | `period:`, `event:` |
-| Value after `period:` | Matching Persistent Period labels only |
-| Value after `event:` | Matching Annotation labels only |
+| Target after a direction | Matching Persistent Period and Annotation labels, plus `now` |
 | Completed segment | `AND` only |
 | After `AND` | Segment-start keywords |
 | Six completed segments | Maximum-reached explanation |
@@ -255,8 +251,7 @@ New Persistent Period and Annotation labels:
 - may contain letters, digits, hyphens, and underscores;
 - must begin with a letter or digit;
 - may not contain whitespace or a colon;
-- are case-insensitively unique within their own type; and
-- may duplicate a label used by the other type because `period:` and `event:` disambiguate them.
+- are case-insensitively unique across Persistent Periods and Annotations.
 
 No comparison-expression migration or legacy-label compatibility is required. Do not add dormant migration code.
 
@@ -264,29 +259,29 @@ No comparison-expression migration or legacy-label compatibility is required. Do
 
 ### Direct period
 
-`period:X` creates a temporary Comparison Segment with the same start and end boundaries as Persistent Period X. It does not reuse X's persistent chart representation or mutate X.
+`X` creates a temporary Comparison Segment with the same start and end boundaries as Persistent Period X. It does not reuse X's persistent chart representation or mutate X.
 
 ### Relative to an Annotation
 
-- `before:event:X` extends from the earliest available measurement to immediately before X.
-- `after:event:X` extends from X to the latest available measurement.
-- `range:Nd before:event:X` covers N consecutive 24-hour days ending immediately before X.
-- `range:Nd after:event:X` covers N consecutive 24-hour days beginning at X.
+- `before:X` extends from the earliest available measurement to immediately before Annotation X.
+- `after:X` extends from Annotation X to the latest available measurement.
+- `range:Nd before:X` covers N consecutive 24-hour days ending immediately before Annotation X.
+- `range:Nd after:X` covers N consecutive 24-hour days beginning at Annotation X.
 
 ### Relative to a Persistent Period
 
-- `before:period:X` extends from the earliest available measurement to immediately before X starts.
-- `after:period:X` extends from immediately after X ends to the latest available measurement.
-- `range:Nd before:period:X` covers N consecutive 24-hour days ending immediately before X starts.
-- `range:Nd after:period:X` covers N consecutive 24-hour days beginning immediately after X ends.
-- `after:period:X` and its ranged form are unavailable while X is open-ended.
+- `before:X` extends from the earliest available measurement to immediately before Persistent Period X starts.
+- `after:X` extends from immediately after Persistent Period X ends to the latest available measurement.
+- `range:Nd before:X` covers N consecutive 24-hour days ending immediately before Persistent Period X starts.
+- `range:Nd after:X` covers N consecutive 24-hour days beginning immediately after Persistent Period X ends.
+- `after:X` and its ranged form are unavailable while X is open-ended.
 
 ### Boundary ownership
 
 At minute precision:
 
-- a before-event segment ends one minute before the event timestamp;
-- an after-event segment includes the event timestamp;
+- a before-Annotation segment ends one minute before the Annotation timestamp;
+- an after-Annotation segment includes the Annotation timestamp;
 - a before-period segment ends one minute before the period start;
 - a direct period includes its start and end; and
 - an after-period segment starts one minute after the period end.
@@ -320,7 +315,7 @@ Replacement mode depends on complete Comparison Segments, not whether the editor
 
 - Each segment uses one color for its complete interval, label, main-chart representation, and diurnal series.
 - Colors are assigned by left-to-right segment order.
-- The chart label is the entire canonical segment expression, such as `range:14d before:event:Xalatan`.
+- The chart label is the entire canonical segment expression, such as `range:14d before:Xalatan`.
 - Duplicate segments are allowed and receive their own positional colors.
 - Comparison Segments are read-only and cannot be dragged, resized, or edited on the chart.
 
@@ -336,15 +331,15 @@ Replacement mode depends on complete Comparison Segments, not whether the editor
 Only these creation/editing paths are blocked:
 
 - the Periods toggle/control;
-- the Events toggle/control;
+- the Annotations toggle/control;
 - Ctrl-drag period creation; and
-- Ctrl-click event creation.
+- Ctrl-click Annotation creation.
 
 Position, Quality, Sessions, Raw, Trend, Right, Left, zooming, panning, and other measurement-analysis controls remain available.
 
 Blocked toolbar controls remain visible and use `aria-disabled` so an attempted activation can provide feedback. A blocked control or chart gesture creates a toast reading:
 
-> Clear the search expressions before creating or editing periods and events.
+> Clear the search expressions before creating or editing periods and annotations.
 
 Toast behavior:
 
@@ -361,7 +356,7 @@ Toast behavior:
 - The completion popup uses listbox semantics and exposes the active descendant.
 - Syntax color is supplementary; an invisible live status announces domain state.
 - The live status announces the expected token type, available suggestion count, active Comparison Segment count, whether an inactive suffix exists, and when the six-segment limit is reached.
-- Disabled Period and Event controls expose `aria-disabled` and remain keyboard-focusable for feedback.
+- Disabled Period and Annotation controls expose `aria-disabled` and remain keyboard-focusable for feedback.
 - The clear control has an explicit accessible name.
 - Toasts use an appropriate live region and their close controls have explicit accessible names.
 

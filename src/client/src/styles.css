@@ -1,6 +1,23 @@
-@import "./shared/styles.css";
-@import "./main-chart/styles.css";
-@import "./comparison-expression.css";
-@import "./app.css";
+@import "./shared/styles/tokens.css";
+@import "./shared/styles/base.css";
+@import "./shared/ui/styles.css";
+@import "./features/charts/chronological/styles.css";
+@import "./features/comparison/styles.css";
+@import "./features/workspace/styles.css";
+@import "./features/data-import/styles.css";
+@import "./features/charts/diurnal/styles.css";
+@import "./shared/layout/styles.css";
+@import "./features/legal/styles.css";
+@import "./app/toast/styles.css";
 
-.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+.visually-hidden {
+  position: absolute !important;
+  width: 0.0625rem !important;
+  height: 0.0625rem !important;
+  padding: 0 !important;
+  margin: -0.0625rem !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}

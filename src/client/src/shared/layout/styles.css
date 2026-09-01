@@ -1,0 +1,272 @@
+.site-footer {
+  margin: clamp(3rem, 8vh, 6rem) calc(var(--gutter) * -1) -3rem;
+  background: #0d0d0d;
+  color: var(--floating-ink);
+  font-family: var(--font);
+}
+.site-footer__inner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 3rem var(--gutter) 1.5rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 3rem clamp(2rem, 5vw, 5rem);
+}
+.site-footer section {
+  min-width: 0;
+  align-content: start;
+  display: grid;
+  gap: var(--s3);
+}
+.site-footer h2 {
+  color: var(--floating-ink);
+  font-size: 0.8125rem;
+}
+.site-footer p {
+  max-width: 31rem;
+  color: var(--floating-muted);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+.site-footer__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+.site-footer__brand img {
+  width: 1.5rem;
+  height: 1.5rem;
+  filter: invert(1);
+}
+.site-footer__brand strong {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+.site-footer__github {
+  width: max-content;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: #d8d8d8;
+  font: var(--small);
+  line-height: 1;
+  text-decoration: none;
+}
+.site-footer__github:hover,
+.site-footer__github:focus-visible {
+  color: #fff;
+}
+.site-footer__github svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  display: block;
+  fill: currentColor;
+}
+.site-footer__file {
+  min-width: 0;
+  display: grid;
+  gap: var(--s1);
+  font: var(--small);
+}
+.site-footer__file strong {
+  overflow: hidden;
+  color: var(--floating-ink);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.site-footer__file span {
+  color: var(--floating-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.site-footer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+.site-footer .ui-button--secondary {
+  border-color: #fff;
+  background: #fff;
+  color: #0d0d0d;
+}
+.site-footer .ui-button--secondary:hover,
+.site-footer .ui-button--secondary:focus-visible {
+  border-color: #e8e8e8;
+  background: #e8e8e8;
+}
+.site-footer .ui-button--quiet {
+  color: var(--floating-muted);
+}
+.site-footer .ui-button--quiet:hover,
+.site-footer .ui-button--quiet:focus-visible {
+  background: var(--dark-active);
+  color: var(--floating-ink);
+}
+.clear-data-dialog {
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 0;
+  border: 0.0625rem solid var(--editor-divider);
+  border-radius: 0.875rem;
+  background: var(--editor-canvas);
+  color: var(--editor-ink);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 38%);
+  color-scheme: dark;
+}
+.clear-data-dialog::backdrop {
+  background: rgb(0 0 0 / 64%);
+}
+.clear-data-dialog__form {
+  padding: var(--s5);
+  display: grid;
+  gap: var(--s4);
+}
+.clear-data-dialog__copy {
+  display: grid;
+  gap: var(--s2);
+}
+.site-footer .clear-data-dialog h2 {
+  color: var(--editor-ink);
+  font-size: 1.25rem;
+  font-weight: 400;
+}
+.site-footer .clear-data-dialog p {
+  max-width: none;
+  color: var(--editor-muted);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.clear-data-dialog label {
+  color: var(--editor-ink);
+  font-size: 0.8125rem;
+}
+.clear-data-dialog input {
+  width: 100%;
+  height: 2.5rem;
+  padding: 0 var(--s3);
+  border: 0;
+  border-radius: var(--radius);
+  outline: 0;
+  background: var(--editor-surface);
+  color: var(--editor-ink);
+}
+.clear-data-dialog input:focus {
+  background: var(--editor-surface);
+  box-shadow: none;
+}
+.clear-data-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+.site-footer .clear-data-dialog .ui-button--secondary {
+  border-color: transparent;
+  background: var(--editor-button);
+  color: var(--editor-ink);
+}
+.site-footer .clear-data-dialog .ui-button--secondary:hover,
+.site-footer .clear-data-dialog .ui-button--secondary:focus-visible {
+  border-color: transparent;
+  background: var(--editor-input);
+  color: var(--editor-ink);
+}
+.site-footer .clear-data-dialog .ui-button--danger {
+  border-color: #fff;
+  background: #fff;
+  color: #0d0d0d;
+}
+.site-footer .clear-data-dialog .ui-button--danger:hover,
+.site-footer .clear-data-dialog .ui-button--danger:focus-visible {
+  border-color: #e8e8e8;
+  background: #e8e8e8;
+  color: #0d0d0d;
+}
+.site-footer .clear-data-dialog .ui-button--danger:disabled {
+  border: 0;
+  outline: 0;
+  background: var(--editor-button);
+  color: var(--editor-muted);
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.site-footer__bottom {
+  grid-column: 1 / -1;
+  padding-top: var(--s4);
+  border-top: 0.0625rem solid var(--dark-hover);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3) var(--s6);
+  color: #777;
+  font: var(--small);
+}
+.site-footer__legal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2) var(--s4);
+}
+.site-footer__legal a {
+  color: var(--floating-muted);
+  text-decoration: none;
+}
+.site-footer__legal a:hover,
+.site-footer__legal a:focus-visible {
+  color: #fff;
+}
+.site-footer__status {
+  margin-inline-start: auto;
+}
+.site-footer--compact {
+  margin: 0;
+}
+.site-footer--compact .site-footer__inner {
+  padding-top: var(--s6);
+  grid-template-columns: 1fr;
+  gap: var(--s5);
+}
+.site-footer--compact .site-footer__about {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+.site-footer--compact .site-footer__github {
+  justify-self: end;
+}
+.site-footer--compact .site-footer__bottom {
+  padding-top: 0;
+  border-top: 0;
+}
+
+@media (max-width: 48rem) {
+  .site-footer__inner {
+    grid-template-columns: 1fr 1fr;
+  }
+  .site-footer__about {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 40rem) {
+  .site-footer__inner {
+    grid-template-columns: 1fr;
+    gap: var(--s6);
+    padding-top: var(--s6);
+  }
+  .site-footer__about {
+    grid-column: auto;
+  }
+  .site-footer--compact .site-footer__about {
+    grid-template-columns: 1fr;
+  }
+  .site-footer--compact .site-footer__github {
+    justify-self: start;
+  }
+  .site-footer__bottom {
+    align-items: flex-start;
+  }
+  .site-footer__status {
+    width: 100%;
+    margin-inline-start: 0;
+  }
+}
