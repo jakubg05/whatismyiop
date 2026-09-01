@@ -4,7 +4,7 @@ const MIN_NEIGHBORS = 6;
 const SMOOTHER_FRACTION = 0.35;
 const ROBUST_STEPS = 3;
 
-export function fitCalendarValues(
+export function fitLowessTrend(
   timesInDays: number[],
   values: number[],
   timeSpanDays: number,
@@ -23,7 +23,11 @@ export function fitCalendarValues(
   return { neighborCount, fitted };
 }
 
-export function interpolateSorted(xs: number[], ys: number[], target: number): number {
+export function interpolateClamped(
+  xs: number[],
+  ys: number[],
+  target: number,
+): number {
   let low = 0;
   let high = xs.length;
   while (low < high) {
@@ -34,6 +38,7 @@ export function interpolateSorted(xs: number[], ys: number[], target: number): n
   if (low <= 0) return ys[0];
   if (low >= xs.length) return ys.at(-1)!;
   const left = low - 1;
-  const ratio = (target - xs[left]) / Math.max(Number.EPSILON, xs[low] - xs[left]);
+  const ratio =
+    (target - xs[left]) / Math.max(Number.EPSILON, xs[low] - xs[left]);
   return ys[left] + (ys[low] - ys[left]) * ratio;
 }

@@ -1,29 +1,27 @@
 import { describe, expect, it } from "vitest";
-import {
-  coalesceMeasurementSessions,
-  type Eye,
-  type Measurement,
-} from "./analysis";
+import { aggregateMeasurementSessions, type Eye, type Measurement } from ".";
 
 const minute = 60 * 1000;
 
-function reading(minuteOffset: number, eye: Eye, iop: number, position = "Sitting"): Measurement {
+function reading(
+  minuteOffset: number,
+  eye: Eye,
+  iop: number,
+  position = "Sitting",
+): Measurement {
   return {
     sourceRow: minuteOffset + (eye === "OD" ? 2 : 3),
-    timestampText: "2026-08-28T12:00:00",
     time: minuteOffset * minute,
     eye,
     iop,
     quality: "Good",
-    qualityRaw: "",
-    comment: "",
     position,
   };
 }
 
 describe("measurement sessions", () => {
-  it("coalesces both eyes and different positions into one anchored session", () => {
-    const points = coalesceMeasurementSessions([
+  it("groups both eyes and different positions into one anchored session", () => {
+    const points = aggregateMeasurementSessions([
       reading(0, "OD", 20, "Sitting"),
       reading(2, "OS", 23, "Supine"),
       reading(4, "OD", 22, "Supine"),
@@ -39,7 +37,7 @@ describe("measurement sessions", () => {
   });
 
   it("does not chain a long sequence into one session", () => {
-    const points = coalesceMeasurementSessions([
+    const points = aggregateMeasurementSessions([
       reading(0, "OD", 20),
       reading(9, "OD", 22),
       reading(18, "OD", 24),
@@ -58,11 +56,30 @@ describe("measurement sessions", () => {
       reading(2, "OD", 22),
       reading(4, "OD", 30),
     ];
-    const medianPoints = coalesceMeasurementSessions(measurements);
-    const averagePoints = coalesceMeasurementSessions(measurements, "average");
+    const medianPoints = aggregateMeasurementSessions(measurements);
+    const averagePoints = aggregateMeasurementSessions(measurements, "average");
 
     expect(medianPoints[0].iop).toBe(22);
     expect(averagePoints).toHaveLength(1);
     expect(averagePoints[0].iop).toBe(24);
+  });
+
+  it("includes a reading exactly ten minutes from the session start", () => {
+    const points = aggregateMeasurementSessions([
+      reading(10, "OD", 24),
+      reading(0, "OD", 20),
+    ]);
+
+    expect(points).toHaveLength(1);
+    expect(points[0]).toMatchObject({
+      sessionStart: 0,
+      sessionEnd: 10 * minute,
+      time: 5 * minute,
+      iop: 22,
+    });
+  });
+
+  it("returns no session points for no measurements", () => {
+    expect(aggregateMeasurementSessions([])).toEqual([]);
   });
 });

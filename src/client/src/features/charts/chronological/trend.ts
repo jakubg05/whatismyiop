@@ -1,11 +1,15 @@
 import {
-  coalesceMeasurementSessions,
+  aggregateMeasurementSessions,
   type Eye,
   type Measurement,
   type MeasurementView,
   type SessionAggregation,
 } from "../../measurements";
-import { fitCalendarValues, interpolateSorted } from "../../../shared/math/trendSmoothing";
+import {
+  fitLowessTrend,
+  interpolateClamped,
+} from "../../../shared/math/lowess";
+import { median } from "../../../shared/lib/statistics";
 
 export type TrendEstimate = {
   time: number;
@@ -32,21 +36,6 @@ type TrendObservation = {
   iop: number;
 };
 
-function median(values: number[]): number {
-  const ordered = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(ordered.length / 2);
-  return ordered.length % 2 === 0
-    ? (ordered[middle - 1] + ordered[middle]) / 2
-    : ordered[middle];
-}
-
-function observation(session: { time: number; iop: number }): TrendObservation {
-  return {
-    time: session.time,
-    iop: session.iop,
-  };
-}
-
 function nearestDistance(times: number[], target: number): number {
   let low = 0;
   let high = times.length;
@@ -56,14 +45,20 @@ function nearestDistance(times: number[], target: number): number {
     else high = middle;
   }
   return Math.min(
-    low < times.length ? Math.abs(times[low] - target) : Number.POSITIVE_INFINITY,
+    low < times.length
+      ? Math.abs(times[low] - target)
+      : Number.POSITIVE_INFINITY,
     low > 0 ? Math.abs(times[low - 1] - target) : Number.POSITIVE_INFINITY,
   );
 }
 
 function medianGap(observations: TrendObservation[]): number {
   if (observations.length < 2) return 0;
-  return median(observations.slice(1).map((item, index) => item.time - observations[index].time));
+  return median(
+    observations
+      .slice(1)
+      .map((item, index) => item.time - observations[index].time),
+  );
 }
 
 function estimateEye(observations: TrendObservation[]): TrendEstimate[] {
@@ -71,17 +66,35 @@ function estimateEye(observations: TrendObservation[]): TrendEstimate[] {
   const times = observations.map((item) => item.time);
   const firstTime = times[0];
   const lastTime = times.at(-1)!;
-  const timeSpanDays = Math.max(Number.EPSILON, (lastTime - firstTime) / DAY_MS);
+  const timeSpanDays = Math.max(
+    Number.EPSILON,
+    (lastTime - firstTime) / DAY_MS,
+  );
   const normalizedTimes = times.map((time) => (time - firstTime) / DAY_MS);
-  const { neighborCount, fitted } = fitCalendarValues(normalizedTimes, rawValues, timeSpanDays);
-  const squaredResiduals = rawValues.map((value, index) => (value - fitted[index]) ** 2);
-  const localVariances = fitCalendarValues(normalizedTimes, squaredResiduals, timeSpanDays, false).fitted;
+  const { neighborCount, fitted } = fitLowessTrend(
+    normalizedTimes,
+    rawValues,
+    timeSpanDays,
+  );
+  const squaredResiduals = rawValues.map(
+    (value, index) => (value - fitted[index]) ** 2,
+  );
+  const localVariances = fitLowessTrend(
+    normalizedTimes,
+    squaredResiduals,
+    timeSpanDays,
+    false,
+  ).fitted;
   const gapLimit = Math.max(45 * DAY_MS, medianGap(observations) * 3);
   return Array.from({ length: SAMPLE_COUNT }, (_, index) => {
-    const time = firstTime + (lastTime - firstTime) * index / (SAMPLE_COUNT - 1);
+    const time =
+      firstTime + ((lastTime - firstTime) * index) / (SAMPLE_COUNT - 1);
     const normalizedTime = (time - firstTime) / DAY_MS;
-    const iop = interpolateSorted(normalizedTimes, fitted, normalizedTime);
-    const variance = Math.max(0, interpolateSorted(normalizedTimes, localVariances, normalizedTime));
+    const iop = interpolateClamped(normalizedTimes, fitted, normalizedTime);
+    const variance = Math.max(
+      0,
+      interpolateClamped(normalizedTimes, localVariances, normalizedTime),
+    );
     const margin = 1.96 * Math.sqrt(variance / neighborCount);
     return {
       time,
@@ -98,24 +111,44 @@ export function buildTrendSeries(
   view: MeasurementView,
   aggregation: SessionAggregation,
 ): EyeTrend[] {
-  const inputs = view === "raw"
-    ? [...measurements].sort((left, right) => left.time - right.time || left.sourceRow - right.sourceRow)
-    : coalesceMeasurementSessions(measurements, aggregation);
+  const inputs =
+    view === "raw"
+      ? [...measurements].sort(
+          (left, right) =>
+            left.time - right.time || left.sourceRow - right.sourceRow,
+        )
+      : aggregateMeasurementSessions(measurements, aggregation);
   return (["OD", "OS"] as Eye[]).flatMap((eye) => {
-    const observations = inputs.filter((input) => input.eye === eye).map(observation);
-    if (observations.length < MIN_OBSERVATIONS || observations[0].time === observations.at(-1)!.time) return [];
-    return [{
-      eye,
-      estimates: estimateEye(observations),
-      observationCount: observations.length,
-      view,
-      aggregation,
-    }];
+    const observations = inputs
+      .filter((input) => input.eye === eye)
+      .map(({ time, iop }) => ({ time, iop }));
+    if (
+      observations.length < MIN_OBSERVATIONS ||
+      observations[0].time === observations.at(-1)!.time
+    )
+      return [];
+    return [
+      {
+        eye,
+        estimates: estimateEye(observations),
+        observationCount: observations.length,
+        view,
+        aggregation,
+      },
+    ];
   });
 }
 
-export function interpolateTrendEstimate(estimates: TrendEstimate[], time: number): TrendEstimate | null {
-  if (estimates.length === 0 || time < estimates[0].time || time > estimates.at(-1)!.time) return null;
+export function interpolateTrendEstimate(
+  estimates: TrendEstimate[],
+  time: number,
+): TrendEstimate | null {
+  if (
+    estimates.length === 0 ||
+    time < estimates[0].time ||
+    time > estimates.at(-1)!.time
+  )
+    return null;
   const index = estimates.findIndex((estimate) => estimate.time >= time);
   if (index <= 0) return estimates[0];
   const left = estimates[index - 1];
@@ -123,11 +156,18 @@ export function interpolateTrendEstimate(estimates: TrendEstimate[], time: numbe
   return interpolateEstimate(left, right, time);
 }
 
-export function interpolateTrend(estimates: TrendEstimate[], time: number): number | null {
+export function interpolateTrend(
+  estimates: TrendEstimate[],
+  time: number,
+): number | null {
   return interpolateTrendEstimate(estimates, time)?.iop ?? null;
 }
 
-function interpolateEstimate(left: TrendEstimate, right: TrendEstimate, time: number): TrendEstimate {
+function interpolateEstimate(
+  left: TrendEstimate,
+  right: TrendEstimate,
+  time: number,
+): TrendEstimate {
   const ratio = (time - left.time) / Math.max(1, right.time - left.time);
   return {
     time,
@@ -145,13 +185,20 @@ export function splitTrendSegment(
 ): Array<readonly [TrendEstimate, TrendEstimate]> {
   const cuts = [
     left.time,
-    ...boundaries.filter((boundary) => boundary > left.time && boundary < right.time),
+    ...boundaries.filter(
+      (boundary) => boundary > left.time && boundary < right.time,
+    ),
     right.time,
   ].sort((a, b) => a - b);
-  return cuts.slice(1).map((cut, index) => [
-    interpolateEstimate(left, right, cuts[index]),
-    interpolateEstimate(left, right, cut),
-  ] as const);
+  return cuts
+    .slice(1)
+    .map(
+      (cut, index) =>
+        [
+          interpolateEstimate(left, right, cuts[index]),
+          interpolateEstimate(left, right, cut),
+        ] as const,
+    );
 }
 
 export function trendEstimatesForDomain(
@@ -160,10 +207,11 @@ export function trendEstimatesForDomain(
   domainEnd: number,
 ): TrendEstimate[] {
   if (
-    estimates.length < 2
-    || domainEnd < estimates[0].time
-    || domainStart > estimates.at(-1)!.time
-  ) return [];
+    estimates.length < 2 ||
+    domainEnd < estimates[0].time ||
+    domainStart > estimates.at(-1)!.time
+  )
+    return [];
 
   let start = 0;
   let end = estimates.length;

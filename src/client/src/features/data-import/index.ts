@@ -1,1 +1,1 @@
-export { ImportActions } from "./ImportActions";
+export { ImportPanel } from "./ImportPanel";

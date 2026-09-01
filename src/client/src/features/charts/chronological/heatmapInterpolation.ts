@@ -1,9 +1,19 @@
 import type { DiurnalHeatmapData } from "../diurnal/diurnalHeatmapData";
+import { DIURNAL_BIN_COUNT } from "../diurnal/format";
 
 export const DEFAULT_HEATMAP_COLOR_DOMAIN = [10, 32] as const;
 
-export function heatmapColorPosition(value: number, domain: readonly [number, number]): number {
-  return Math.max(0, Math.min(1, (value - domain[0]) / Math.max(Number.EPSILON, domain[1] - domain[0])));
+export function heatmapColorPosition(
+  value: number,
+  domain: readonly [number, number],
+): number {
+  return Math.max(
+    0,
+    Math.min(
+      1,
+      (value - domain[0]) / Math.max(Number.EPSILON, domain[1] - domain[0]),
+    ),
+  );
 }
 
 function quantile(sorted: number[], position: number): number {
@@ -26,7 +36,7 @@ function visibleHeatmapValues(
   const values: number[] = [];
   const timeSamples = 48;
   for (let x = 0; x < timeSamples; x += 1) {
-    const time = start + (end - start) * x / (timeSamples - 1);
+    const time = start + ((end - start) * x) / (timeSamples - 1);
     for (let hour = 0; hour < 24; hour += 1) {
       const value = heatmapValueAt(data, dates, time, hour + 0.5);
       if (value !== null) values.push(value);
@@ -35,7 +45,9 @@ function visibleHeatmapValues(
   return values;
 }
 
-function heatmapColorDomainFromValues(values: number[]): readonly [number, number] {
+function heatmapColorDomainFromValues(
+  values: number[],
+): readonly [number, number] {
   if (values.length === 0) return DEFAULT_HEATMAP_COLOR_DOMAIN;
   values.sort((left, right) => left - right);
   const robustMin = quantile(values, 0.05);
@@ -46,31 +58,21 @@ function heatmapColorDomainFromValues(values: number[]): readonly [number, numbe
   return [center - spread / 2 - padding, center + spread / 2 + padding];
 }
 
-export function visibleHeatmapColorDomain(
-  data: DiurnalHeatmapData,
-  dates: number[],
-  domain: readonly [number, number],
-): readonly [number, number] {
-  return heatmapColorDomainFromValues(visibleHeatmapValues(data, domain, dates));
-}
-
-export function sharedVisibleHeatmapColorDomain(
-  dataSets: readonly DiurnalHeatmapData[],
-  domain: readonly [number, number],
-): readonly [number, number] {
-  return heatmapColorDomainFromValues(dataSets.flatMap((data) => visibleHeatmapValues(data, domain)));
-}
-
 export function sharedHeatmapColorDomain(
   dataSets: readonly DiurnalHeatmapData[],
 ): readonly [number, number] {
-  return heatmapColorDomainFromValues(dataSets.flatMap((data) => {
-    if (data.times.length === 0) return [];
-    return visibleHeatmapValues(data, [data.times[0], data.times.at(-1)!]);
-  }));
+  return heatmapColorDomainFromValues(
+    dataSets.flatMap((data) => {
+      if (data.times.length === 0) return [];
+      return visibleHeatmapValues(data, [data.times[0], data.times.at(-1)!]);
+    }),
+  );
 }
 
-export function heatmapBracket(values: number[], target: number): readonly [number, number, number] {
+export function heatmapBracket(
+  values: number[],
+  target: number,
+): readonly [number, number, number] {
   if (values.length <= 1) return [0, 0, 0];
   let low = 0;
   let high = values.length - 1;
@@ -81,7 +83,11 @@ export function heatmapBracket(values: number[], target: number): readonly [numb
   }
   if (target <= values[0]) return [0, 0, 0];
   if (target >= values.at(-1)!) return [high, high, 0];
-  return [low, high, (target - values[low]) / Math.max(1, values[high] - values[low])];
+  return [
+    low,
+    high,
+    (target - values[low]) / Math.max(1, values[high] - values[low]),
+  ];
 }
 
 export function heatmapValueFromBracket(
@@ -122,11 +128,25 @@ export function heatmapValueFromBracket(
   return totalWeight > 0 ? total / totalWeight : null;
 }
 
-export function heatmapValueAt(data: DiurnalHeatmapData, dates: number[], time: number, hour: number): number | null {
+export function heatmapValueAt(
+  data: DiurnalHeatmapData,
+  dates: number[],
+  time: number,
+  hour: number,
+): number | null {
   if (data.z.length === 0 || dates.length === 0) return null;
   const [left, right, timeRatio] = heatmapBracket(dates, time);
-  const binPosition = Math.max(0, Math.min(7, (hour - 1.5) / 3));
+  const lastBin = DIURNAL_BIN_COUNT - 1;
+  const binPosition = Math.max(0, Math.min(lastBin, (hour - 1.5) / 3));
   const upperBin = Math.floor(binPosition);
-  const lowerBin = Math.min(7, Math.ceil(binPosition));
-  return heatmapValueFromBracket(data, left, right, timeRatio, upperBin, lowerBin, binPosition - upperBin);
+  const lowerBin = Math.min(lastBin, Math.ceil(binPosition));
+  return heatmapValueFromBracket(
+    data,
+    left,
+    right,
+    timeRatio,
+    upperBin,
+    lowerBin,
+    binPosition - upperBin,
+  );
 }

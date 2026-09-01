@@ -1,16 +1,20 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { SiteFooter } from "../../app/layout/SiteFooter";
+import { SiteFooter } from "../../shared/layout/SiteFooter";
 
-export const LEGAL_EFFECTIVE_DATE = "30 August 2026";
+const LEGAL_EFFECTIVE_DATE = "30 August 2026";
 
-type LegalPageProps = {
+type LegalDocumentLayoutProps = {
   title: string;
   summary: string;
   children: ReactNode;
 };
 
-export function LegalPage({ title, summary, children }: LegalPageProps) {
+export function LegalDocumentLayout({
+  title,
+  summary,
+  children,
+}: LegalDocumentLayoutProps) {
   return (
     <main className="legal-page">
       <header className="legal-header">

@@ -1,4 +1,4 @@
-export function TopNavigation() {
+export function SiteHeader() {
   return (
     <header className="app-topbar">
       <div className="app-brand">

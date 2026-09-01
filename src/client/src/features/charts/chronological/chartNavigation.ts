@@ -12,38 +12,47 @@ export type DaylightDay = {
 };
 
 const MINIMUM_WINDOW_MS = 60_000;
-const OPEN_DOMAIN_LIMITS: TimeDomain = [-62_135_596_800_000, 253_402_300_799_999];
+const OPEN_DOMAIN_LIMITS: TimeDomain = [
+  -62_135_596_800_000, 253_402_300_799_999,
+];
 const DAY_MS = 86_400_000;
 const DAYLIGHT_FADE_START_DAYS = 20;
 const DAYLIGHT_FULL_STRENGTH_DAYS = 3;
 const DAYLIGHT_MAX_OPACITY = 0.3;
-const BRATISLAVA_LATITUDE_RADIANS = 48.1486 * Math.PI / 180;
-const SUNRISE_ALTITUDE_RADIANS = -0.833 * Math.PI / 180;
+const BRATISLAVA_LATITUDE_RADIANS = (48.1486 * Math.PI) / 180;
+const SUNRISE_ALTITUDE_RADIANS = (-0.833 * Math.PI) / 180;
 
-function daylightHours(dayStart: number): readonly [sunrise: number, sunset: number] {
+function daylightHours(
+  dayStart: number,
+): readonly [sunrise: number, sunset: number] {
   const date = new Date(dayStart);
   const yearStart = Date.UTC(date.getUTCFullYear(), 0, 1);
   const dayOfYear = Math.floor((dayStart - yearStart) / DAY_MS) + 1;
-  const daysInYear = Date.UTC(date.getUTCFullYear() + 1, 0, 1) - yearStart === 366 * DAY_MS ? 366 : 365;
-  const yearAngle = 2 * Math.PI * (dayOfYear - 1) / daysInYear;
+  const daysInYear =
+    Date.UTC(date.getUTCFullYear() + 1, 0, 1) - yearStart === 366 * DAY_MS
+      ? 366
+      : 365;
+  const yearAngle = (2 * Math.PI * (dayOfYear - 1)) / daysInYear;
   const declination =
-    0.006918
-    - 0.399912 * Math.cos(yearAngle)
-    + 0.070257 * Math.sin(yearAngle)
-    - 0.006758 * Math.cos(2 * yearAngle)
-    + 0.000907 * Math.sin(2 * yearAngle)
-    - 0.002697 * Math.cos(3 * yearAngle)
-    + 0.00148 * Math.sin(3 * yearAngle);
-  const hourAngleCosine = (
-    Math.sin(SUNRISE_ALTITUDE_RADIANS)
-    - Math.sin(BRATISLAVA_LATITUDE_RADIANS) * Math.sin(declination)
-  ) / (Math.cos(BRATISLAVA_LATITUDE_RADIANS) * Math.cos(declination));
+    0.006918 -
+    0.399912 * Math.cos(yearAngle) +
+    0.070257 * Math.sin(yearAngle) -
+    0.006758 * Math.cos(2 * yearAngle) +
+    0.000907 * Math.sin(2 * yearAngle) -
+    0.002697 * Math.cos(3 * yearAngle) +
+    0.00148 * Math.sin(3 * yearAngle);
+  const hourAngleCosine =
+    (Math.sin(SUNRISE_ALTITUDE_RADIANS) -
+      Math.sin(BRATISLAVA_LATITUDE_RADIANS) * Math.sin(declination)) /
+    (Math.cos(BRATISLAVA_LATITUDE_RADIANS) * Math.cos(declination));
   const hourAngle = Math.acos(Math.max(-1, Math.min(1, hourAngleCosine)));
-  const halfDaylightHours = hourAngle * 12 / Math.PI;
+  const halfDaylightHours = (hourAngle * 12) / Math.PI;
   return [12 - halfDaylightHours, 12 + halfDaylightHours];
 }
 
-export function daylightBackground(domain: TimeDomain): DaylightBackground | null {
+export function daylightBackground(
+  domain: TimeDomain,
+): DaylightBackground | null {
   const span = domain[1] - domain[0];
   if (span <= 0 || span >= DAYLIGHT_FADE_START_DAYS * DAY_MS) return null;
 
@@ -59,8 +68,8 @@ export function daylightBackground(domain: TimeDomain): DaylightBackground | nul
     const [sunrise, sunset] = daylightHours(start);
     days.push({
       start,
-      sunrisePercent: sunrise / 24 * 100,
-      sunsetPercent: sunset / 24 * 100,
+      sunrisePercent: (sunrise / 24) * 100,
+      sunsetPercent: (sunset / 24) * 100,
     });
   }
 
@@ -80,7 +89,10 @@ export function constrainDomain(
   const fullSpan = Math.max(0, fullEnd - fullStart);
   if (fullSpan === 0) return [fullStart, fullEnd];
 
-  const span = Math.min(fullSpan, Math.max(Math.min(minimumWindow, fullSpan), end - start));
+  const span = Math.min(
+    fullSpan,
+    Math.max(Math.min(minimumWindow, fullSpan), end - start),
+  );
   let nextStart = start;
   let nextEnd = start + span;
 
@@ -113,7 +125,11 @@ export function zoomDomain(
   );
 }
 
-export function panDomain(domain: TimeDomain, offset: number, fullDomain: TimeDomain | null): TimeDomain {
+export function panDomain(
+  domain: TimeDomain,
+  offset: number,
+  fullDomain: TimeDomain | null,
+): TimeDomain {
   return constrainDomain(
     domain[0] + offset,
     domain[1] + offset,
@@ -135,10 +151,17 @@ export function navigateWheelDomain(
     const scale = Math.exp(Math.max(-4, Math.min(4, movement * 0.002)));
     return zoomDomain(domain, scale, anchorRatio, fullDomain);
   }
-  return panDomain(domain, (movement / Math.max(1, plotWidth)) * (domain[1] - domain[0]), fullDomain);
+  return panDomain(
+    domain,
+    (movement / Math.max(1, plotWidth)) * (domain[1] - domain[0]),
+    fullDomain,
+  );
 }
 
-export function clipDomain(domain: TimeDomain, viewport: TimeDomain): TimeDomain | null {
+export function clipDomain(
+  domain: TimeDomain,
+  viewport: TimeDomain,
+): TimeDomain | null {
   const start = Math.max(domain[0], viewport[0]);
   const end = Math.min(domain[1], viewport[1]);
   return end > start ? [start, end] : null;

@@ -6,11 +6,11 @@ import { TrendExplanation } from "./TrendExplanation";
 
 export function ChartEditor({
   mode,
-  draftRangeLabel,
+  draftPeriodLabel,
   draftEventLabel,
   labelError,
   isEditing,
-  onSaveRange,
+  onSavePeriod,
   onSaveEvent,
   onDelete,
   onCancel,
@@ -19,11 +19,11 @@ export function ChartEditor({
   onOpenHeatmapInfo,
 }: {
   mode: ChartMode;
-  draftRangeLabel: string;
+  draftPeriodLabel: string;
   draftEventLabel: string;
   labelError: string | null;
   isEditing: boolean;
-  onSaveRange: () => void;
+  onSavePeriod: () => void;
   onSaveEvent: () => void;
   onDelete: () => void;
   onCancel: () => void;
@@ -32,34 +32,93 @@ export function ChartEditor({
   onOpenHeatmapInfo: () => void;
 }) {
   return (
-    <aside className={`editor-drawer editor-drawer--${mode ?? "closed"}`} aria-hidden={!mode}>
+    <aside
+      className={`editor-drawer editor-drawer--${mode === "period" ? "range" : (mode ?? "closed")}`}
+      aria-hidden={!mode}
+    >
       <div className="editor-drawer__inner">
-        {mode && <div className="editor-drawer__toolbar">
-          <div className="editor-drawer__heading">
-            <span>{mode === "trend"
-              ? "How trends work?"
-              : mode === "sessions"
-                ? "How sessions work?"
-                : mode === "heatmap"
-                  ? "How heatmaps work?"
-                  : (mode === "range" ? draftRangeLabel : draftEventLabel).trim() || "Untitled"}</span>
-            {(mode === "range" || mode === "event") && labelError && <small
-              id="annotation-name-guidance"
-              className="editor-drawer__name-guidance--warning"
-            >{labelError}</small>}
+        {mode && (
+          <div className="editor-drawer__toolbar">
+            <div className="editor-drawer__heading">
+              <span>
+                {mode === "trend"
+                  ? "How trends work?"
+                  : mode === "sessions"
+                    ? "How sessions work?"
+                    : mode === "heatmap"
+                      ? "How heatmaps work?"
+                      : (mode === "period"
+                          ? draftPeriodLabel
+                          : draftEventLabel
+                        ).trim() || "Untitled"}
+              </span>
+              {(mode === "period" || mode === "event") && labelError && (
+                <small
+                  id="annotation-name-guidance"
+                  className="editor-drawer__name-guidance--warning"
+                >
+                  {labelError}
+                </small>
+              )}
+            </div>
+            <div className="editor-drawer__actions">
+              {isEditing && (
+                <button
+                  type="button"
+                  className="editor-drawer__delete"
+                  onClick={onDelete}
+                >
+                  Delete
+                </button>
+              )}
+              {(mode === "period" || mode === "event") && (
+                <Button
+                  type="submit"
+                  form={`${mode}-editor-form`}
+                  variant="primary"
+                  className="draft-action"
+                >
+                  Save
+                </Button>
+              )}
+              <button
+                type="button"
+                className="editor-drawer__close"
+                aria-label="Close editor"
+                onClick={onCancel}
+              >
+                <MaterialSymbol name="close" />
+              </button>
+            </div>
           </div>
-          <div className="editor-drawer__actions">
-            {isEditing && <button type="button" className="editor-drawer__delete" onClick={onDelete}>Delete</button>}
-            {(mode === "range" || mode === "event") && <Button type="submit" form={`${mode}-editor-form`} variant="editorPrimary" className="draft-action">Save</Button>}
-            <button type="button" className="editor-drawer__close" aria-label="Close editor" onClick={onCancel}>
-              <MaterialSymbol name="close" />
-            </button>
-          </div>
-        </div>}
-        {mode === "range" && <form id="range-editor-form" onSubmit={(event) => { event.preventDefault(); onSaveRange(); }} />}
-        {mode === "event" && <form id="event-editor-form" onSubmit={(event) => { event.preventDefault(); onSaveEvent(); }} />}
-        {mode === "trend" && <TrendExplanation expanded onOpenSessions={onOpenSessionInfo} />}
-        {mode === "sessions" && <SessionExplanation onOpenTrendInfo={onOpenTrendInfo} onOpenHeatmapInfo={onOpenHeatmapInfo} />}
+        )}
+        {mode === "period" && (
+          <form
+            id="period-editor-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSavePeriod();
+            }}
+          />
+        )}
+        {mode === "event" && (
+          <form
+            id="event-editor-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSaveEvent();
+            }}
+          />
+        )}
+        {mode === "trend" && (
+          <TrendExplanation expanded onOpenSessions={onOpenSessionInfo} />
+        )}
+        {mode === "sessions" && (
+          <SessionExplanation
+            onOpenTrendInfo={onOpenTrendInfo}
+            onOpenHeatmapInfo={onOpenHeatmapInfo}
+          />
+        )}
         {mode === "heatmap" && <HeatmapExplanation />}
       </div>
     </aside>

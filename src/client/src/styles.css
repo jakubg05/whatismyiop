@@ -2,5 +2,20 @@
 @import "./features/charts/chronological/styles.css";
 @import "./features/comparison/styles.css";
 @import "./app/styles.css";
+@import "./features/data-import/styles.css";
+@import "./features/charts/diurnal/styles.css";
+@import "./shared/layout/styles.css";
+@import "./features/legal/styles.css";
+@import "./app/toast/styles.css";
 
-.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}

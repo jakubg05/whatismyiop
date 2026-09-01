@@ -1,4 +1,4 @@
-export const PERIOD_PALETTE = [
+const PERIOD_PALETTE = [
   { stroke: "#456b8e", fill: "#a9c2d6" },
   { stroke: "#76571e", fill: "#e5c982" },
   { stroke: "#4c7059", fill: "#b8d0bd" },
@@ -7,7 +7,14 @@ export const PERIOD_PALETTE = [
   { stroke: "#356f70", fill: "#a9cecc" },
 ] as const;
 
-export const EVENT_PALETTE = ["#8f6aa8", "#b56f8a", "#b47b5c", "#5d9290", "#7384b5", "#8b9253"] as const;
+const EVENT_PALETTE = [
+  "#8f6aa8",
+  "#b56f8a",
+  "#b47b5c",
+  "#5d9290",
+  "#7384b5",
+  "#8b9253",
+] as const;
 
 export function periodPalette(index: number) {
   return PERIOD_PALETTE[index % PERIOD_PALETTE.length];
