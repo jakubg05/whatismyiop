@@ -20,6 +20,7 @@ import {
   type Measurement,
   type MeasurementView,
   type SessionAggregation,
+  type SessionPoint,
 } from "../../../measurements";
 import {
   navigateWheelDomain,
@@ -52,8 +53,7 @@ import {
   TimeAxisTick,
 } from "../../chronological/chart/RightAxisTicks";
 import {
-  buildDiurnalHeatmapData,
-  heatmapReadingsForView,
+  buildDiurnalHeatmaps,
 } from "./diurnalHeatmapData";
 import {
   DIURNAL_BIN_COUNT,
@@ -71,6 +71,7 @@ const DRAG_THRESHOLD = 4;
 
 type Props = {
   measurements: readonly Measurement[];
+  sessionPoints: readonly SessionPoint[];
   measurementView: MeasurementView;
   sessionAggregation: SessionAggregation;
   eye: Eye;
@@ -248,6 +249,7 @@ function HeatmapLegend({ domain }: { domain: readonly [number, number] }) {
 
 export function HistoryHeatmap({
   measurements,
+  sessionPoints,
   measurementView,
   sessionAggregation,
   eye,
@@ -278,21 +280,14 @@ export function HistoryHeatmap({
   const [pinned, setPinned] = useState(false);
   const [dragging, setDragging] = useState(false);
   const heatmapReadings = useMemo(
-    () =>
-      heatmapReadingsForView(measurements, measurementView, sessionAggregation),
-    [measurementView, measurements, sessionAggregation],
-  );
-  const heatmap = useMemo(
-    () => buildDiurnalHeatmapData(heatmapReadings, eye, fullDomain),
-    [eye, fullDomain, heatmapReadings],
+    () => (measurementView === "raw" ? measurements : sessionPoints),
+    [measurementView, measurements, sessionPoints],
   );
   const heatmapsByEye = useMemo(
-    () =>
-      (["OD", "OS"] as Eye[]).map((eye) =>
-        buildDiurnalHeatmapData(heatmapReadings, eye, fullDomain),
-      ),
+    () => buildDiurnalHeatmaps(heatmapReadings, fullDomain),
     [fullDomain, heatmapReadings],
   );
+  const heatmap = heatmapsByEye[eye];
   const axisAnchors = useMemo(
     () => [
       { time: domain[0], hour: 0 },
@@ -302,7 +297,7 @@ export function HistoryHeatmap({
   );
   const dates = heatmap.times;
   const colorDomain = useMemo(
-    () => sharedHeatmapColorDomain(heatmapsByEye),
+    () => sharedHeatmapColorDomain([heatmapsByEye.OD, heatmapsByEye.OS]),
     [heatmapsByEye],
   );
   const positionedHover = useMemo(() => {

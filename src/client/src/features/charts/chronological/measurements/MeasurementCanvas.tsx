@@ -6,7 +6,6 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
-  aggregateMeasurementSessions,
   type Eye,
   type Measurement,
   type SessionAggregation,
@@ -32,7 +31,6 @@ import {
 import { MeasurementTooltip } from "./MeasurementTooltip";
 import {
   createPlotProjection,
-  lowerBoundByTime,
   positionMeasurementTooltip,
   positionTrendTooltip,
   timeIndexRange,
@@ -43,6 +41,7 @@ import {
 
 type Props = {
   measurements: Measurement[];
+  sessionPoints: readonly SessionPoint[];
   showRawReadings: boolean;
   sessionAggregation: SessionAggregation;
   showTrend: boolean;
@@ -84,6 +83,7 @@ function pointerHitRadius(): number {
 
 export function MeasurementCanvas({
   measurements,
+  sessionPoints,
   showRawReadings,
   sessionAggregation,
   showTrend,
@@ -127,18 +127,6 @@ export function MeasurementCanvas({
   const [navigating, setNavigating] = useState(false);
   const [navigationModifier, setNavigationModifier] =
     useState<NavigationModifier>(null);
-  const visibleMeasurements = useMemo(
-    () => measurements.filter((measurement) => visibleEyes[measurement.eye]),
-    [measurements, visibleEyes],
-  );
-  const sessionPoints = useMemo(
-    () => aggregateMeasurementSessions(measurements, sessionAggregation),
-    [measurements, sessionAggregation],
-  );
-  const visibleSessionPoints = useMemo(
-    () => sessionPoints.filter((point) => visibleEyes[point.eye]),
-    [sessionPoints, visibleEyes],
-  );
   const trendSeries = useMemo(
     () =>
       showTrend
@@ -146,10 +134,12 @@ export function MeasurementCanvas({
             measurements,
             showRawReadings ? "raw" : "sessions",
             sessionAggregation,
+            sessionPoints,
           ).filter((series) => visibleTrendEyes[series.eye])
         : [],
     [
       measurements,
+      sessionPoints,
       sessionAggregation,
       showRawReadings,
       showTrend,
@@ -166,37 +156,51 @@ export function MeasurementCanvas({
         .map(([sessionId]) => sessionId),
     );
   }, [sessionPoints]);
-  const chartPoints = useMemo<CanvasMeasurementPoint[]>(
-    () =>
-      [
-        ...visibleMeasurements.map((measurement) => ({
-          kind: "raw" as const,
+  const rawPoints = useMemo<Record<Eye, CanvasMeasurementPoint[]>>(
+    () => {
+      const points: Record<Eye, CanvasMeasurementPoint[]> = { OD: [], OS: [] };
+      for (const measurement of measurements) {
+        if (!visibleEyes[measurement.eye]) continue;
+        points[measurement.eye].push({
+          kind: "raw",
           id: `raw:${measurement.sequence}:${measurement.eye}`,
           time: measurement.time,
           eye: measurement.eye,
           iop: measurement.iop,
           measurement,
-        })),
-        ...visibleSessionPoints.map((session) => ({
-          kind: "session" as const,
+        });
+      }
+      return points;
+    },
+    [measurements, visibleEyes],
+  );
+  const sessionCanvasPoints = useMemo<Record<Eye, CanvasMeasurementPoint[]>>(
+    () => {
+      const points: Record<Eye, CanvasMeasurementPoint[]> = { OD: [], OS: [] };
+      for (const session of sessionPoints) {
+        if (!visibleEyes[session.eye]) continue;
+        points[session.eye].push({
+          kind: "session",
           id: `session:${session.sessionId}:${session.eye}`,
           time: session.time,
           eye: session.eye,
           iop: session.iop,
           session,
-        })),
-      ].sort((a, b) => a.time - b.time),
-    [visibleMeasurements, visibleSessionPoints],
+        });
+      }
+      return points;
+    },
+    [sessionPoints, visibleEyes],
   );
-  const sessionPointBySourceRow = useMemo(() => {
-    const points = new Map<number, Extract<CanvasPoint, { kind: "session" }>>();
-    for (const point of chartPoints) {
-      if (point.kind !== "session") continue;
-      for (const measurement of point.session.measurements)
-        points.set(measurement.sequence, point);
+  const sessionPointsById = useMemo(() => {
+    const groups = new Map<number, SessionPoint[]>();
+    for (const point of sessionPoints) {
+      const group = groups.get(point.sessionId);
+      if (group) group.push(point);
+      else groups.set(point.sessionId, [point]);
     }
-    return points;
-  }, [chartPoints]);
+    return groups;
+  }, [sessionPoints]);
   const positionedSelectedPoint = selectedPoint
     ? positionPoint(selectedPoint)
     : null;
@@ -211,9 +215,9 @@ export function MeasurementCanvas({
   const focusedSessionPoints = useMemo(
     () =>
       focusedSessionId !== null
-        ? sessionPoints.filter((point) => point.sessionId === focusedSessionId)
+        ? (sessionPointsById.get(focusedSessionId) ?? [])
         : [],
-    [focusedSessionId, sessionPoints],
+    [focusedSessionId, sessionPointsById],
   );
   currentDomain.current = [domainStart, domainEnd];
 
@@ -329,6 +333,7 @@ export function MeasurementCanvas({
         targetCanvas.height = renderHeight;
       const context = targetCanvas.getContext("2d");
       if (!context) return;
+      const drawContext = context;
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       context.clearRect(0, 0, width, height);
 
@@ -383,39 +388,63 @@ export function MeasurementCanvas({
           context.stroke();
         }
       }
-      const firstVisibleIndex = lowerBoundByTime(chartPoints, domainStart);
-      for (
-        let index = firstVisibleIndex;
-        index < chartPoints.length;
-        index += 1
+      function drawPoints(
+        points: readonly CanvasMeasurementPoint[],
+        radius: number,
+        baseAlpha: number,
+        pointsPerPixel: number,
       ) {
-        const point = chartPoints[index];
-        if (point.time > domainEnd) break;
-        const baseX = projection.xForTime(point.time);
-        const x =
-          baseX +
-          pointCollisionOffset(point, baseX, width - CHART_PLOT_INSETS.right);
-        const y = projection.yForValue(point.iop);
-        const pointSessionId =
-          point.kind === "session"
-            ? point.session.sessionId
-            : sessionPointBySourceRow.get(point.measurement.sequence)?.session
-                .sessionId;
-        const radius =
-          (point.kind === "session" ? sessionRadius : rawRadius) *
-          (selectedPointId === point.id ? 1 + selectionPop.current : 1);
-        const baseAlpha = point.kind === "session" ? sessionAlpha : rawAlpha;
-
-        context.beginPath();
-        context.arc(x, y, radius, 0, Math.PI * 2);
-        context.globalAlpha = visibilityAlphaAt.current(
-          point.time,
-          point.id,
-          pointSessionId ?? null,
-          baseAlpha,
+        if (baseAlpha <= 0) return;
+        const [start, end] = timeIndexRange(points, domainStart, domainEnd);
+        const step = Math.max(
+          1,
+          Math.ceil((end - start) / Math.max(1, plotWidth * pointsPerPixel)),
         );
-        context.fillStyle = COLORS[point.eye];
-        context.fill();
+        let sample = 0;
+        for (let chunkStart = start; chunkStart < end; chunkStart += step) {
+          const chunkSize = Math.min(step, end - chunkStart);
+          const offset =
+            chunkSize === 1
+              ? 0
+              : Math.floor(((sample * 0.61803398875) % 1) * chunkSize);
+          const point = points[chunkStart + offset];
+          sample += 1;
+          const baseX = projection.xForTime(point.time);
+          const x =
+            baseX +
+            pointCollisionOffset(
+              point,
+              baseX,
+              width - CHART_PLOT_INSETS.right,
+            );
+          const y = projection.yForValue(point.iop);
+          const pointSessionId =
+            point.kind === "session" ? point.session.sessionId : null;
+          const pointRadius =
+            radius *
+            (selectedPointId === point.id ? 1 + selectionPop.current : 1);
+
+          drawContext.beginPath();
+          drawContext.arc(x, y, pointRadius, 0, Math.PI * 2);
+          drawContext.globalAlpha = visibilityAlphaAt.current(
+            point.time,
+            point.id,
+            pointSessionId,
+            baseAlpha,
+          );
+          drawContext.fillStyle = COLORS[point.eye];
+          drawContext.fill();
+        }
+      }
+
+      for (const eye of ["OD", "OS"] as const) {
+        drawPoints(
+          rawPoints[eye],
+          rawRadius,
+          rawAlpha,
+          showRawReadings ? 4 : 1,
+        );
+        drawPoints(sessionCanvasPoints[eye], sessionRadius, sessionAlpha, 2);
       }
 
       context.save();
@@ -574,7 +603,6 @@ export function MeasurementCanvas({
     };
   }, [
     bilateralSessionIds,
-    chartPoints,
     dimming.emphasizedRanges,
     domainEnd,
     domainStart,
@@ -583,7 +611,8 @@ export function MeasurementCanvas({
     focusedTrendEye,
     selectedPointId,
     selectionPulse,
-    sessionPointBySourceRow,
+    rawPoints,
+    sessionCanvasPoints,
     showRawReadings,
     trendSeries,
     yMax,
@@ -853,47 +882,43 @@ export function MeasurementCanvas({
     const pointerY = clientY - bounds.top;
     const hitRadius = pointerHitRadius();
     if (!projection.contains(pointerX, pointerY)) return null;
-    if (chartPoints.length === 0) return null;
-
-    const [start, end] = timeIndexRange(
-      chartPoints,
-      projection.timeForX(pointerX - hitRadius - SESSION_POINT_SEPARATION),
-      projection.timeForX(pointerX + hitRadius + SESSION_POINT_SEPARATION),
-    );
+    const pointsByEye = showRawReadings ? rawPoints : sessionCanvasPoints;
     let best: PositionedCanvasPoint | null = null;
     let bestDistanceSquared = hitRadius * hitRadius;
-
-    for (let index = start; index < end; index += 1) {
-      const point = chartPoints[index];
-      if (showRawReadings && point.kind !== "raw") continue;
-      const baseX = projection.xForTime(point.time);
-      const x =
-        baseX +
-        pointCollisionOffset(
-          point,
-          baseX,
-          bounds.width - CHART_PLOT_INSETS.right,
-        );
-      if (Math.abs(x - pointerX) > hitRadius) continue;
-      const y = projection.yForValue(point.iop);
-      const distanceSquared = (x - pointerX) ** 2 + (y - pointerY) ** 2;
-      if (distanceSquared <= bestDistanceSquared) {
-        bestDistanceSquared = distanceSquared;
-        const tooltip = positionMeasurementTooltip(
-          x - CHART_PLOT_INSETS.left,
-          y - CHART_PLOT_INSETS.top,
-          projection.plotWidth,
-          projection.plotHeight,
-        );
-        const tooltipPoint =
-          !showRawReadings && point.kind === "raw"
-            ? sessionPointBySourceRow.get(point.measurement.sequence)
-            : point;
-        if (!tooltipPoint) continue;
-        best = {
-          point: tooltipPoint,
-          ...tooltip,
-        };
+    for (const eye of ["OD", "OS"] as const) {
+      const points = pointsByEye[eye];
+      const [start, end] = timeIndexRange(
+        points,
+        projection.timeForX(pointerX - hitRadius - SESSION_POINT_SEPARATION),
+        projection.timeForX(pointerX + hitRadius + SESSION_POINT_SEPARATION),
+      );
+      const candidateStep = Math.max(1, Math.ceil((end - start) / 2_048));
+      for (let index = start; index < end; index += candidateStep) {
+        const point = points[index];
+        const baseX = projection.xForTime(point.time);
+        const x =
+          baseX +
+          pointCollisionOffset(
+            point,
+            baseX,
+            bounds.width - CHART_PLOT_INSETS.right,
+          );
+        if (Math.abs(x - pointerX) > hitRadius) continue;
+        const y = projection.yForValue(point.iop);
+        const distanceSquared = (x - pointerX) ** 2 + (y - pointerY) ** 2;
+        if (distanceSquared <= bestDistanceSquared) {
+          bestDistanceSquared = distanceSquared;
+          const tooltip = positionMeasurementTooltip(
+            x - CHART_PLOT_INSETS.left,
+            y - CHART_PLOT_INSETS.top,
+            projection.plotWidth,
+            projection.plotHeight,
+          );
+          best = {
+            point,
+            ...tooltip,
+          };
+        }
       }
     }
     return best;
