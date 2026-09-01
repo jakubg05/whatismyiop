@@ -233,6 +233,43 @@
   font-size: 0.75rem;
   line-height: 1.55;
 }
+.ui-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+.ui-sidebar-header__heading {
+  min-width: 0;
+  display: grid;
+  gap: 0.1875rem;
+}
+.ui-sidebar-header__title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--editor-ink);
+  font: var(--small);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ui-sidebar-header--prominent .ui-sidebar-header__title {
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+.ui-sidebar-header__subtitle {
+  color: var(--editor-muted);
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+.ui-sidebar-header__actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
 .trend-explanation__body h3,
 .session-explanation h3,
 .heatmap-explanation h3 {

@@ -1,4 +1,4 @@
-import { Button, MaterialSymbol } from "../../../../shared/ui";
+import { Button, MaterialSymbol, SidebarHeader } from "../../../../shared/ui";
 import { HeatmapExplanation } from "../heatmap/HeatmapExplanation";
 import { SessionExplanation } from "../measurements/SessionExplanation";
 import { TrendExplanation } from "../trend/TrendExplanation";
@@ -38,59 +38,65 @@ export function ChartEditor({
     >
       <div className="editor-drawer__inner">
         {mode && (
-          <div className="editor-drawer__toolbar">
-            <div className="editor-drawer__heading">
-              <span>
-                {mode === "trend"
-                  ? "How trends work?"
-                  : mode === "sessions"
-                    ? "How sessions work?"
-                    : mode === "heatmap"
-                      ? "How heatmaps work?"
-                      : (mode === "period"
-                          ? draftPeriodLabel
-                          : draftEventLabel
-                        ).trim() || "Untitled"}
-              </span>
-              {(mode === "period" || mode === "event") && labelError && (
+          <SidebarHeader
+            className="editor-drawer__toolbar"
+            prominent={
+              mode === "trend" || mode === "sessions" || mode === "heatmap"
+            }
+            title={
+              mode === "trend"
+                ? "How trends work?"
+                : mode === "sessions"
+                  ? "How sessions work?"
+                  : mode === "heatmap"
+                    ? "How heatmaps work?"
+                    : (mode === "period"
+                        ? draftPeriodLabel
+                        : draftEventLabel
+                      ).trim() || "Untitled"
+            }
+            subtitle={
+              (mode === "period" || mode === "event") && labelError ? (
                 <small
                   id="annotation-name-guidance"
                   className="editor-drawer__name-guidance--warning"
                 >
                   {labelError}
                 </small>
-              )}
-            </div>
-            <div className="editor-drawer__actions">
-              {isEditing && (
+              ) : undefined
+            }
+            actions={
+              <>
+                {isEditing && (
+                  <button
+                    type="button"
+                    className="editor-drawer__delete"
+                    onClick={onDelete}
+                  >
+                    Delete
+                  </button>
+                )}
+                {(mode === "period" || mode === "event") && (
+                  <Button
+                    type="submit"
+                    form={`${mode}-editor-form`}
+                    variant="primary"
+                    className="draft-action"
+                  >
+                    Save
+                  </Button>
+                )}
                 <button
                   type="button"
-                  className="editor-drawer__delete"
-                  onClick={onDelete}
+                  className="editor-drawer__close"
+                  aria-label="Close editor"
+                  onClick={onCancel}
                 >
-                  Delete
+                  <MaterialSymbol name="close" />
                 </button>
-              )}
-              {(mode === "period" || mode === "event") && (
-                <Button
-                  type="submit"
-                  form={`${mode}-editor-form`}
-                  variant="primary"
-                  className="draft-action"
-                >
-                  Save
-                </Button>
-              )}
-              <button
-                type="button"
-                className="editor-drawer__close"
-                aria-label="Close editor"
-                onClick={onCancel}
-              >
-                <MaterialSymbol name="close" />
-              </button>
-            </div>
-          </div>
+              </>
+            }
+          />
         )}
         {mode === "period" && (
           <form

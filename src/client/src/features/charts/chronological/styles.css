@@ -1271,39 +1271,10 @@
   z-index: 1;
   min-height: calc(2.75rem + var(--s4));
   padding: var(--s4) 0 var(--s3);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
   background: var(--editor-canvas);
 }
-.editor-drawer__heading {
-  min-width: 0;
-  display: grid;
-  gap: 0.1875rem;
-}
-.editor-drawer__heading > span {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--editor-ink);
-  font: var(--small);
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.editor-drawer__heading small {
-  color: var(--editor-muted);
-  font-size: 0.6875rem;
-  line-height: 1.35;
-}
-.editor-drawer__heading .editor-drawer__name-guidance--warning {
+.editor-drawer__name-guidance--warning {
   color: #f2cf5b;
-}
-.editor-drawer__actions {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
 }
 .editor-drawer__close {
   width: var(--control-sm);
@@ -1431,11 +1402,6 @@
 }
 .heatmap-explanation {
   padding-bottom: calc(var(--s6) + var(--s4));
-}
-.editor-drawer--trend .editor-drawer__heading > span,
-.editor-drawer--sessions .editor-drawer__heading > span,
-.editor-drawer--heatmap .editor-drawer__heading > span {
-  font-weight: 400;
 }
 .draft-action {
   width: auto;
