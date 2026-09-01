@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Eye, Measurement, SessionPoint } from "../../../measurements";
 import {
   buildDiurnalHeatmapData,
+  buildDiurnalHeatmaps,
   heatmapReadingsForView,
 } from "../history/diurnalHeatmapData";
 
@@ -143,5 +144,19 @@ describe("diurnal heatmap data", () => {
     );
 
     expect(data.z[0].slice(0, 2)).toEqual([12, 24]);
+  });
+
+  it("precomputes both eyes in one pass", () => {
+    const range = domain("2026-01-01");
+    const data = buildDiurnalHeatmaps(
+      [
+        session("2026-01-01T01:00:00", "OD", 14, 1),
+        session("2026-01-01T01:00:00", "OS", 24, 2),
+      ],
+      range,
+    );
+
+    expect(data.OD.z[0][0]).toBe(14);
+    expect(data.OS.z[0][0]).toBe(24);
   });
 });

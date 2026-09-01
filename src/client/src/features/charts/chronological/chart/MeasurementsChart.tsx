@@ -21,6 +21,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  aggregateMeasurementSessions,
   type Eye,
   type Measurement,
   type MeasurementView,
@@ -338,10 +339,12 @@ export const MeasurementsChart = memo(function MeasurementsChart({
     return ticks;
   }, [pressureDomain]);
   const qualityOptions = useMemo(
-    () =>
-      [...new Set(measurements.map((measurement) => measurement.quality))].sort(
-        (a, b) => a.localeCompare(b),
-      ),
+    () => {
+      const options = new Set<string>();
+      for (const measurement of measurements)
+        options.add(measurement.quality);
+      return [...options].sort((a, b) => a.localeCompare(b));
+    },
     [measurements],
   );
   const filteredMeasurements = useMemo(
@@ -352,6 +355,11 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           (qualityFilter === "all" || measurement.quality === qualityFilter),
       ),
     [measurements, positionFilter, qualityFilter],
+  );
+  const sessionPoints = useMemo(
+    () =>
+      aggregateMeasurementSessions(filteredMeasurements, sessionAggregation),
+    [filteredMeasurements, sessionAggregation],
   );
   const timeTicks = useMemo(
     () =>
@@ -1315,6 +1323,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
           />
           <MeasurementCanvas
             measurements={filteredMeasurements}
+            sessionPoints={sessionPoints}
             showRawReadings={measurementView === "raw"}
             sessionAggregation={sessionAggregation}
             showTrend={showTrend}
@@ -1451,6 +1460,7 @@ export const MeasurementsChart = memo(function MeasurementsChart({
         {renderHeatmap && measurements.length > 0 && (
           <HistoryHeatmap
             measurements={filteredMeasurements}
+            sessionPoints={sessionPoints}
             measurementView={measurementView}
             sessionAggregation={sessionAggregation}
             eye={heatmapEye}
